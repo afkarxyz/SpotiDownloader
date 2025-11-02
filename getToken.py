@@ -14,6 +14,17 @@ def get_session_token_sync(max_wait=30):
         if not bypasser.is_bypassed():
             return None
         
+        spotify_url = "https://open.spotify.com/track/53iuhJlwXhSER5J2IYYv1W"
+        input_element = page.ele('css:.searchInput')
+        if input_element:
+            input_element.input(spotify_url)
+            time.sleep(0.5)
+        
+        download_button = page.ele('css:button[type="submit"]')
+        if download_button:
+            download_button.click()
+            time.sleep(0.5)
+        
         page.run_js("""
             window.originalFetch = window.fetch;
             window.sessionToken = null;

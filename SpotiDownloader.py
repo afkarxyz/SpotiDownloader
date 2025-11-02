@@ -10,6 +10,7 @@ from packaging import version
 import qdarktheme
 
 from mutagen.mp3 import MP3
+from mutagen.flac import FLAC, Picture
 from mutagen.id3 import ID3, APIC, TIT2, TPE1, TALB, TDRC, TRCK, TSRC, COMM
 
 from PyQt6.QtWidgets import (
@@ -107,7 +108,7 @@ class DownloadWorker(QThread):
     
     def __init__(self, parent, tracks, outpath, token, is_single_track=False, is_album=False, is_playlist=False, 
                  album_or_playlist_name='', filename_format='title_artist', use_track_numbers=True,
-                 use_artist_subfolders=False, use_album_subfolders=False):
+                 use_artist_subfolders=False, use_album_subfolders=False, audio_format='mp3'):
         super().__init__()
         self.parent = parent
         self.tracks = tracks
@@ -121,6 +122,7 @@ class DownloadWorker(QThread):
         self.use_track_numbers = use_track_numbers
         self.use_artist_subfolders = use_artist_subfolders
         self.use_album_subfolders = use_album_subfolders
+        self.audio_format = audio_format
         self.is_paused = False
         self.is_stopped = False
         self.failed_tracks = []
@@ -128,12 +130,13 @@ class DownloadWorker(QThread):
         self.skipped_tracks = []
 
     def get_formatted_filename(self, track):
+        ext = ".flac" if self.audio_format == "flac" else ".mp3"
         if self.filename_format == "artist_title":
-            filename = f"{track.artists} - {track.title}.mp3"
+            filename = f"{track.artists} - {track.title}{ext}"
         elif self.filename_format == "title_only":
-            filename = f"{track.title}.mp3"
+            filename = f"{track.title}{ext}"
         else:
-            filename = f"{track.title} - {track.artists}.mp3"
+            filename = f"{track.title} - {track.artists}{ext}"
         filename = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', filename)
         return filename
 
@@ -146,11 +149,25 @@ class DownloadWorker(QThread):
             if file_size < 100000:  
                 return False
             
-            audio = MP3(filepath)
-            if audio.info.length > 0:  
-                return True
-            else:
-                return False
+            with open(filepath, 'rb') as f:
+                header = f.read(4)
+            
+            if header == b'fLaC':
+                try:
+                    audio = FLAC(filepath)
+                    if audio.info.length > 0:
+                        return True
+                except Exception:
+                    return True
+            elif header[:3] == b'ID3' or header[:2] in [b'\xff\xfb', b'\xff\xf3', b'\xff\xf2']:
+                try:
+                    audio = MP3(filepath)
+                    if audio.info.length > 0:  
+                        return True
+                except Exception:
+                    return True
+            
+            return False
         except Exception:
             return False
 
@@ -198,6 +215,21 @@ class DownloadWorker(QThread):
             
             payload = {"id": track.id}
             
+            if self.audio_format == "flac":
+                flac_check_response = requests.post(
+                    "https://api.spotidownloader.com/isFlacAvailable",
+                    headers=headers,
+                    json=payload,
+                    timeout=30
+                )
+                
+                if flac_check_response.status_code == 200:
+                    flac_data = flac_check_response.json()
+                    if not flac_data.get('flacAvailable', False):
+                        return False, "FLAC format not available for this track"
+                else:
+                    return False, "Failed to check FLAC availability"
+            
             response = requests.post(
                 "https://api.spotidownloader.com/download",
                 headers=headers,
@@ -212,7 +244,12 @@ class DownloadWorker(QThread):
             if not data.get('success'):
                 return False, f"API request failed: {data.get('error', 'Unknown error')}"
 
-            host = data['link'].split('//', 1)[1].split('/', 1)[0]
+            if self.audio_format == "flac" and 'linkFlac' in data:
+                download_link = data['linkFlac']
+            else:
+                download_link = data['link']
+            
+            host = download_link.split('//', 1)[1].split('/', 1)[0]
             
             download_headers = {
                 'Host': host,
@@ -220,7 +257,7 @@ class DownloadWorker(QThread):
                 'Origin': 'https://spotidownloader.com'
             }
             
-            audio_response = requests.get(data['link'], headers=download_headers, timeout=300)
+            audio_response = requests.get(download_link, headers=download_headers, timeout=300)
             if audio_response.status_code != 200:
                 return False, f"Failed to download audio file. Status code: {audio_response.status_code}"
             
@@ -228,6 +265,16 @@ class DownloadWorker(QThread):
             try:
                 with open(temp_filepath, "wb") as file:
                     file.write(audio_response.content)
+                
+                with open(temp_filepath, 'rb') as f:
+                    header = f.read(4)
+                
+                actual_is_flac = (header == b'fLaC')
+                actual_is_mp3 = (header[:3] == b'ID3' or header[:2] in [b'\xff\xfb', b'\xff\xf3', b'\xff\xf2'])
+                
+                if self.audio_format == "flac" and actual_is_mp3:
+                    filepath = filepath.replace('.flac', '.mp3')
+                    print(f"Warning: FLAC not available, downloaded as MP3 instead")
                 
                 if self.is_valid_existing_file(temp_filepath):
                     os.rename(temp_filepath, filepath)
@@ -251,50 +298,87 @@ class DownloadWorker(QThread):
             return False, f"Exception occurred: {str(e)}"
 
     def embed_metadata(self, filepath, track):
-        audio = MP3(filepath, ID3=ID3)
-        
         try:
-            audio.add_tags()
-        except:
-            pass
-
-        audio.tags.add(TIT2(encoding=3, text=track.title))
-        audio.tags.add(TPE1(encoding=3, text=track.artists.split(", ")))
-        audio.tags.add(TALB(encoding=3, text=track.album))
-        audio.tags.add(COMM(encoding=3, lang='eng', desc='Source', text='github.com/afkarxyz/SpotiDownloader'))
-
-        try:
-            if track.release_date:
+            if filepath.endswith('.flac'):
+                audio = FLAC(filepath)
+                
+                audio['title'] = track.title
+                audio['artist'] = track.artists.split(", ")
+                audio['album'] = track.album
+                audio['comment'] = 'github.com/afkarxyz/SpotiDownloader'
+                
                 try:
-                    release_date = datetime.strptime(track.release_date, "%Y-%m-%d")
-                    audio.tags.add(TDRC(encoding=3, text=track.release_date))
-                except ValueError:
-                    if track.release_date.isdigit():
-                        audio.tags.add(TDRC(encoding=3, text=track.release_date))
+                    if track.release_date:
+                        audio['date'] = track.release_date
+                except Exception as e:
+                    print(f"Error adding release date: {e}")
+                
+                audio['tracknumber'] = str(track.track_number)
+                audio['isrc'] = track.isrc
+                
+                if track.image_url:
+                    try:
+                        image_headers = {
+                            'Referer': 'https://spotidownloader.com/',
+                            'Origin': 'https://spotidownloader.com'
+                        }
+                        image_data = requests.get(track.image_url, headers=image_headers).content
+                        picture = Picture()
+                        picture.mime = 'image/jpeg'
+                        picture.desc = ''
+                        picture.data = image_data
+                        audio.add_picture(picture)
+                    except Exception as e:
+                        print(f"Error adding cover art: {e}")
+                
+                audio.save()
+            else:
+                audio = MP3(filepath, ID3=ID3)
+                
+                try:
+                    audio.add_tags()
+                except:
+                    pass
+
+                audio.tags.add(TIT2(encoding=3, text=track.title))
+                audio.tags.add(TPE1(encoding=3, text=track.artists.split(", ")))
+                audio.tags.add(TALB(encoding=3, text=track.album))
+                audio.tags.add(COMM(encoding=3, lang='eng', desc='Source', text='github.com/afkarxyz/SpotiDownloader'))
+
+                try:
+                    if track.release_date:
+                        try:
+                            release_date = datetime.strptime(track.release_date, "%Y-%m-%d")
+                            audio.tags.add(TDRC(encoding=3, text=track.release_date))
+                        except ValueError:
+                            if track.release_date.isdigit():
+                                audio.tags.add(TDRC(encoding=3, text=track.release_date))
+                except Exception as e:
+                    print(f"Error adding release date: {e}")
+
+                audio.tags.add(TRCK(encoding=3, text=str(track.track_number)))
+                audio.tags.add(TSRC(encoding=3, text=track.isrc))
+
+                if track.image_url:
+                    try:
+                        image_headers = {
+                            'Referer': 'https://spotidownloader.com/',
+                            'Origin': 'https://spotidownloader.com'
+                        }
+                        image_data = requests.get(track.image_url, headers=image_headers).content
+                        audio.tags.add(APIC(
+                            encoding=3,
+                            mime='image/jpeg',
+                            type=3,
+                            desc='',
+                            data=image_data
+                        ))
+                    except Exception as e:
+                        print(f"Error adding cover art: {e}")
+
+                audio.save()
         except Exception as e:
-            print(f"Error adding release date: {e}")
-
-        audio.tags.add(TRCK(encoding=3, text=str(track.track_number)))
-        audio.tags.add(TSRC(encoding=3, text=track.isrc))
-
-        if track.image_url:
-            try:
-                image_headers = {
-                    'Referer': 'https://spotidownloader.com/',
-                    'Origin': 'https://spotidownloader.com'
-                }
-                image_data = requests.get(track.image_url, headers=image_headers).content
-                audio.tags.add(APIC(
-                    encoding=3,
-                    mime='image/jpeg',
-                    type=3,
-                    desc='',
-                    data=image_data
-                ))
-            except Exception as e:
-                print(f"Error adding cover art: {e}")
-
-        audio.save()
+            print(f"Error embedding metadata: {e}")
 
     def scan_existing_files(self):
         existing_count = 0
@@ -417,7 +501,7 @@ class UpdateDialog(QDialog):
 class SpotiDownloaderGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.current_version = "5.4" 
+        self.current_version = "5.5" 
         self.tracks = []
         self.all_tracks = []  
         self.album_or_playlist_name = ''
@@ -438,6 +522,7 @@ class SpotiDownloaderGUI(QWidget):
         self.current_theme_color = self.settings.value('theme_color', '#2196F3')
         self.track_list_format = self.settings.value('track_list_format', 'track_artist_date_duration')
         self.date_format = self.settings.value('date_format', 'dd_mm_yyyy')
+        self.audio_format = self.settings.value('audio_format', 'mp3')
         
         self.elapsed_time = QTime(0, 0, 0)
         self.timer = QTimer(self)
@@ -1052,7 +1137,7 @@ class SpotiDownloaderGUI(QWidget):
         download_layout.setSpacing(2)
         download_layout.setContentsMargins(0, 0, 0, 0)
         
-        download_label = QLabel('Authentication')
+        download_label = QLabel('Download Settings')
         download_label.setStyleSheet("font-weight: bold; margin-top: 8px; margin-bottom: 5px;")
         download_layout.addWidget(download_label)
         
@@ -1063,6 +1148,7 @@ class SpotiDownloaderGUI(QWidget):
         self.auto_token_checkbox.setChecked(self.settings.value('auto_refresh_fetch', False, type=bool))
         self.auto_token_checkbox.toggled.connect(self.save_auto_token_setting)
         auth_options_layout.addWidget(self.auto_token_checkbox)
+        auth_options_layout.addSpacing(10)
 
         self.fetch_mode_group = QButtonGroup(self)
         self.fast_mode_radio = QRadioButton('Fast')
@@ -1092,8 +1178,39 @@ class SpotiDownloaderGUI(QWidget):
         self.fetch_mode_group.addButton(self.slow_mode_radio)
 
         auth_options_layout.addWidget(self.fast_mode_radio)
+        auth_options_layout.addSpacing(10)
         auth_options_layout.addWidget(self.normal_mode_radio)
+        auth_options_layout.addSpacing(10)
         auth_options_layout.addWidget(self.slow_mode_radio)
+        auth_options_layout.addSpacing(20)
+               
+        audio_format_label = QLabel('Audio Format:')
+        audio_format_label.setStyleSheet("font-weight: bold;")
+        auth_options_layout.addWidget(audio_format_label)
+        auth_options_layout.addSpacing(10)
+        
+        self.audio_format_group = QButtonGroup(self)
+        self.mp3_format_radio = QRadioButton('MP3')
+        self.mp3_format_radio.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.mp3_format_radio.toggled.connect(self.save_audio_format)
+        self.mp3_format_radio.setToolTip("Download in MP3 format")
+        
+        self.flac_format_radio = QRadioButton('FLAC')
+        self.flac_format_radio.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.flac_format_radio.toggled.connect(self.save_audio_format)
+        self.flac_format_radio.setToolTip("Download in FLAC format (lossless, if available)")
+        
+        if self.audio_format == "flac":
+            self.flac_format_radio.setChecked(True)
+        else:
+            self.mp3_format_radio.setChecked(True)
+        
+        self.audio_format_group.addButton(self.mp3_format_radio)
+        self.audio_format_group.addButton(self.flac_format_radio)
+        
+        auth_options_layout.addWidget(self.mp3_format_radio)
+        auth_options_layout.addSpacing(10)
+        auth_options_layout.addWidget(self.flac_format_radio)
         auth_options_layout.addStretch()
         
         download_layout.addLayout(auth_options_layout)
@@ -1309,7 +1426,7 @@ class SpotiDownloaderGUI(QWidget):
 
             about_layout.addWidget(section_widget)
 
-        footer_label = QLabel(f"v{self.current_version} | October 2025")
+        footer_label = QLabel(f"v{self.current_version} | November 2025")
         about_layout.addWidget(footer_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
         about_tab.setLayout(about_layout)
@@ -1378,6 +1495,15 @@ class SpotiDownloaderGUI(QWidget):
 
         if hasattr(self, 'token_countdown'):
             self.token_countdown = self.token_refresh_interval // 1000
+    
+    def save_audio_format(self):
+        if self.flac_format_radio.isChecked():
+            self.audio_format = "flac"
+        else:
+            self.audio_format = "mp3"
+        
+        self.settings.setValue('audio_format', self.audio_format)
+        self.settings.sync()
     
     def save_track_list_format(self):
         format_value = self.track_list_format_dropdown.currentData()
@@ -1894,7 +2020,8 @@ class SpotiDownloaderGUI(QWidget):
             self.filename_format,
             self.use_track_numbers,
             self.use_artist_subfolders,
-            self.use_album_subfolders
+            self.use_album_subfolders,
+            self.audio_format
         )
         
         self.worker.finished.connect(self.on_download_finished)
@@ -1914,6 +2041,7 @@ class SpotiDownloaderGUI(QWidget):
             
         self.stop_btn.show()
         self.pause_resume_btn.show()
+        self.remove_successful_btn.hide()
         self.progress_bar.show()
         self.progress_bar.setValue(0)
         
