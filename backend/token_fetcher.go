@@ -6,22 +6,50 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
-//go:embed bin/gettoken.exe
-var gettokenExe []byte
+// Embed binaries untuk berbagai platform
+//go:embed bin/gettoken-windows-amd64.exe
+var gettokenWindowsAmd64 []byte
 
-// FetchSessionToken menjalankan gettoken.exe dan mengembalikan session token
+//go:embed bin/gettoken-darwin-universal
+var gettokenDarwinUniversal []byte
+
+//go:embed bin/gettoken-linux-amd64
+var gettokenLinuxAmd64 []byte
+
+// getEmbeddedBinary mengembalikan binary data dan nama file yang sesuai dengan platform
+func getEmbeddedBinary() ([]byte, string, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return gettokenWindowsAmd64, "gettoken.exe", nil
+	case "darwin":
+		return gettokenDarwinUniversal, "gettoken", nil
+	case "linux":
+		return gettokenLinuxAmd64, "gettoken", nil
+	default:
+		return nil, "", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	}
+}
+
+// FetchSessionToken menjalankan gettoken binary dan mengembalikan session token
 func FetchSessionToken() (string, error) {
-	// Buat temporary file untuk gettoken.exe
-	tempDir := os.TempDir()
-	exePath := filepath.Join(tempDir, "gettoken.exe")
-
-	// Tulis embedded exe ke temporary file
-	err := os.WriteFile(exePath, gettokenExe, 0755)
+	// Dapatkan binary yang sesuai dengan platform
+	binaryData, binaryName, err := getEmbeddedBinary()
 	if err != nil {
-		return "", fmt.Errorf("failed to write gettoken.exe: %v", err)
+		return "", err
+	}
+
+	// Buat temporary file untuk binary
+	tempDir := os.TempDir()
+	exePath := filepath.Join(tempDir, binaryName)
+
+	// Tulis embedded binary ke temporary file
+	err = os.WriteFile(exePath, binaryData, 0755)
+	if err != nil {
+		return "", fmt.Errorf("failed to write %s: %v", binaryName, err)
 	}
 	defer os.Remove(exePath) // Hapus setelah selesai
 
@@ -29,7 +57,7 @@ func FetchSessionToken() (string, error) {
 	cmd := exec.Command(exePath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to execute gettoken.exe: %v, output: %s", err, string(output))
+		return "", fmt.Errorf("failed to execute %s: %v, output: %s", binaryName, err, string(output))
 	}
 
 	// Ambil output dan bersihkan whitespace
@@ -52,7 +80,7 @@ func FetchSessionToken() (string, error) {
 	}
 
 	if token == "" {
-		return "", fmt.Errorf("gettoken.exe did not return a valid token")
+		return "", fmt.Errorf("%s did not return a valid token", binaryName)
 	}
 
 	return token, nil

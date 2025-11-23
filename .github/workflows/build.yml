@@ -1,0 +1,415 @@
+name: Build Multi-Platform
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.25.4'
+  NODE_VERSION: '20'
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build helper binary
+        shell: bash
+        run: |
+          cd helper
+          pip install pyinstaller DrissionPage
+          pyinstaller --onefile --name gettoken-windows-amd64 get_token.py
+          mkdir -p ../backend/bin
+          cp dist/gettoken-windows-amd64.exe ../backend/bin/gettoken-windows-amd64.exe
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        continue-on-error: true
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          pnpm install
+          pnpm run generate-icon
+
+      - name: Build application
+        run: wails build -platform windows/amd64
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p dist
+          Copy-Item -Path "build\bin\SpotiDownloader.exe" -Destination "dist\SpotiDownloader-${{ steps.version.outputs.version }}.exe"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: dist/SpotiDownloader-${{ steps.version.outputs.version }}.exe
+          retention-days: 7
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build helper binary
+        run: |
+          cd helper
+          pip install pyinstaller DrissionPage
+          pyinstaller --onefile --name gettoken-darwin-universal get_token.py
+          mkdir -p ../backend/bin
+          cp dist/gettoken-darwin-universal ../backend/bin/gettoken-darwin-universal
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        continue-on-error: true
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          pnpm install
+          pnpm run generate-icon
+
+      - name: Build application
+        run: wails build -platform darwin/universal
+
+      - name: Create DMG
+        run: |
+          mkdir -p dist
+          # Install create-dmg if not available
+          brew install create-dmg || true
+
+          # Create DMG
+          create-dmg \
+            --volname "SpotiDownloader" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "SpotiDownloader.app" 175 120 \
+            --hide-extension "SpotiDownloader.app" \
+            --app-drop-link 425 120 \
+            "dist/SpotiDownloader-${{ steps.version.outputs.version }}.dmg" \
+            "build/bin/SpotiDownloader.app" || \
+          # Fallback to hdiutil if create-dmg fails
+          hdiutil create -volname SpotiDownloader -srcfolder build/bin/SpotiDownloader.app -ov -format UDZO dist/SpotiDownloader-${{ steps.version.outputs.version }}.dmg
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-portable
+          path: dist/SpotiDownloader-${{ steps.version.outputs.version }}.dmg
+          retention-days: 7
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build helper binary
+        run: |
+          cd helper
+          pip install pyinstaller DrissionPage
+          pyinstaller --onefile --name gettoken-linux-amd64 get_token.py
+          mkdir -p ../backend/bin
+          cp dist/gettoken-linux-amd64 ../backend/bin/gettoken-linux-amd64
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        continue-on-error: true
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2 imagemagick
+
+          # Create symlink for webkit2gtk-4.0 -> webkit2gtk-4.1 (Ubuntu 24.04 compatibility)
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          pnpm install
+          pnpm run generate-icon
+
+      - name: Build application
+        run: wails build -platform linux/amd64
+
+      - name: Download appimagetool
+        run: |
+          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+
+      - name: Create AppImage
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          # Copy binary
+          cp build/bin/SpotiDownloader AppDir/usr/bin/
+
+          # Create desktop file
+          cat > AppDir/spotidownloader.desktop << 'EOF'
+          [Desktop Entry]
+          Name=SpotiDownloader
+          Exec=SpotiDownloader
+          Icon=spotidownloader
+          Type=Application
+          Categories=Audio;AudioVideo;
+          Comment=Download Spotify tracks with high quality
+          EOF
+
+          cp AppDir/spotidownloader.desktop AppDir/usr/share/applications/
+
+          # Create icon
+          if [ -f "build/appicon.png" ]; then
+            convert build/appicon.png -resize 256x256 AppDir/spotidownloader.png
+          elif [ -f "frontend/public/icon.svg" ]; then
+            convert -background none -size 256x256 frontend/public/icon.svg AppDir/spotidownloader.png
+          else
+            echo "Warning: No icon found, building without icon"
+          fi
+
+          # Copy icon if exists
+          if [ -f "AppDir/spotidownloader.png" ]; then
+            cp AppDir/spotidownloader.png AppDir/usr/share/icons/hicolor/256x256/apps/
+            cp AppDir/spotidownloader.png AppDir/.DirIcon
+          fi
+
+          # Create AppRun
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/sh
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin/:${PATH}"
+          export LD_LIBRARY_PATH="${HERE}/usr/lib/:${LD_LIBRARY_PATH}"
+          exec "${HERE}/usr/bin/SpotiDownloader" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          # Create AppImage
+          mkdir -p dist
+          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/SpotiDownloader-${{ steps.version.outputs.version }}.AppImage
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-portable
+          path: dist/SpotiDownloader-${{ steps.version.outputs.version }}.AppImage
+          retention-days: 7
+
+  create-release:
+    name: Create Release
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          generate_release_notes: false
+          body: |
+            ## Changelog
+
+            ## Downloads
+
+            - `SpotiDownloader-${{ steps.version.outputs.version }}.exe` - Windows
+            - `SpotiDownloader-${{ steps.version.outputs.version }}.dmg` - macOS
+            - `SpotiDownloader-${{ steps.version.outputs.version }}.AppImage` - Linux
+
+            <details>
+            <summary><b>Linux Requirements</b></summary>
+
+            The AppImage requires `webkit2gtk-4.1` to be installed on your system:
+
+            **Ubuntu/Debian:**
+            ```bash
+            sudo apt install libwebkit2gtk-4.1-0
+            ```
+
+            **Arch Linux:**
+            ```bash
+            sudo pacman -S webkit2gtk-4.1
+            ```
+
+            **Fedora:**
+            ```bash
+            sudo dnf install webkit2gtk4.1
+            ```
+
+            After installing the dependency, make the AppImage executable:
+            ```bash
+            chmod +x SpotiDownloader-${{ steps.version.outputs.version }}.AppImage
+            ./SpotiDownloader-${{ steps.version.outputs.version }}.AppImage
+            ```
+
+            </details>
+          files: |
+            artifacts/windows-portable/*.exe
+            artifacts/macos-portable/*.dmg
+            artifacts/linux-portable/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
