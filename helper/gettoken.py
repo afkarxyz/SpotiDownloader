@@ -1,4 +1,4 @@
-from CloudflareBypasser import CloudflareBypasser
+from cf_bypasser import CloudflareBypasser
 from DrissionPage import ChromiumPage
 import time
 
@@ -7,6 +7,7 @@ def get_session_token_sync(max_wait=30):
     try:
         page = ChromiumPage()
         page.get("https://spotidownloader.com/")
+        time.sleep(0.5)
         
         bypasser = CloudflareBypasser(page, max_retries=3, log=True)
         bypasser.bypass()
