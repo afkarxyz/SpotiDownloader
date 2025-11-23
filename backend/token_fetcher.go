@@ -1,6 +1,7 @@
 package backend
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,16 +9,19 @@ import (
 	"strings"
 )
 
-// FetchSessionToken menjalankan gettoken binary dan mengembalikan session token
-func FetchSessionToken() (string, error) {
-	// Buat temporary file untuk binary
-	tempDir := os.TempDir()
-	exePath := filepath.Join(tempDir, binaryName)
+//go:embed bin/gettoken.exe
+var gettokenExe []byte
 
-	// Tulis embedded binary ke temporary file
-	err := os.WriteFile(exePath, embeddedBinary, 0755)
+// FetchSessionToken menjalankan gettoken.exe dan mengembalikan session token
+func FetchSessionToken() (string, error) {
+	// Buat temporary file untuk gettoken.exe
+	tempDir := os.TempDir()
+	exePath := filepath.Join(tempDir, "gettoken.exe")
+
+	// Tulis embedded exe ke temporary file
+	err := os.WriteFile(exePath, gettokenExe, 0755)
 	if err != nil {
-		return "", fmt.Errorf("failed to write %s: %v", binaryName, err)
+		return "", fmt.Errorf("failed to write gettoken.exe: %v", err)
 	}
 	defer os.Remove(exePath) // Hapus setelah selesai
 
@@ -25,7 +29,7 @@ func FetchSessionToken() (string, error) {
 	cmd := exec.Command(exePath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to execute %s: %v, output: %s", binaryName, err, string(output))
+		return "", fmt.Errorf("failed to execute gettoken.exe: %v, output: %s", err, string(output))
 	}
 
 	// Ambil output dan bersihkan whitespace
@@ -48,7 +52,7 @@ func FetchSessionToken() (string, error) {
 	}
 
 	if token == "" {
-		return "", fmt.Errorf("%s did not return a valid token", binaryName)
+		return "", fmt.Errorf("gettoken.exe did not return a valid token")
 	}
 
 	return token, nil
