@@ -21,4 +21,4 @@ Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
 
 ### [SpotiFLAC](https://github.com/afkarxyz/SpotiFLAC)
 
-Get Spotify tracks in true FLAC from Tidal, Deezer & Qobuz — no account required.
+Get Spotify tracks in true FLAC from Tidal, Deezer, Qobuz & Amazon Music — no account required.
