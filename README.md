@@ -3,7 +3,7 @@
 ![SpotiDownloader](https://github.com/user-attachments/assets/351a0205-8ffa-428c-9d6b-8755078eb69f)
 
 <div align="center">
-<b>SpotiDownloader</b> is a GUI tool for downloading Spotify tracks, albums, and playlists using the API provided by spotidownloader.com
+Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
 </div>
 
 ### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/latest/download/SpotiDownloader.exe)
@@ -11,14 +11,8 @@
 #
 
 > [!Important]
-Requires a **Chromium-based browser** like Chrome or Edge to obtain the token.
+**Google Chrome** is required to obtain the token.
 
-## Screenshots
+## Screenshot
 
-![image](https://github.com/user-attachments/assets/4dab734d-5dbf-478b-996d-f13e3bea8218)
-
-![image](https://github.com/user-attachments/assets/747168aa-d0ac-451e-b00b-dc1529141339)
-
-![image](https://github.com/user-attachments/assets/6c7791f0-2af8-49f9-9860-e1e4e503363e)
-
-![image](https://github.com/user-attachments/assets/43a5def9-a315-4433-8630-cdd150d33793)
+![Image](https://github.com/user-attachments/assets/6c5a070b-109f-42d5-b1ab-5b078e380183)
