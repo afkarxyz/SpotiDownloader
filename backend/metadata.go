@@ -179,3 +179,124 @@ func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
+// ReadISRCFromFile reads ISRC metadata from a FLAC or MP3 file
+func ReadISRCFromFile(filePath string) (string, error) {
+	if !fileExists(filePath) {
+		return "", fmt.Errorf("file does not exist")
+	}
+
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	switch ext {
+	case ".flac":
+		return readISRCFromFlac(filePath)
+	case ".mp3":
+		return readISRCFromMp3(filePath)
+	default:
+		return "", fmt.Errorf("unsupported file format: %s", ext)
+	}
+}
+
+// readISRCFromFlac reads ISRC from FLAC file
+func readISRCFromFlac(filePath string) (string, error) {
+	f, err := flac.ParseFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse FLAC file: %w", err)
+	}
+
+	// Find VorbisComment block
+	for _, block := range f.Meta {
+		if block.Type == flac.VorbisComment {
+			cmt, err := flacvorbis.ParseFromMetaDataBlock(*block)
+			if err != nil {
+				continue
+			}
+
+			// Get ISRC field
+			isrcValues, err := cmt.Get(flacvorbis.FIELD_ISRC)
+			if err == nil && len(isrcValues) > 0 {
+				return isrcValues[0], nil
+			}
+		}
+	}
+
+	return "", nil // No ISRC found
+}
+
+// readISRCFromMp3 reads ISRC from MP3 file
+func readISRCFromMp3(filePath string) (string, error) {
+	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
+	if err != nil {
+		return "", fmt.Errorf("failed to open MP3 file: %w", err)
+	}
+	defer tag.Close()
+
+	// TSRC is the ID3v2 frame for ISRC
+	frames := tag.GetFrames("TSRC")
+	if len(frames) > 0 {
+		if textFrame, ok := frames[0].(id3v2.TextFrame); ok {
+			return textFrame.Text, nil
+		}
+	}
+
+	return "", nil // No ISRC found
+}
+
+// CheckISRCExists checks if a file with the given ISRC already exists in the directory
+func CheckISRCExists(outputDir string, targetISRC string, audioFormat string) (string, bool) {
+	if targetISRC == "" {
+		return "", false
+	}
+
+	// Read all audio files in directory
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return "", false
+	}
+
+	// Determine which extensions to check
+	extensions := []string{".mp3", ".flac"}
+	if audioFormat == "flac" {
+		extensions = []string{".flac"} // Only check FLAC if format is FLAC
+	} else if audioFormat == "mp3" {
+		extensions = []string{".mp3"} // Only check MP3 if format is MP3
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		filename := entry.Name()
+		ext := strings.ToLower(filepath.Ext(filename))
+
+		// Check if extension matches
+		validExt := false
+		for _, validExtension := range extensions {
+			if ext == validExtension {
+				validExt = true
+				break
+			}
+		}
+
+		if !validExt {
+			continue
+		}
+
+		filePath := filepath.Join(outputDir, filename)
+
+		// Read ISRC from file
+		isrc, err := ReadISRCFromFile(filePath)
+		if err != nil {
+			continue
+		}
+
+		// Compare ISRC (case-insensitive)
+		if isrc != "" && strings.EqualFold(isrc, targetISRC) {
+			return filePath, true
+		}
+	}
+
+	return "", false
+}

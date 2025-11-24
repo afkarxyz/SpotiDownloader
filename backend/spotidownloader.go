@@ -210,12 +210,20 @@ func (s *SpotiDownloader) DownloadByISRC(
 	}
 
 	// Build filename
+	// Check if file with same ISRC already exists
+	if isrc != "" {
+		if existingFile, exists := CheckISRCExists(outputDir, isrc, audioFormat); exists {
+			fmt.Printf("File with ISRC %s already exists: %s\n", isrc, existingFile)
+			return "EXISTS:" + existingFile, nil
+		}
+	}
+
 	filename := BuildFilename(trackName, artistName, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filename = SanitizeFilename(filename) + fileExt
 
 	outputPath := filepath.Join(outputDir, filename)
 
-	// Check if file already exists
+	// Check if file already exists by filename
 	if fileInfo, err := os.Stat(outputPath); err == nil && fileInfo.Size() > 0 {
 		return "EXISTS:" + outputPath, nil
 	}

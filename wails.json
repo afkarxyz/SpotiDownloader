@@ -11,7 +11,7 @@
   },
   "info": {
     "productName": "SpotiDownloader",
-    "productVersion": "5.6"
+    "productVersion": "5.7"
   },
   "wailsjsdir": "./frontend",
   "assetdir": "./frontend/dist",

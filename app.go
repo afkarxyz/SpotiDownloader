@@ -121,7 +121,20 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.FilenameFormat = "title-artist"
 	}
 
-	// Early check: if we have track metadata, check if file already exists
+	// Early check: Check if file with same ISRC already exists
+	if req.ISRC != "" {
+		if existingFile, exists := backend.CheckISRCExists(req.OutputDir, req.ISRC, req.AudioFormat); exists {
+			fmt.Printf("File with ISRC %s already exists: %s\n", req.ISRC, existingFile)
+			return DownloadResponse{
+				Success:       true,
+				Message:       "File with same ISRC already exists",
+				File:          existingFile,
+				AlreadyExists: true,
+			}, nil
+		}
+	}
+
+	// Fallback: if we have track metadata, check if file already exists by filename
 	if req.TrackName != "" && req.ArtistName != "" {
 		fileExt := ".mp3"
 		if req.AudioFormat == "flac" {
@@ -240,7 +253,7 @@ type TokenResponse struct {
 	ExpiresAt int64  `json:"expires_at"` // Unix timestamp
 }
 
-// FetchSessionToken fetches session token by running gettoken.exe
+// FetchSessionToken fetches session token by running get_token.exe
 func (a *App) FetchSessionToken() (TokenResponse, error) {
 	token, err := backend.FetchSessionToken()
 	if err != nil {

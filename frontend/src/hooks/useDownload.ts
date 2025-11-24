@@ -12,6 +12,7 @@ export function useDownload() {
   const [downloadingTrack, setDownloadingTrack] = useState<string | null>(null);
   const [bulkDownloadType, setBulkDownloadType] = useState<"all" | "selected" | null>(null);
   const [downloadedTracks, setDownloadedTracks] = useState<Set<string>>(new Set());
+  const [failedTracks, setFailedTracks] = useState<Set<string>>(new Set());
   const [currentDownloadInfo, setCurrentDownloadInfo] = useState<{
     name: string;
     artists: string;
@@ -120,11 +121,18 @@ export function useDownload() {
           toast.success(response.message);
         }
         setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
+        setFailedTracks((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(track.isrc);
+          return newSet;
+        });
       } else {
         toast.error(response.error || "Download failed");
+        setFailedTracks((prev) => new Set(prev).add(track.isrc));
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Download failed");
+      setFailedTracks((prev) => new Set(prev).add(track.isrc));
     } finally {
       setDownloadingTrack(null);
     }
@@ -148,6 +156,7 @@ export function useDownload() {
 
     let successCount = 0;
     let errorCount = 0;
+    let skippedCount = 0;
     const total = selectedTracks.length;
 
     for (let i = 0; i < selectedTracks.length; i++) {
@@ -180,13 +189,25 @@ export function useDownload() {
         );
 
         if (response.success) {
-          successCount++;
+          if (response.already_exists) {
+            skippedCount++;
+            console.log(`Skipped: ${track?.name} - ${track?.artists} (already exists)`);
+          } else {
+            successCount++;
+          }
           setDownloadedTracks((prev) => new Set(prev).add(isrc));
+          setFailedTracks((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(isrc);
+            return newSet;
+          });
         } else {
           errorCount++;
+          setFailedTracks((prev) => new Set(prev).add(isrc));
         }
       } catch (err) {
         errorCount++;
+        setFailedTracks((prev) => new Set(prev).add(isrc));
       }
 
       setDownloadProgress(Math.round(((i + 1) / total) * 100));
@@ -198,10 +219,22 @@ export function useDownload() {
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
 
-    if (errorCount === 0) {
+    // Build summary message
+    if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
+    } else if (errorCount === 0 && successCount === 0) {
+      // All skipped
+      toast.info(`${skippedCount} tracks already exist`);
+    } else if (errorCount === 0) {
+      // Mix of downloaded and skipped
+      toast.info(`${successCount} downloaded, ${skippedCount} skipped`);
     } else {
-      toast.warning(`Downloaded ${successCount} tracks, ${errorCount} failed`);
+      // Has errors
+      const parts = [];
+      if (successCount > 0) parts.push(`${successCount} downloaded`);
+      if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
+      parts.push(`${errorCount} failed`);
+      toast.warning(parts.join(", "));
     }
   };
 
@@ -224,6 +257,7 @@ export function useDownload() {
 
     let successCount = 0;
     let errorCount = 0;
+    let skippedCount = 0;
     const total = tracksWithIsrc.length;
 
     for (let i = 0; i < tracksWithIsrc.length; i++) {
@@ -249,13 +283,25 @@ export function useDownload() {
         );
 
         if (response.success) {
-          successCount++;
+          if (response.already_exists) {
+            skippedCount++;
+            console.log(`Skipped: ${track.name} - ${track.artists} (already exists)`);
+          } else {
+            successCount++;
+          }
           setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
+          setFailedTracks((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(track.isrc);
+            return newSet;
+          });
         } else {
           errorCount++;
+          setFailedTracks((prev) => new Set(prev).add(track.isrc));
         }
       } catch (err) {
         errorCount++;
+        setFailedTracks((prev) => new Set(prev).add(track.isrc));
       }
 
       setDownloadProgress(Math.round(((i + 1) / total) * 100));
@@ -267,10 +313,22 @@ export function useDownload() {
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
 
-    if (errorCount === 0) {
+    // Build summary message
+    if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
+    } else if (errorCount === 0 && successCount === 0) {
+      // All skipped
+      toast.info(`${skippedCount} tracks already exist`);
+    } else if (errorCount === 0) {
+      // Mix of downloaded and skipped
+      toast.info(`${successCount} downloaded, ${skippedCount} skipped`);
     } else {
-      toast.warning(`Downloaded ${successCount} tracks, ${errorCount} failed`);
+      // Has errors
+      const parts = [];
+      if (successCount > 0) parts.push(`${successCount} downloaded`);
+      if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
+      parts.push(`${errorCount} failed`);
+      toast.warning(parts.join(", "));
     }
   };
 
@@ -281,6 +339,7 @@ export function useDownload() {
 
   const resetDownloadedTracks = () => {
     setDownloadedTracks(new Set());
+    setFailedTracks(new Set());
   };
 
   return {
@@ -289,6 +348,7 @@ export function useDownload() {
     downloadingTrack,
     bulkDownloadType,
     downloadedTracks,
+    failedTracks,
     currentDownloadInfo,
     handleDownloadTrack,
     handleDownloadSelected,
