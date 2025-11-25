@@ -4,6 +4,7 @@ import { getSettings } from "@/lib/settings";
 import { ensureValidToken } from "@/lib/token-manager";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
 
 export function useDownload() {
@@ -13,6 +14,7 @@ export function useDownload() {
   const [bulkDownloadType, setBulkDownloadType] = useState<"all" | "selected" | null>(null);
   const [downloadedTracks, setDownloadedTracks] = useState<Set<string>>(new Set());
   const [failedTracks, setFailedTracks] = useState<Set<string>>(new Set());
+  const [skippedTracks, setSkippedTracks] = useState<Set<string>>(new Set());
   const [currentDownloadInfo, setCurrentDownloadInfo] = useState<{
     name: string;
     artists: string;
@@ -94,30 +96,36 @@ export function useDownload() {
   };
 
   const handleDownloadTrack = async (
-    track: TrackMetadata
+    track: TrackMetadata,
+    playlistName?: string,
+    isArtistDiscography?: boolean
   ) => {
     if (!track.isrc) {
       toast.error("No ISRC found for this track");
       return;
     }
 
+    logger.info(`starting download: ${track.name} - ${track.artists}`);
     const settings = getSettings();
     setDownloadingTrack(track.isrc);
 
     try {
-      // Single track download - no position parameter
+      // Single track download - use playlistName if provided for folder structure
       const response = await downloadWithSpotiDownloader(
         track,
         settings,
-        undefined,
-        false,
+        playlistName,
+        isArtistDiscography,
         undefined // Don't pass position for single track
       );
 
       if (response.success) {
         if (response.already_exists) {
+          logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
           toast.info(response.message);
+          setSkippedTracks((prev) => new Set(prev).add(track.isrc));
         } else {
+          logger.success(`downloaded: ${track.name} - ${track.artists}`);
           toast.success(response.message);
         }
         setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
@@ -127,10 +135,12 @@ export function useDownload() {
           return newSet;
         });
       } else {
+        logger.error(`failed: ${track.name} - ${track.artists} - ${response.error}`);
         toast.error(response.error || "Download failed");
         setFailedTracks((prev) => new Set(prev).add(track.isrc));
       }
     } catch (err) {
+      logger.error(`error: ${track.name} - ${err}`);
       toast.error(err instanceof Error ? err.message : "Download failed");
       setFailedTracks((prev) => new Set(prev).add(track.isrc));
     } finally {
@@ -149,6 +159,7 @@ export function useDownload() {
       return;
     }
 
+    logger.info(`starting batch download: ${selectedTracks.length} selected tracks`);
     const settings = getSettings();
     setIsDownloading(true);
     setBulkDownloadType("selected");
@@ -191,9 +202,11 @@ export function useDownload() {
         if (response.success) {
           if (response.already_exists) {
             skippedCount++;
-            console.log(`Skipped: ${track?.name} - ${track?.artists} (already exists)`);
+            logger.info(`skipped: ${track?.name} - ${track?.artists} (already exists)`);
+            setSkippedTracks((prev) => new Set(prev).add(isrc));
           } else {
             successCount++;
+            logger.success(`downloaded: ${track?.name} - ${track?.artists}`);
           }
           setDownloadedTracks((prev) => new Set(prev).add(isrc));
           setFailedTracks((prev) => {
@@ -203,10 +216,12 @@ export function useDownload() {
           });
         } else {
           errorCount++;
+          logger.error(`failed: ${track?.name} - ${track?.artists}`);
           setFailedTracks((prev) => new Set(prev).add(isrc));
         }
       } catch (err) {
         errorCount++;
+        logger.error(`error: ${track?.name} - ${err}`);
         setFailedTracks((prev) => new Set(prev).add(isrc));
       }
 
@@ -220,6 +235,7 @@ export function useDownload() {
     shouldStopDownloadRef.current = false;
 
     // Build summary message
+    logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
     if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
     } else if (errorCount === 0 && successCount === 0) {
@@ -250,6 +266,7 @@ export function useDownload() {
       return;
     }
 
+    logger.info(`starting batch download: ${tracksWithIsrc.length} tracks`);
     const settings = getSettings();
     setIsDownloading(true);
     setBulkDownloadType("all");
@@ -285,9 +302,11 @@ export function useDownload() {
         if (response.success) {
           if (response.already_exists) {
             skippedCount++;
-            console.log(`Skipped: ${track.name} - ${track.artists} (already exists)`);
+            logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
+            setSkippedTracks((prev) => new Set(prev).add(track.isrc));
           } else {
             successCount++;
+            logger.success(`downloaded: ${track.name} - ${track.artists}`);
           }
           setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
           setFailedTracks((prev) => {
@@ -297,10 +316,12 @@ export function useDownload() {
           });
         } else {
           errorCount++;
+          logger.error(`failed: ${track.name} - ${track.artists}`);
           setFailedTracks((prev) => new Set(prev).add(track.isrc));
         }
       } catch (err) {
         errorCount++;
+        logger.error(`error: ${track.name} - ${err}`);
         setFailedTracks((prev) => new Set(prev).add(track.isrc));
       }
 
@@ -314,6 +335,7 @@ export function useDownload() {
     shouldStopDownloadRef.current = false;
 
     // Build summary message
+    logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
     if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
     } else if (errorCount === 0 && successCount === 0) {
@@ -333,6 +355,7 @@ export function useDownload() {
   };
 
   const handleStopDownload = () => {
+    logger.info("download stopped by user");
     shouldStopDownloadRef.current = true;
     toast.info("Stopping download...");
   };
@@ -340,6 +363,7 @@ export function useDownload() {
   const resetDownloadedTracks = () => {
     setDownloadedTracks(new Set());
     setFailedTracks(new Set());
+    setSkippedTracks(new Set());
   };
 
   return {
@@ -349,6 +373,7 @@ export function useDownload() {
     bulkDownloadType,
     downloadedTracks,
     failedTracks,
+    skippedTracks,
     currentDownloadInfo,
     handleDownloadTrack,
     handleDownloadSelected,

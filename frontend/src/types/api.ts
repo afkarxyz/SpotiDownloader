@@ -1,3 +1,9 @@
+export interface ArtistSimple {
+  id: string;
+  name: string;
+  external_urls: string;
+}
+
 export interface TrackMetadata {
   id: string;
   artists: string;
@@ -10,6 +16,11 @@ export interface TrackMetadata {
   external_urls: string;
   isrc: string;
   album_type?: string;
+  album_id?: string;
+  album_url?: string;
+  artist_id?: string;
+  artist_url?: string;
+  artists_data?: ArtistSimple[];
 }
 
 export interface TrackResponse {
