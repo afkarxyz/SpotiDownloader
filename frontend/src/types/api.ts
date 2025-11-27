@@ -156,3 +156,30 @@ export interface LyricsDownloadResponse {
   error?: string;
   already_exists?: boolean;
 }
+
+export interface TimeSlice {
+  time: number;
+  magnitudes: number[];
+}
+
+export interface SpectrumData {
+  time_slices: TimeSlice[];
+  sample_rate: number;
+  freq_bins: number;
+  duration: number;
+  max_freq: number;
+}
+
+export interface AnalysisResult {
+  file_path: string;
+  sample_rate: number;
+  channels: number;
+  bits_per_sample: number;
+  total_samples: number;
+  duration: number;
+  bit_depth: string;
+  dynamic_range: number;
+  peak_amplitude: number;
+  rms_level: number;
+  spectrum?: SpectrumData;
+}

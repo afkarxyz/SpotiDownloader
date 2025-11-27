@@ -235,6 +235,30 @@ func (a *App) SelectFolder(defaultPath string) (string, error) {
 	return backend.SelectFolderDialog(a.ctx, defaultPath)
 }
 
+// SelectFile opens a file selection dialog and returns the selected file path
+func (a *App) SelectFile() (string, error) {
+	return backend.SelectFileDialog(a.ctx)
+}
+
+// AnalyzeTrack analyzes audio quality of a FLAC file
+func (a *App) AnalyzeTrack(filePath string) (string, error) {
+	if filePath == "" {
+		return "", fmt.Errorf("file path is required")
+	}
+
+	result, err := backend.AnalyzeTrack(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to analyze track: %v", err)
+	}
+
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode response: %v", err)
+	}
+
+	return string(jsonData), nil
+}
+
 // GetDefaults returns the default configuration
 func (a *App) GetDefaults() map[string]string {
 	return map[string]string{

@@ -45,7 +45,7 @@ function App() {
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "5.8";
+  const CURRENT_VERSION = "5.9";
 
   const download = useDownload();
   const metadata = useMetadata();

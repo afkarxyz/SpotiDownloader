@@ -25,38 +25,7 @@ jobs:
     - name: Build with Nuitka
       run: |
         cd helper
-        python -m nuitka --onefile --windows-console-mode=disable --assume-yes-for-downloads --output-dir=../backend/bin --output-filename=get_token.exe get_token.py
-
-    - name: Download UPX
-      run: |
-        $upxVersion = "4.2.4"
-        $upxUrl = "https://github.com/upx/upx/releases/download/v$upxVersion/upx-$upxVersion-win64.zip"
-        Invoke-WebRequest -Uri $upxUrl -OutFile upx.zip
-        Expand-Archive -Path upx.zip -DestinationPath .
-        Move-Item "upx-$upxVersion-win64/upx.exe" "upx.exe"
-      shell: pwsh
-
-    - name: Compress with UPX
-      run: |
-        if (Test-Path "backend/bin/get_token.exe") {
-          Write-Host "Original size:"
-          $originalSize = (Get-Item "backend/bin/get_token.exe").Length / 1MB
-          Write-Host "$([math]::Round($originalSize, 2)) MB"
-
-          Write-Host "`nCompressing with UPX..."
-          .\upx.exe --best --lzma --force backend/bin/get_token.exe
-
-          Write-Host "`nCompressed size:"
-          $compressedSize = (Get-Item "backend/bin/get_token.exe").Length / 1MB
-          Write-Host "$([math]::Round($compressedSize, 2)) MB"
-
-          $ratio = [math]::Round((1 - ($compressedSize / $originalSize)) * 100, 1)
-          Write-Host "`nCompression ratio: $ratio%"
-        } else {
-          Write-Host "Error: get_token.exe not found"
-          exit 1
-        }
-      shell: pwsh
+        python -m nuitka --onefile --windows-console-mode=disable --output-dir=../backend/bin --output-filename=get_token.exe get_token.py
 
     - name: Verify build
       run: |

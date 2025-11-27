@@ -48,3 +48,23 @@ func SelectFolderDialog(ctx context.Context, defaultPath string) (string, error)
 
 	return selectedPath, nil
 }
+
+func SelectFileDialog(ctx context.Context) (string, error) {
+	options := wailsRuntime.OpenDialogOptions{
+		Title:            "Select FLAC File",
+		DefaultDirectory: GetDefaultMusicPath(),
+		Filters: []wailsRuntime.FileFilter{
+			{
+				DisplayName: "FLAC Files (*.flac)",
+				Pattern:     "*.flac",
+			},
+		},
+	}
+
+	selectedPath, err := wailsRuntime.OpenFileDialog(ctx, options)
+	if err != nil {
+		return "", err
+	}
+
+	return selectedPath, nil
+}
