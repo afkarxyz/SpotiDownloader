@@ -15,7 +15,7 @@ Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
 
 ## Screenshot
 
-![Image](https://github.com/user-attachments/assets/8c870ebd-c07c-4f16-ada0-5922e0fbcba1)
+![Image](https://github.com/user-attachments/assets/54b12e79-9d41-4855-87cf-9efab9132df6)
 
 ## Other projects
 
