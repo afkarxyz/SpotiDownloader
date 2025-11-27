@@ -25,7 +25,7 @@ jobs:
     - name: Build with Nuitka
       run: |
         cd helper
-        python -m nuitka --onefile --windows-console-mode=disable --output-dir=../backend/bin --output-filename=get_token.exe get_token.py
+        python -m nuitka --onefile --windows-console-mode=disable --assume-yes-for-downloads --output-dir=../backend/bin --output-filename=get_token.exe get_token.py
 
     - name: Verify build
       run: |
