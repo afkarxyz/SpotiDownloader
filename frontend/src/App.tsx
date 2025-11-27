@@ -30,6 +30,7 @@ import type { HistoryItem } from "@/components/FetchHistory";
 // Hooks
 import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
+import { useLyrics } from "@/hooks/useLyrics";
 
 const HISTORY_KEY = "spotidownloader_fetch_history";
 const MAX_HISTORY = 5;
@@ -48,6 +49,7 @@ function App() {
 
   const download = useDownload();
   const metadata = useMetadata();
+  const lyrics = useLyrics();
 
   useEffect(() => {
     const settings = getSettings();
@@ -76,6 +78,7 @@ function App() {
     setSelectedTracks([]);
     setSearchQuery("");
     download.resetDownloadedTracks();
+    lyrics.resetLyricsState();
     setSortBy("default");
     setCurrentPage(1);
   }, [metadata.metadata]);
@@ -249,7 +252,9 @@ function App() {
           downloadingTrack={download.downloadingTrack}
           isDownloaded={download.downloadedTracks.has(track.isrc)}
           isFailed={download.failedTracks.has(track.isrc)}
+          downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
           onDownload={download.handleDownloadTrack}
+          onDownloadLyrics={lyrics.handleDownloadLyrics}
           onOpenFolder={handleOpenFolder}
         />
       );
@@ -272,6 +277,7 @@ function App() {
           bulkDownloadType={download.bulkDownloadType}
           downloadProgress={download.downloadProgress}
           currentDownloadInfo={download.currentDownloadInfo}
+          downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
           currentPage={currentPage}
           itemsPerPage={ITEMS_PER_PAGE}
           onSearchChange={handleSearchChange}
@@ -279,6 +285,9 @@ function App() {
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, false, position)
+          }
           onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(selectedTracks, track_list, album_info.name)
@@ -319,6 +328,7 @@ function App() {
           bulkDownloadType={download.bulkDownloadType}
           downloadProgress={download.downloadProgress}
           currentDownloadInfo={download.currentDownloadInfo}
+          downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
           currentPage={currentPage}
           itemsPerPage={ITEMS_PER_PAGE}
           onSearchChange={handleSearchChange}
@@ -326,6 +336,9 @@ function App() {
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name, false, position)
+          }
           onDownloadAll={() => download.handleDownloadAll(track_list, playlist_info.owner.name)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(
@@ -372,6 +385,7 @@ function App() {
           bulkDownloadType={download.bulkDownloadType}
           downloadProgress={download.downloadProgress}
           currentDownloadInfo={download.currentDownloadInfo}
+          downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
           currentPage={currentPage}
           itemsPerPage={ITEMS_PER_PAGE}
           onSearchChange={handleSearchChange}
@@ -379,6 +393,9 @@ function App() {
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography, position) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography, position)
+          }
           onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name, true)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(selectedTracks, track_list, artist_info.name, true)

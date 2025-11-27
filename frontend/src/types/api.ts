@@ -137,3 +137,22 @@ export interface HealthResponse {
   status: string;
   time: string;
 }
+
+export interface LyricsDownloadRequest {
+  spotify_id: string;
+  track_name: string;
+  artist_name: string;
+  output_dir?: string;
+  filename_format?: string;
+  track_number?: boolean;
+  position?: number;
+  use_album_track_number?: boolean;
+}
+
+export interface LyricsDownloadResponse {
+  success: boolean;
+  message: string;
+  file?: string;
+  error?: string;
+  already_exists?: boolean;
+}

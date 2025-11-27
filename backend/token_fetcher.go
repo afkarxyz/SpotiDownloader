@@ -33,26 +33,11 @@ func FetchSessionToken() (string, error) {
 	}
 
 	// Ambil output dan bersihkan whitespace
-	fullOutput := strings.TrimSpace(string(output))
+	token := strings.TrimSpace(string(output))
 
-	// Split berdasarkan baris dan ambil hanya token (bukan "Bypass successful.")
-	lines := strings.Split(fullOutput, "\n")
-	var token string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		// Skip baris "Bypass successful." dan baris kosong
-		if line != "" && !strings.Contains(line, "Bypass successful") {
-			// Cek apakah ini JWT token (dimulai dengan eyJ)
-			if strings.HasPrefix(line, "eyJ") {
-				token = line
-				break
-			}
-		}
-	}
-
-	if token == "" {
-		return "", fmt.Errorf("get_token.exe did not return a valid token")
+	// Validasi token (harus dimulai dengan eyJ untuk JWT)
+	if token == "" || !strings.HasPrefix(token, "eyJ") {
+		return "", fmt.Errorf("get_token.exe did not return a valid token: %s", token)
 	}
 
 	return token, nil

@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, CheckCircle, XCircle } from "lucide-react";
+import { Download, FolderOpen, CheckCircle, XCircle, FileText } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TrackMetadata } from "@/types/api";
 
 interface TrackInfoProps {
@@ -10,7 +11,9 @@ interface TrackInfoProps {
   downloadingTrack: string | null;
   isDownloaded: boolean;
   isFailed: boolean;
+  downloadingLyricsTrack?: string | null;
   onDownload: (track: TrackMetadata) => void;
+  onDownloadLyrics?: (spotifyId: string, trackName: string, artistName: string, albumName?: string) => void;
   onOpenFolder: () => void;
 }
 
@@ -20,7 +23,9 @@ export function TrackInfo({
   downloadingTrack,
   isDownloaded,
   isFailed,
+  downloadingLyricsTrack,
   onDownload,
+  onDownloadLyrics,
   onOpenFolder,
 }: TrackInfoProps) {
   return (
@@ -72,6 +77,29 @@ export function TrackInfo({
                     </>
                   )}
                 </Button>
+                {track.id && onDownloadLyrics && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => onDownloadLyrics(track.id!, track.name, track.artists, track.album_name)}
+                        variant="outline"
+                        disabled={downloadingLyricsTrack === track.id}
+                      >
+                        {downloadingLyricsTrack === track.id ? (
+                          <Spinner />
+                        ) : (
+                          <>
+                            <FileText className="h-4 w-4" />
+                            Download Lyrics
+                          </>
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download Lyrics</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {isDownloaded && (
                   <Button onClick={onOpenFolder} variant="outline">
                     <FolderOpen className="h-4 w-4" />

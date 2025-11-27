@@ -1,19 +1,12 @@
-from cf_bypasser import CloudflareBypasser
 from DrissionPage import ChromiumPage
 import time
 
-def get_session_token_sync(max_wait=30):
+def get_session_token_sync(max_wait=10):
     page = None
     try:
         page = ChromiumPage()
         page.get("https://spotidownloader.com/")
         time.sleep(0.5)
-        
-        bypasser = CloudflareBypasser(page, max_retries=3, log=True)
-        bypasser.bypass()
-        
-        if not bypasser.is_bypassed():
-            return None
         
         spotify_url = "https://open.spotify.com/track/53iuhJlwXhSER5J2IYYv1W"
         input_element = page.ele('css:.searchInput')
@@ -61,8 +54,13 @@ def get_session_token_sync(max_wait=30):
 async def main():
     return get_session_token_sync()
 
-def get_token():
-    return get_session_token_sync()
+def get_token(max_retries=3):
+    for attempt in range(max_retries):
+        token = get_session_token_sync()
+        if token:
+            return token
+        time.sleep(0.5)
+    return None
 
 if __name__ == "__main__":
     token = get_token()

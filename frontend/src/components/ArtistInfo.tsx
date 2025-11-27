@@ -34,6 +34,7 @@ interface ArtistInfoProps {
   bulkDownloadType: "all" | "selected" | null;
   downloadProgress: number;
   currentDownloadInfo: { name: string; artists: string } | null;
+  downloadingLyricsTrack?: string | null;
   currentPage: number;
   itemsPerPage: number;
   onSearchChange: (value: string) => void;
@@ -41,6 +42,7 @@ interface ArtistInfoProps {
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (track: TrackMetadata, folderName?: string, isArtistDiscography?: boolean) => void;
+  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
   onStopDownload: () => void;
@@ -66,6 +68,7 @@ export function ArtistInfo({
   bulkDownloadType,
   downloadProgress,
   currentDownloadInfo,
+  downloadingLyricsTrack,
   currentPage,
   itemsPerPage,
   onSearchChange,
@@ -73,6 +76,7 @@ export function ArtistInfo({
   onToggleTrack,
   onToggleSelectAll,
   onDownloadTrack,
+  onDownloadLyrics,
   onDownloadAll,
   onDownloadSelected,
   onStopDownload,
@@ -213,6 +217,7 @@ export function ArtistInfo({
             skippedTracks={skippedTracks}
             downloadingTrack={downloadingTrack}
             isDownloading={isDownloading}
+            downloadingLyricsTrack={downloadingLyricsTrack}
             currentPage={currentPage}
             itemsPerPage={itemsPerPage}
             showCheckboxes={true}
@@ -222,6 +227,7 @@ export function ArtistInfo({
             onToggleTrack={onToggleTrack}
             onToggleSelectAll={onToggleSelectAll}
             onDownloadTrack={onDownloadTrack}
+            onDownloadLyrics={onDownloadLyrics}
             onPageChange={onPageChange}
             onAlbumClick={onAlbumClick}
             onArtistClick={onArtistClick}
