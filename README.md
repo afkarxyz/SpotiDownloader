@@ -1,4 +1,4 @@
-[![GitHub All Releases](https://img.shields.io/github/downloads/afkarxyz/SpotifyDown-GUI/total?style=for-the-badge)](https://github.com/afkarxyz/SpotifyDown-GUI/releases)
+[![GitHub All Releases](https://img.shields.io/github/downloads/afkarxyz/SpotiDownloader/total?style=for-the-badge)](https://github.com/afkarxyz/SpotiDownloader/releases)
 
 ![SpotiDownloader](https://github.com/user-attachments/assets/351a0205-8ffa-428c-9d6b-8755078eb69f)
 
@@ -6,7 +6,7 @@
 Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
 </div>
 
-### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/latest/download/SpotiDownloader.exe)
+### [Download](https://github.com/afkarxyz/SpotiDownloader/releases/latest/download/SpotiDownloader.exe)
 
 #
 
