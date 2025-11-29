@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, CheckCircle, XCircle, FileText } from "lucide-react";
+import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TrackMetadata } from "@/types/api";
@@ -11,6 +11,7 @@ interface TrackInfoProps {
   downloadingTrack: string | null;
   isDownloaded: boolean;
   isFailed: boolean;
+  isSkipped: boolean;
   downloadingLyricsTrack?: string | null;
   onDownload: (track: TrackMetadata) => void;
   onDownloadLyrics?: (spotifyId: string, trackName: string, artistName: string, albumName?: string) => void;
@@ -23,6 +24,7 @@ export function TrackInfo({
   downloadingTrack,
   isDownloaded,
   isFailed,
+  isSkipped,
   downloadingLyricsTrack,
   onDownload,
   onDownloadLyrics,
@@ -43,12 +45,13 @@ export function TrackInfo({
             <div className="space-y-1">
               <div className="flex items-center gap-3">
                 <h1 className="text-3xl font-bold wrap-break-word">{track.name}</h1>
-                {isDownloaded && (
+                {isSkipped ? (
+                  <FileCheck className="h-6 w-6 text-yellow-500 shrink-0" />
+                ) : isDownloaded ? (
                   <CheckCircle className="h-6 w-6 text-green-500 shrink-0" />
-                )}
-                {isFailed && (
+                ) : isFailed ? (
                   <XCircle className="h-6 w-6 text-red-500 shrink-0" />
-                )}
+                ) : null}
               </div>
               <p className="text-lg text-muted-foreground">{track.artists}</p>
             </div>

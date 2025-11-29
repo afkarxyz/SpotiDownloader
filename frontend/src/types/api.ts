@@ -123,6 +123,7 @@ export interface DownloadRequest {
   track_number?: boolean;
   position?: number;
   use_album_track_number?: boolean;
+  item_id?: string; // Optional queue item ID for tracking
 }
 
 export interface DownloadResponse {
@@ -131,6 +132,7 @@ export interface DownloadResponse {
   file?: string;
   error?: string;
   already_exists?: boolean;
+  item_id?: string; // Queue item ID for tracking
 }
 
 export interface HealthResponse {

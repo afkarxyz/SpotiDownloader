@@ -52,6 +52,7 @@ type DownloadRequest struct {
 	TrackNumber         bool   `json:"track_number,omitempty"`
 	Position            int    `json:"position,omitempty"`               // Position in playlist/album (1-based)
 	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"` // Use album track number instead of playlist position
+	ItemID              string `json:"item_id,omitempty"`                // Optional queue item ID for tracking
 }
 
 // DownloadResponse represents the response structure for download operations
@@ -61,6 +62,7 @@ type DownloadResponse struct {
 	File          string `json:"file,omitempty"`
 	Error         string `json:"error,omitempty"`
 	AlreadyExists bool   `json:"already_exists,omitempty"`
+	ItemID        string `json:"item_id,omitempty"` // Queue item ID for tracking
 }
 
 // GetSpotifyMetadata fetches metadata from Spotify
@@ -121,15 +123,31 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.FilenameFormat = "title-artist"
 	}
 
+	// ItemID should always be provided by frontend (created via AddToDownloadQueue)
+	// If not provided, generate one for backwards compatibility
+	itemID := req.ItemID
+	if itemID == "" {
+		itemID = fmt.Sprintf("%s-%d", req.ISRC, time.Now().UnixNano())
+		// Add to queue if no ItemID was provided (legacy support)
+		backend.AddToQueue(itemID, req.TrackName, req.ArtistName, req.AlbumName, req.ISRC)
+	}
+
+	// Mark item as downloading immediately
+	backend.SetDownloading(true)
+	backend.StartDownloadItem(itemID)
+	defer backend.SetDownloading(false)
+
 	// Early check: Check if file with same ISRC already exists
 	if req.ISRC != "" {
 		if existingFile, exists := backend.CheckISRCExists(req.OutputDir, req.ISRC, req.AudioFormat); exists {
 			fmt.Printf("File with ISRC %s already exists: %s\n", req.ISRC, existingFile)
+			backend.SkipDownloadItem(itemID, existingFile)
 			return DownloadResponse{
 				Success:       true,
 				Message:       "File with same ISRC already exists",
 				File:          existingFile,
 				AlreadyExists: true,
+				ItemID:        itemID,
 			}, nil
 		}
 	}
@@ -145,18 +163,16 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		expectedPath := filepath.Join(req.OutputDir, expectedFilename)
 
 		if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 0 {
+			backend.SkipDownloadItem(itemID, expectedPath)
 			return DownloadResponse{
 				Success:       true,
 				Message:       "File already exists",
 				File:          expectedPath,
 				AlreadyExists: true,
+				ItemID:        itemID,
 			}, nil
 		}
 	}
-
-	// Set downloading state
-	backend.SetDownloading(true)
-	defer backend.SetDownloading(false)
 
 	// Use TrackID if provided, otherwise use ISRC
 	trackID := req.TrackID
@@ -190,9 +206,11 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	)
 
 	if err != nil {
+		backend.FailDownloadItem(itemID, fmt.Sprintf("Download failed: %v", err))
 		return DownloadResponse{
 			Success: false,
 			Error:   fmt.Sprintf("Download failed: %v", err),
+			ItemID:  itemID,
 		}, err
 	}
 
@@ -206,6 +224,16 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	message := "Download completed successfully"
 	if alreadyExists {
 		message = "File already exists"
+		backend.SkipDownloadItem(itemID, filename)
+	} else {
+		// Get file size for completed download
+		if fileInfo, statErr := os.Stat(filename); statErr == nil {
+			finalSize := float64(fileInfo.Size()) / (1024 * 1024) // Convert to MB
+			backend.CompleteDownloadItem(itemID, filename, finalSize)
+		} else {
+			// Fallback: mark as completed without size
+			backend.CompleteDownloadItem(itemID, filename, 0)
+		}
 	}
 
 	return DownloadResponse{
@@ -213,6 +241,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		Message:       message,
 		File:          filename,
 		AlreadyExists: alreadyExists,
+		ItemID:        itemID,
 	}, nil
 }
 
@@ -291,6 +320,28 @@ func (a *App) FetchSessionToken() (TokenResponse, error) {
 		Token:     token,
 		ExpiresAt: expiresAt,
 	}, nil
+}
+
+// GetDownloadQueue returns the complete download queue state
+func (a *App) GetDownloadQueue() backend.DownloadQueueInfo {
+	return backend.GetDownloadQueue()
+}
+
+// AddToDownloadQueue adds a new item to the download queue and returns its ID
+func (a *App) AddToDownloadQueue(isrc, trackName, artistName, albumName string) string {
+	itemID := fmt.Sprintf("%s-%d", isrc, time.Now().UnixNano())
+	backend.AddToQueue(itemID, trackName, artistName, albumName, isrc)
+	return itemID
+}
+
+// ClearCompletedDownloads clears completed, failed, and skipped items from the queue
+func (a *App) ClearCompletedDownloads() {
+	backend.ClearDownloadQueue()
+}
+
+// MarkDownloadItemFailed marks a download item as failed with an error message
+func (a *App) MarkDownloadItemFailed(itemID, errorMsg string) {
+	backend.FailDownloadItem(itemID, errorMsg)
 }
 
 // Quit closes the application

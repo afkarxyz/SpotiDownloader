@@ -24,18 +24,24 @@ import { TrackInfo } from "@/components/TrackInfo";
 import { AlbumInfo } from "@/components/AlbumInfo";
 import { PlaylistInfo } from "@/components/PlaylistInfo";
 import { ArtistInfo } from "@/components/ArtistInfo";
+import { DownloadQueue } from "@/components/DownloadQueue";
 import { DownloadProgressToast } from "@/components/DownloadProgressToast";
+import { AudioAnalysisPage } from "@/components/AudioAnalysisPage";
 import type { HistoryItem } from "@/components/FetchHistory";
 
 // Hooks
 import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
 import { useLyrics } from "@/hooks/useLyrics";
+import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 
 const HISTORY_KEY = "spotidownloader_fetch_history";
 const MAX_HISTORY = 5;
 
+type PageType = "main" | "audio-analysis";
+
 function App() {
+  const [currentPageView, setCurrentPageView] = useState<PageType>("main");
   const [spotifyUrl, setSpotifyUrl] = useState("");
   const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,11 +51,12 @@ function App() {
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "5.9";
+  const CURRENT_VERSION = "6.0";
 
   const download = useDownload();
   const metadata = useMetadata();
   const lyrics = useLyrics();
+  const downloadQueue = useDownloadQueueDialog();
 
   useEffect(() => {
     const settings = getSettings();
@@ -252,6 +259,7 @@ function App() {
           downloadingTrack={download.downloadingTrack}
           isDownloaded={download.downloadedTracks.has(track.isrc)}
           isFailed={download.failedTracks.has(track.isrc)}
+          isSkipped={download.skippedTracks.has(track.isrc)}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
           onDownload={download.handleDownloadTrack}
           onDownloadLyrics={lyrics.handleDownloadLyrics}
@@ -429,10 +437,24 @@ function App() {
         <TitleBar />
         <div className="flex-1 p-4 md:p-8">
           <div className="max-w-4xl mx-auto space-y-6">
-            <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} />
-          
-          {/* Download Progress Toast */}
-          <DownloadProgressToast />
+            {currentPageView === "audio-analysis" ? (
+              <AudioAnalysisPage onBack={() => setCurrentPageView("main")} />
+            ) : (
+              <>
+                <Header
+                  version={CURRENT_VERSION}
+                  hasUpdate={hasUpdate}
+                  onOpenAudioAnalysis={() => setCurrentPageView("audio-analysis")}
+                />
+
+          {/* Download Progress Toast - Bottom Left */}
+          <DownloadProgressToast onClick={downloadQueue.openQueue} />
+
+          {/* Download Queue Dialog */}
+          <DownloadQueue
+            isOpen={downloadQueue.isOpen}
+            onClose={downloadQueue.closeQueue}
+          />
 
           {/* Timeout Dialog */}
           <Dialog
@@ -542,7 +564,9 @@ function App() {
             hasResult={!!metadata.metadata}
           />
 
-            {metadata.metadata && renderMetadata()}
+                {metadata.metadata && renderMetadata()}
+              </>
+            )}
           </div>
         </div>
       </div>

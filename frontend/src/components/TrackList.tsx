@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, CheckCircle, XCircle, SkipForward, FileText } from "lucide-react";
+import { Download, CheckCircle, XCircle, FileCheck, FileText } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -198,7 +198,7 @@ export function TrackList({
                             <span className="font-medium">{track.name}</span>
                           )}
                           {skippedTracks.has(track.isrc) ? (
-                            <SkipForward className="h-4 w-4 text-yellow-500 shrink-0" />
+                            <FileCheck className="h-4 w-4 text-yellow-500 shrink-0" />
                           ) : downloadedTracks.has(track.isrc) ? (
                             <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                           ) : failedTracks.has(track.isrc) ? (
@@ -285,7 +285,7 @@ export function TrackList({
                               {downloadingTrack === track.isrc ? (
                                 <Spinner />
                               ) : skippedTracks.has(track.isrc) ? (
-                                <SkipForward className="h-4 w-4 text-yellow-500" />
+                                <FileCheck className="h-4 w-4 text-yellow-500" />
                               ) : downloadedTracks.has(track.isrc) ? (
                                 <CheckCircle className="h-4 w-4 text-green-500" />
                               ) : failedTracks.has(track.isrc) ? (
@@ -324,7 +324,7 @@ export function TrackList({
                               {downloadingLyricsTrack === track.id ? (
                                 <Spinner />
                               ) : skippedLyrics?.has(track.id) ? (
-                                <SkipForward className="h-4 w-4 text-yellow-500" />
+                                <FileCheck className="h-4 w-4 text-yellow-500" />
                               ) : downloadedLyrics?.has(track.id) ? (
                                 <CheckCircle className="h-4 w-4 text-green-500" />
                               ) : failedLyrics?.has(track.id) ? (

@@ -31,7 +31,7 @@ export function useDownload() {
   ) => {
     // Ensure we have a valid token before downloading
     const sessionToken = await ensureValidToken();
-    
+
     const os = settings.operatingSystem;
 
     let outputDir = settings.downloadPath;
@@ -57,6 +57,10 @@ export function useDownload() {
       }
     }
 
+    // Always add item to queue before downloading
+    const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
+    const itemID = await AddToDownloadQueue(track.isrc, track.name || "", track.artists || "", track.album_name || "");
+
     const response = await downloadTrack({
       isrc: track.isrc,
       track_id: track.id,
@@ -73,6 +77,7 @@ export function useDownload() {
       track_number: settings.trackNumber,
       position,
       use_album_track_number: useAlbumTrackNumber,
+      item_id: itemID,
     });
 
     // Check if token expired (403 or ERR_UNAUTHORIZED)
@@ -90,6 +95,12 @@ export function useDownload() {
           retryCount + 1
         );
       }
+    }
+
+    // Mark as failed if download failed (queue tracking)
+    if (!response.success && response.item_id) {
+      const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+      await MarkDownloadItemFailed(response.item_id, response.error || "Download failed");
     }
 
     return response;
