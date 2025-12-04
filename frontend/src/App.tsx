@@ -11,13 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Search, X } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getSettings, applyThemeMode } from "@/lib/settings";
+import { getSettings, applyThemeMode, applyFont } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
 import { OpenFolder } from "../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 
 // Components
 import { TitleBar } from "@/components/TitleBar";
+import { Sidebar, type PageType } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { SearchBar } from "@/components/SearchBar";
 import { TrackInfo } from "@/components/TrackInfo";
@@ -27,41 +28,46 @@ import { ArtistInfo } from "@/components/ArtistInfo";
 import { DownloadQueue } from "@/components/DownloadQueue";
 import { DownloadProgressToast } from "@/components/DownloadProgressToast";
 import { AudioAnalysisPage } from "@/components/AudioAnalysisPage";
+import { SettingsPage } from "@/components/SettingsPage";
+import { DebugLoggerPage } from "@/components/DebugLoggerPage";
 import type { HistoryItem } from "@/components/FetchHistory";
 
 // Hooks
 import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
 import { useLyrics } from "@/hooks/useLyrics";
+import { useCover } from "@/hooks/useCover";
 import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 
 const HISTORY_KEY = "spotidownloader_fetch_history";
 const MAX_HISTORY = 5;
 
-type PageType = "main" | "audio-analysis";
-
 function App() {
-  const [currentPageView, setCurrentPageView] = useState<PageType>("main");
+  const [currentPage, setCurrentPage] = useState<PageType>("main");
   const [spotifyUrl, setSpotifyUrl] = useState("");
   const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<string>("default");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentListPage, setCurrentListPage] = useState(1);
   const [hasUpdate, setHasUpdate] = useState(false);
+  const [releaseDate, setReleaseDate] = useState<string | null>(null);
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.0";
+  const CURRENT_VERSION = "6.1";
 
   const download = useDownload();
   const metadata = useMetadata();
   const lyrics = useLyrics();
+  const cover = useCover();
   const downloadQueue = useDownloadQueueDialog();
+
 
   useEffect(() => {
     const settings = getSettings();
     applyThemeMode(settings.themeMode);
     applyTheme(settings.theme);
+    applyFont(settings.fontFamily);
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
@@ -86,8 +92,9 @@ function App() {
     setSearchQuery("");
     download.resetDownloadedTracks();
     lyrics.resetLyricsState();
+    cover.resetCoverState();
     setSortBy("default");
-    setCurrentPage(1);
+    setCurrentListPage(1);
   }, [metadata.metadata]);
 
   const checkForUpdates = async () => {
@@ -96,8 +103,11 @@ function App() {
         "https://api.github.com/repos/afkarxyz/SpotiDownloader/releases/latest"
       );
       const data = await response.json();
-      // tag_name format: "v5.7" -> extract "5.7"
       const latestVersion = data.tag_name?.replace(/^v/, "") || "";
+
+      if (data.published_at) {
+        setReleaseDate(data.published_at);
+      }
 
       if (latestVersion && latestVersion > CURRENT_VERSION) {
         setHasUpdate(true);
@@ -163,7 +173,6 @@ function App() {
     }
   };
 
-  // Add to history when metadata is successfully fetched
   useEffect(() => {
     if (!metadata.metadata || !spotifyUrl) return;
 
@@ -214,7 +223,7 @@ function App() {
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-    setCurrentPage(1);
+    setCurrentListPage(1);
   };
 
   const toggleTrackSelection = (isrc: string) => {
@@ -247,6 +256,7 @@ function App() {
     }
   };
 
+
   const renderMetadata = () => {
     if (!metadata.metadata) return null;
 
@@ -261,8 +271,13 @@ function App() {
           isFailed={download.failedTracks.has(track.isrc)}
           isSkipped={download.skippedTracks.has(track.isrc)}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
+          downloadedLyrics={lyrics.downloadedLyrics}
+          failedLyrics={lyrics.failedLyrics}
+          skippedLyrics={lyrics.skippedLyrics}
+          downloadingCover={cover.downloadingCover}
           onDownload={download.handleDownloadTrack}
           onDownloadLyrics={lyrics.handleDownloadLyrics}
+          onDownloadCover={cover.handleDownloadCover}
           onOpenFolder={handleOpenFolder}
         />
       );
@@ -286,7 +301,15 @@ function App() {
           downloadProgress={download.downloadProgress}
           currentDownloadInfo={download.currentDownloadInfo}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
-          currentPage={currentPage}
+          downloadedLyrics={lyrics.downloadedLyrics}
+          failedLyrics={lyrics.failedLyrics}
+          skippedLyrics={lyrics.skippedLyrics}
+          downloadedCovers={cover.downloadedCovers}
+          failedCovers={cover.failedCovers}
+          skippedCovers={cover.skippedCovers}
+          downloadingCoverTrack={cover.downloadingCoverTrack}
+          isBulkDownloadingCovers={cover.isBulkDownloadingCovers}
+          currentPage={currentListPage}
           itemsPerPage={ITEMS_PER_PAGE}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
@@ -296,13 +319,17 @@ function App() {
           onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
             lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, false, position)
           }
+          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId) =>
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, false, position, trackId)
+          }
+          onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name)}
           onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(selectedTracks, track_list, album_info.name)
           }
           onStopDownload={download.handleStopDownload}
           onOpenFolder={handleOpenFolder}
-          onPageChange={setCurrentPage}
+          onPageChange={setCurrentListPage}
           onArtistClick={async (artist) => {
             const artistUrl = await metadata.handleArtistClick(artist);
             if (artistUrl) {
@@ -337,7 +364,15 @@ function App() {
           downloadProgress={download.downloadProgress}
           currentDownloadInfo={download.currentDownloadInfo}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
-          currentPage={currentPage}
+          downloadedLyrics={lyrics.downloadedLyrics}
+          failedLyrics={lyrics.failedLyrics}
+          skippedLyrics={lyrics.skippedLyrics}
+          downloadedCovers={cover.downloadedCovers}
+          failedCovers={cover.failedCovers}
+          skippedCovers={cover.skippedCovers}
+          downloadingCoverTrack={cover.downloadingCoverTrack}
+          isBulkDownloadingCovers={cover.isBulkDownloadingCovers}
+          currentPage={currentListPage}
           itemsPerPage={ITEMS_PER_PAGE}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
@@ -347,6 +382,10 @@ function App() {
           onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
             lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name, false, position)
           }
+          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId) =>
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlist_info.owner.name, false, position, trackId)
+          }
+          onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlist_info.owner.name)}
           onDownloadAll={() => download.handleDownloadAll(track_list, playlist_info.owner.name)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(
@@ -357,7 +396,7 @@ function App() {
           }
           onStopDownload={download.handleStopDownload}
           onOpenFolder={handleOpenFolder}
-          onPageChange={setCurrentPage}
+          onPageChange={setCurrentListPage}
           onAlbumClick={metadata.handleAlbumClick}
           onArtistClick={async (artist) => {
             const artistUrl = await metadata.handleArtistClick(artist);
@@ -394,7 +433,15 @@ function App() {
           downloadProgress={download.downloadProgress}
           currentDownloadInfo={download.currentDownloadInfo}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
-          currentPage={currentPage}
+          downloadedLyrics={lyrics.downloadedLyrics}
+          failedLyrics={lyrics.failedLyrics}
+          skippedLyrics={lyrics.skippedLyrics}
+          downloadedCovers={cover.downloadedCovers}
+          failedCovers={cover.failedCovers}
+          skippedCovers={cover.skippedCovers}
+          downloadingCoverTrack={cover.downloadingCoverTrack}
+          isBulkDownloadingCovers={cover.isBulkDownloadingCovers}
+          currentPage={currentListPage}
           itemsPerPage={ITEMS_PER_PAGE}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
@@ -404,6 +451,10 @@ function App() {
           onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography, position) =>
             lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography, position)
           }
+          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, isArtistDiscography, position, trackId) =>
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, isArtistDiscography, position, trackId)
+          }
+          onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, artist_info.name, true)}
           onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name, true)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(selectedTracks, track_list, artist_info.name, true)
@@ -417,7 +468,7 @@ function App() {
               setSpotifyUrl(artistUrl);
             }
           }}
-          onPageChange={setCurrentPage}
+          onPageChange={setCurrentListPage}
           onTrackClick={async (track) => {
             if (track.external_urls) {
               setSpotifyUrl(track.external_urls);
@@ -431,144 +482,159 @@ function App() {
     return null;
   };
 
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case "settings":
+        return <SettingsPage />;
+      case "debug":
+        return <DebugLoggerPage />;
+      case "audio-analysis":
+        return <AudioAnalysisPage />;
+      default:
+        return (
+          <>
+            <Header
+              version={CURRENT_VERSION}
+              hasUpdate={hasUpdate}
+              releaseDate={releaseDate}
+            />
+
+            {/* Timeout Dialog */}
+            <Dialog
+              open={metadata.showTimeoutDialog}
+              onOpenChange={metadata.setShowTimeoutDialog}
+            >
+              <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
+                <div className="absolute right-4 top-4">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 opacity-70 hover:opacity-100"
+                    onClick={() => metadata.setShowTimeoutDialog(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <DialogTitle className="text-sm font-medium">Fetch Artist</DialogTitle>
+                <DialogDescription>
+                  Set timeout for fetching metadata. Longer timeout is recommended for artists
+                  with large discography.
+                </DialogDescription>
+                {metadata.pendingArtistName && (
+                  <div className="py-2">
+                    <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.pendingArtistName}</p>
+                  </div>
+                )}
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="timeout">Timeout (seconds)</Label>
+                    <Input
+                      id="timeout"
+                      type="number"
+                      min="10"
+                      max="600"
+                      value={metadata.timeoutValue}
+                      onChange={(e) => metadata.setTimeoutValue(Number(e.target.value))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Default: 60 seconds. For large discographies, try 300-600 seconds (5-10
+                      minutes).
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => metadata.setShowTimeoutDialog(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={metadata.handleConfirmFetch}>
+                    <Search className="h-4 w-4" />
+                    Fetch
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Album Fetch Dialog */}
+            <Dialog open={metadata.showAlbumDialog} onOpenChange={metadata.setShowAlbumDialog}>
+              <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
+                <div className="absolute right-4 top-4">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 opacity-70 hover:opacity-100"
+                    onClick={() => metadata.setShowAlbumDialog(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <DialogTitle className="text-sm font-medium">Fetch Album</DialogTitle>
+                <DialogDescription>
+                  Do you want to fetch metadata for this album?
+                </DialogDescription>
+                {metadata.selectedAlbum && (
+                  <div className="py-2">
+                    <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.selectedAlbum.name}</p>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => metadata.setShowAlbumDialog(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={async () => {
+                    const albumUrl = await metadata.handleConfirmAlbumFetch();
+                    if (albumUrl) {
+                      setSpotifyUrl(albumUrl);
+                    }
+                  }}>
+                    <Search className="h-4 w-4" />
+                    Fetch Album
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <SearchBar
+              url={spotifyUrl}
+              loading={metadata.loading}
+              onUrlChange={setSpotifyUrl}
+              onFetch={handleFetchMetadata}
+              history={fetchHistory}
+              onHistorySelect={handleHistorySelect}
+              onHistoryRemove={removeFromHistory}
+              hasResult={!!metadata.metadata}
+            />
+
+            {metadata.metadata && renderMetadata()}
+          </>
+        );
+    }
+  };
+
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-background flex flex-col">
         <TitleBar />
-        <div className="flex-1 p-4 md:p-8">
+        <Sidebar currentPage={currentPage} onPageChange={setCurrentPage} />
+        
+        {/* Main content area with sidebar offset */}
+        <div className="flex-1 ml-14 mt-10 p-4 md:p-8">
           <div className="max-w-4xl mx-auto space-y-6">
-            {currentPageView === "audio-analysis" ? (
-              <AudioAnalysisPage onBack={() => setCurrentPageView("main")} />
-            ) : (
-              <>
-                <Header
-                  version={CURRENT_VERSION}
-                  hasUpdate={hasUpdate}
-                  onOpenAudioAnalysis={() => setCurrentPageView("audio-analysis")}
-                />
-
-          {/* Download Progress Toast - Bottom Left */}
-          <DownloadProgressToast onClick={downloadQueue.openQueue} />
-
-          {/* Download Queue Dialog */}
-          <DownloadQueue
-            isOpen={downloadQueue.isOpen}
-            onClose={downloadQueue.closeQueue}
-          />
-
-          {/* Timeout Dialog */}
-          <Dialog
-            open={metadata.showTimeoutDialog}
-            onOpenChange={metadata.setShowTimeoutDialog}
-          >
-            <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
-              <div className="absolute right-4 top-4">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 opacity-70 hover:opacity-100"
-                  onClick={() => metadata.setShowTimeoutDialog(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <DialogTitle className="text-sm font-medium">Fetch Artist</DialogTitle>
-              <DialogDescription>
-                Set timeout for fetching metadata. Longer timeout is recommended for artists
-                with large discography.
-              </DialogDescription>
-              {metadata.pendingArtistName && (
-                <div className="py-2">
-                  <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.pendingArtistName}</p>
-                </div>
-              )}
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="timeout">Timeout (seconds)</Label>
-                  <Input
-                    id="timeout"
-                    type="number"
-                    min="10"
-                    max="600"
-                    value={metadata.timeoutValue}
-                    onChange={(e) => metadata.setTimeoutValue(Number(e.target.value))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Default: 60 seconds. For large discographies, try 300-600 seconds (5-10
-                    minutes).
-                  </p>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => metadata.setShowTimeoutDialog(false)}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={metadata.handleConfirmFetch}>
-                  <Search className="h-4 w-4" />
-                  Fetch
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Album Fetch Dialog */}
-          <Dialog open={metadata.showAlbumDialog} onOpenChange={metadata.setShowAlbumDialog}>
-            <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
-              <div className="absolute right-4 top-4">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 opacity-70 hover:opacity-100"
-                  onClick={() => metadata.setShowAlbumDialog(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <DialogTitle className="text-sm font-medium">Fetch Album</DialogTitle>
-              <DialogDescription>
-                Do you want to fetch metadata for this album?
-              </DialogDescription>
-              {metadata.selectedAlbum && (
-                <div className="py-2">
-                  <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.selectedAlbum.name}</p>
-                </div>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => metadata.setShowAlbumDialog(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={async () => {
-                  const albumUrl = await metadata.handleConfirmAlbumFetch();
-                  if (albumUrl) {
-                    setSpotifyUrl(albumUrl);
-                  }
-                }}>
-                  <Search className="h-4 w-4" />
-                  Fetch Album
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <SearchBar
-            url={spotifyUrl}
-            loading={metadata.loading}
-            onUrlChange={setSpotifyUrl}
-            onFetch={handleFetchMetadata}
-            history={fetchHistory}
-            onHistorySelect={handleHistorySelect}
-            onHistoryRemove={removeFromHistory}
-            hasResult={!!metadata.metadata}
-          />
-
-                {metadata.metadata && renderMetadata()}
-              </>
-            )}
+            {renderPage()}
           </div>
         </div>
+
+        {/* Download Progress Toast - Bottom Left */}
+        <DownloadProgressToast onClick={downloadQueue.openQueue} />
+
+        {/* Download Queue Dialog */}
+        <DownloadQueue
+          isOpen={downloadQueue.isOpen}
+          onClose={downloadQueue.closeQueue}
+        />
       </div>
     </TooltipProvider>
   );

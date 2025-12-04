@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck } from "lucide-react";
+import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck, ImageDown } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TrackMetadata } from "@/types/api";
@@ -13,8 +14,13 @@ interface TrackInfoProps {
   isFailed: boolean;
   isSkipped: boolean;
   downloadingLyricsTrack?: string | null;
+  downloadedLyrics?: Set<string>;
+  failedLyrics?: Set<string>;
+  skippedLyrics?: Set<string>;
+  downloadingCover?: boolean;
   onDownload: (track: TrackMetadata) => void;
   onDownloadLyrics?: (spotifyId: string, trackName: string, artistName: string, albumName?: string) => void;
+  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string) => void;
   onOpenFolder: () => void;
 }
 
@@ -26,20 +32,53 @@ export function TrackInfo({
   isFailed,
   isSkipped,
   downloadingLyricsTrack,
+  downloadedLyrics,
+  failedLyrics,
+  skippedLyrics,
+  downloadingCover,
   onDownload,
   onDownloadLyrics,
+  onDownloadCover,
   onOpenFolder,
 }: TrackInfoProps) {
+  const [isHoveringCover, setIsHoveringCover] = useState(false);
+
   return (
     <Card>
       <CardContent className="px-6">
         <div className="flex gap-6 items-start">
           {track.images && (
-            <img
-              src={track.images}
-              alt={track.name}
-              className="w-48 h-48 rounded-md shadow-lg object-cover shrink-0"
-            />
+            <div 
+              className="relative shrink-0"
+              onMouseEnter={() => setIsHoveringCover(true)}
+              onMouseLeave={() => setIsHoveringCover(false)}
+            >
+              <img
+                src={track.images}
+                alt={track.name}
+                className="w-48 h-48 rounded-md shadow-lg object-cover"
+              />
+              {isHoveringCover && onDownloadCover && (
+                <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        className="cursor-pointer"
+                        onClick={() => onDownloadCover(track.images, track.name, track.artists, track.album_name)}
+                        disabled={downloadingCover}
+                      >
+                        {downloadingCover ? <Spinner /> : <ImageDown className="h-5 w-5" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download Cover</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+            </div>
           )}
           <div className="flex-1 space-y-4 min-w-0">
             <div className="space-y-1">
@@ -86,20 +125,34 @@ export function TrackInfo({
                       <Button
                         onClick={() => onDownloadLyrics(track.id!, track.name, track.artists, track.album_name)}
                         variant="outline"
+                        size="icon"
                         disabled={downloadingLyricsTrack === track.id}
                       >
                         {downloadingLyricsTrack === track.id ? (
                           <Spinner />
+                        ) : skippedLyrics?.has(track.id) ? (
+                          <FileCheck className="h-4 w-4 text-yellow-500" />
+                        ) : downloadedLyrics?.has(track.id) ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : failedLyrics?.has(track.id) ? (
+                          <XCircle className="h-4 w-4 text-red-500" />
                         ) : (
-                          <>
-                            <FileText className="h-4 w-4" />
-                            Download Lyrics
-                          </>
+                          <FileText className="h-4 w-4" />
                         )}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Download Lyrics</p>
+                      {downloadingLyricsTrack === track.id ? (
+                        <p>Downloading lyrics...</p>
+                      ) : skippedLyrics?.has(track.id) ? (
+                        <p>Lyrics already exists</p>
+                      ) : downloadedLyrics?.has(track.id) ? (
+                        <p>Lyrics downloaded</p>
+                      ) : failedLyrics?.has(track.id) ? (
+                        <p>Lyrics failed</p>
+                      ) : (
+                        <p>Download Lyrics</p>
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 )}

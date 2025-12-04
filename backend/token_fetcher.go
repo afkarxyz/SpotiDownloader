@@ -1,7 +1,6 @@
 package backend
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,27 +8,53 @@ import (
 	"strings"
 )
 
-//go:embed bin/get_token.exe
-var gettokenExe []byte
-
-// FetchSessionToken menjalankan get_token.exe dan mengembalikan session token
-func FetchSessionToken() (string, error) {
-	// Buat temporary file untuk get_token.exe
-	tempDir := os.TempDir()
-	exePath := filepath.Join(tempDir, "get_token.exe")
-
-	// Tulis embedded exe ke temporary file
-	err := os.WriteFile(exePath, gettokenExe, 0755)
+// getSpotiDownloaderDir returns the path to ~/.spotidownloader directory
+func getSpotiDownloaderDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to write get_token.exe: %v", err)
+		return "", fmt.Errorf("failed to get user home directory: %v", err)
 	}
-	defer os.Remove(exePath) // Hapus setelah selesai
+	return filepath.Join(homeDir, ".spotidownloader"), nil
+}
+
+// FetchSessionToken menjalankan get_token dan mengembalikan session token
+func FetchSessionToken() (string, error) {
+	// Get the .spotidownloader directory path
+	spotiDir, err := getSpotiDownloaderDir()
+	if err != nil {
+		return "", err
+	}
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(spotiDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create .spotidownloader directory: %v", err)
+	}
+
+	// Get the appropriate binary for current OS (defined in platform-specific files)
+	binaryData, binaryName := getTokenBinary()
+	exePath := filepath.Join(spotiDir, binaryName)
+
+	// Check if binary already exists and has the same size
+	needsUpdate := true
+	if info, err := os.Stat(exePath); err == nil {
+		if info.Size() == int64(len(binaryData)) {
+			needsUpdate = false
+		}
+	}
+
+	// Write binary if needed
+	if needsUpdate {
+		err = os.WriteFile(exePath, binaryData, 0755)
+		if err != nil {
+			return "", fmt.Errorf("failed to write get_token binary: %v", err)
+		}
+	}
 
 	// Jalankan executable
 	cmd := exec.Command(exePath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to execute get_token.exe: %v, output: %s", err, string(output))
+		return "", fmt.Errorf("failed to execute get_token: %v, output: %s", err, string(output))
 	}
 
 	// Ambil output dan bersihkan whitespace
@@ -37,7 +62,7 @@ func FetchSessionToken() (string, error) {
 
 	// Validasi token (harus dimulai dengan eyJ untuk JWT)
 	if token == "" || !strings.HasPrefix(token, "eyJ") {
-		return "", fmt.Errorf("get_token.exe did not return a valid token: %s", token)
+		return "", fmt.Errorf("get_token did not return a valid token: %s", token)
 	}
 
 	return token, nil

@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen } from "lucide-react";
+import { Download, FolderOpen, ImageDown } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SearchAndSort } from "./SearchAndSort";
 import { TrackList } from "./TrackList";
 import { DownloadProgress } from "./DownloadProgress";
@@ -30,6 +31,15 @@ interface AlbumInfoProps {
   downloadProgress: number;
   currentDownloadInfo: { name: string; artists: string } | null;
   downloadingLyricsTrack?: string | null;
+  downloadedLyrics?: Set<string>;
+  failedLyrics?: Set<string>;
+  skippedLyrics?: Set<string>;
+  // Cover props
+  downloadedCovers?: Set<string>;
+  failedCovers?: Set<string>;
+  skippedCovers?: Set<string>;
+  downloadingCoverTrack?: string | null;
+  isBulkDownloadingCovers?: boolean;
   currentPage: number;
   itemsPerPage: number;
   onSearchChange: (value: string) => void;
@@ -38,6 +48,8 @@ interface AlbumInfoProps {
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (track: TrackMetadata, folderName?: string, isArtistDiscography?: boolean) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
+  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string) => void;
+  onDownloadAllCovers?: () => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
   onStopDownload: () => void;
@@ -62,6 +74,14 @@ export function AlbumInfo({
   downloadProgress,
   currentDownloadInfo,
   downloadingLyricsTrack,
+  downloadedLyrics,
+  failedLyrics,
+  skippedLyrics,
+  downloadedCovers,
+  failedCovers,
+  skippedCovers,
+  downloadingCoverTrack,
+  isBulkDownloadingCovers,
   currentPage,
   itemsPerPage,
   onSearchChange,
@@ -70,6 +90,8 @@ export function AlbumInfo({
   onToggleSelectAll,
   onDownloadTrack,
   onDownloadLyrics,
+  onDownloadCover,
+  onDownloadAllCovers,
   onDownloadAll,
   onDownloadSelected,
   onStopDownload,
@@ -143,6 +165,22 @@ export function AlbumInfo({
                     Download Selected ({selectedTracks.length})
                   </Button>
                 )}
+                {onDownloadAllCovers && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={onDownloadAllCovers}
+                        variant="outline"
+                        disabled={isBulkDownloadingCovers}
+                      >
+                        {isBulkDownloadingCovers ? <Spinner /> : <ImageDown className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download All Covers</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {downloadedTracks.size > 0 && (
                   <Button onClick={onOpenFolder} variant="outline">
                     <FolderOpen className="h-4 w-4" />
@@ -179,6 +217,9 @@ export function AlbumInfo({
           downloadingTrack={downloadingTrack}
           isDownloading={isDownloading}
           downloadingLyricsTrack={downloadingLyricsTrack}
+          downloadedLyrics={downloadedLyrics}
+          failedLyrics={failedLyrics}
+          skippedLyrics={skippedLyrics}
           currentPage={currentPage}
           itemsPerPage={itemsPerPage}
           showCheckboxes={true}
@@ -186,6 +227,11 @@ export function AlbumInfo({
           folderName={albumInfo.name}
           onToggleTrack={onToggleTrack}
           onDownloadLyrics={onDownloadLyrics}
+          onDownloadCover={onDownloadCover}
+          downloadedCovers={downloadedCovers}
+          failedCovers={failedCovers}
+          skippedCovers={skippedCovers}
+          downloadingCoverTrack={downloadingCoverTrack}
           onToggleSelectAll={onToggleSelectAll}
           onDownloadTrack={onDownloadTrack}
           onPageChange={onPageChange}
