@@ -57,7 +57,7 @@ func NewSpotifyMetadataClient() *SpotifyMetadataClient {
 
 // TrackMetadata mirrors the filtered track payload returned by the Python script.
 type TrackMetadata struct {
-	ID          string `json:"id"`
+	SpotifyID   string `json:"spotify_id,omitempty"`
 	Artists     string `json:"artists"`
 	Name        string `json:"name"`
 	AlbumName   string `json:"album_name"`
@@ -78,7 +78,7 @@ type ArtistSimple struct {
 
 // AlbumTrackMetadata holds per-track info for album / playlist formatting.
 type AlbumTrackMetadata struct {
-	ID          string         `json:"id"`
+	SpotifyID   string         `json:"spotify_id,omitempty"`
 	Artists     string         `json:"artists"`
 	Name        string         `json:"name"`
 	AlbumName   string         `json:"album_name"`
@@ -507,7 +507,7 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *playlistRaw) PlaylistRes
 			})
 		}
 		tracks = append(tracks, AlbumTrackMetadata{
-			ID:          item.Track.ID,
+			SpotifyID:   item.Track.ID,
 			Artists:     joinArtists(item.Track.Artists),
 			Name:        item.Track.Name,
 			AlbumName:   item.Track.Album.Name,
@@ -556,7 +556,7 @@ func (c *SpotifyMetadataClient) formatAlbumData(ctx context.Context, raw *albumR
 	for _, item := range raw.Data.Tracks.Items {
 		isrc := c.fetchTrackISRC(ctx, item.ID, raw.Token, cache)
 		tracks = append(tracks, AlbumTrackMetadata{
-			ID:          item.ID,
+			SpotifyID:   item.ID,
 			Artists:     joinArtists(item.Artists),
 			Name:        item.Name,
 			AlbumName:   raw.Data.Name,
@@ -634,7 +634,7 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 				})
 			}
 			allTracks = append(allTracks, AlbumTrackMetadata{
-				ID:          tr.ID,
+				SpotifyID:   tr.ID,
 				Artists:     joinArtists(tr.Artists),
 				Name:        tr.Name,
 				AlbumName:   alb.Name,
@@ -681,7 +681,7 @@ func formatTrackData(raw *trackFull) TrackResponse {
 	}
 	return TrackResponse{
 		Track: TrackMetadata{
-			ID:          raw.ID,
+			SpotifyID:   raw.ID,
 			Artists:     joinArtists(raw.Artists),
 			Name:        raw.Name,
 			AlbumName:   raw.Album.Name,

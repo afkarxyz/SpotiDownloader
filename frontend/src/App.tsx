@@ -54,7 +54,7 @@ function App() {
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.1";
+  const CURRENT_VERSION = "6.2";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -323,9 +323,9 @@ function App() {
             cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, false, position, trackId)
           }
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name)}
-          onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name)}
+          onDownloadAll={() => download.handleDownloadAll(track_list, undefined, true)}
           onDownloadSelected={() =>
-            download.handleDownloadSelected(selectedTracks, track_list, album_info.name)
+            download.handleDownloadSelected(selectedTracks, track_list, undefined, true)
           }
           onStopDownload={download.handleStopDownload}
           onOpenFolder={handleOpenFolder}

@@ -5,7 +5,6 @@ export interface ArtistSimple {
 }
 
 export interface TrackMetadata {
-  id: string;
   artists: string;
   name: string;
   album_name: string;
@@ -16,6 +15,7 @@ export interface TrackMetadata {
   external_urls: string;
   isrc: string;
   album_type?: string;
+  spotify_id?: string;
   album_id?: string;
   album_url?: string;
   artist_id?: string;

@@ -119,22 +119,22 @@ export function TrackInfo({
                     </>
                   )}
                 </Button>
-                {track.id && onDownloadLyrics && (
+                {track.spotify_id && onDownloadLyrics && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        onClick={() => onDownloadLyrics(track.id!, track.name, track.artists, track.album_name)}
+                        onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name)}
                         variant="outline"
                         size="icon"
-                        disabled={downloadingLyricsTrack === track.id}
+                        disabled={downloadingLyricsTrack === track.spotify_id}
                       >
-                        {downloadingLyricsTrack === track.id ? (
+                        {downloadingLyricsTrack === track.spotify_id ? (
                           <Spinner />
-                        ) : skippedLyrics?.has(track.id) ? (
+                        ) : skippedLyrics?.has(track.spotify_id) ? (
                           <FileCheck className="h-4 w-4 text-yellow-500" />
-                        ) : downloadedLyrics?.has(track.id) ? (
+                        ) : downloadedLyrics?.has(track.spotify_id) ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : failedLyrics?.has(track.id) ? (
+                        ) : failedLyrics?.has(track.spotify_id) ? (
                           <XCircle className="h-4 w-4 text-red-500" />
                         ) : (
                           <FileText className="h-4 w-4" />
@@ -142,13 +142,13 @@ export function TrackInfo({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {downloadingLyricsTrack === track.id ? (
+                      {downloadingLyricsTrack === track.spotify_id ? (
                         <p>Downloading lyrics...</p>
-                      ) : skippedLyrics?.has(track.id) ? (
+                      ) : skippedLyrics?.has(track.spotify_id) ? (
                         <p>Lyrics already exists</p>
-                      ) : downloadedLyrics?.has(track.id) ? (
+                      ) : downloadedLyrics?.has(track.spotify_id) ? (
                         <p>Lyrics downloaded</p>
-                      ) : failedLyrics?.has(track.id) ? (
+                      ) : failedLyrics?.has(track.spotify_id) ? (
                         <p>Lyrics failed</p>
                       ) : (
                         <p>Download Lyrics</p>

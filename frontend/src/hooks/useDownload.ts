@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { downloadTrack } from "@/lib/api";
-import { getSettings } from "@/lib/settings";
+import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
 import { ensureValidToken } from "@/lib/token-manager";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
@@ -25,45 +25,49 @@ export function useDownload() {
     track: TrackMetadata,
     settings: any,
     playlistName?: string,
-    isArtistDiscography?: boolean,
     position?: number,
-    retryCount: number = 0
+    retryCount: number = 0,
+    isAlbum?: boolean,
+    releaseYear?: string
   ) => {
-    // Ensure we have a valid token before downloading
     const sessionToken = await ensureValidToken();
-
     const os = settings.operatingSystem;
-
     let outputDir = settings.downloadPath;
     let useAlbumTrackNumber = false;
 
-    if (playlistName) {
+    const templateData: TemplateData = {
+      artist: track.artists,
+      album: track.album_name,
+      title: track.name,
+      track: position,
+      year: releaseYear || track.release_date?.substring(0, 4),
+      playlist: playlistName,
+      isrc: track.isrc,
+    };
+
+    if (playlistName && !isAlbum) {
       outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+    }
 
-      if (isArtistDiscography) {
-        if (settings.albumSubfolder && track.album_name) {
-          outputDir = joinPath(os, outputDir, sanitizePath(track.album_name, os));
-          useAlbumTrackNumber = true;
+    if (settings.folderTemplate) {
+      const folderPath = parseTemplate(settings.folderTemplate, templateData);
+      if (folderPath) {
+        const parts = folderPath.split("/").filter((p: string) => p.trim());
+        for (const part of parts) {
+          outputDir = joinPath(os, outputDir, sanitizePath(part, os));
         }
-      } else {
-        if (settings.artistSubfolder && track.artists) {
-          outputDir = joinPath(os, outputDir, sanitizePath(track.artists, os));
-        }
-
-        if (settings.albumSubfolder && track.album_name) {
-          outputDir = joinPath(os, outputDir, sanitizePath(track.album_name, os));
-          useAlbumTrackNumber = true;
-        }
+      }
+      if (settings.folderTemplate.includes("{album}")) {
+        useAlbumTrackNumber = true;
       }
     }
 
-    // Always add item to queue before downloading
     const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
     const itemID = await AddToDownloadQueue(track.isrc, track.name || "", track.artists || "", track.album_name || "");
 
     const response = await downloadTrack({
       isrc: track.isrc,
-      track_id: track.id,
+      track_id: track.spotify_id,
       session_token: sessionToken,
       track_name: track.name,
       artist_name: track.artists,
@@ -73,31 +77,21 @@ export function useDownload() {
       album_track_number: track.track_number,
       output_dir: outputDir,
       audio_format: settings.audioFormat,
-      filename_format: settings.filenameFormat,
+      filename_format: settings.filenameTemplate,
       track_number: settings.trackNumber,
       position,
       use_album_track_number: useAlbumTrackNumber,
       item_id: itemID,
     });
 
-    // Check if token expired (403 or ERR_UNAUTHORIZED)
     if (!response.success && retryCount < 2) {
       const errorMsg = response.error?.toLowerCase() || "";
       if (errorMsg.includes("unauthorized") || errorMsg.includes("403") || errorMsg.includes("err_unauthorized")) {
-        // Force refresh token and retry
         await ensureValidToken(true);
-        return downloadWithSpotiDownloader(
-          track,
-          settings,
-          playlistName,
-          isArtistDiscography,
-          position,
-          retryCount + 1
-        );
+        return downloadWithSpotiDownloader(track, settings, playlistName, position, retryCount + 1, isAlbum, releaseYear);
       }
     }
 
-    // Mark as failed if download failed (queue tracking)
     if (!response.success && response.item_id) {
       const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
       await MarkDownloadItemFailed(response.item_id, response.error || "Download failed");
@@ -109,7 +103,9 @@ export function useDownload() {
   const handleDownloadTrack = async (
     track: TrackMetadata,
     playlistName?: string,
-    isArtistDiscography?: boolean
+    _isArtistDiscography?: boolean,
+    isAlbum?: boolean,
+    position?: number
   ) => {
     if (!track.isrc) {
       toast.error("No ISRC found for this track");
@@ -121,14 +117,7 @@ export function useDownload() {
     setDownloadingTrack(track.isrc);
 
     try {
-      // Single track download - use playlistName if provided for folder structure
-      const response = await downloadWithSpotiDownloader(
-        track,
-        settings,
-        playlistName,
-        isArtistDiscography,
-        undefined // Don't pass position for single track
-      );
+      const response = await downloadWithSpotiDownloader(track, settings, playlistName, position, 0, isAlbum);
 
       if (response.success) {
         if (response.already_exists) {
@@ -163,7 +152,7 @@ export function useDownload() {
     selectedTracks: string[],
     allTracks: TrackMetadata[],
     playlistName?: string,
-    isArtistDiscography?: boolean
+    isAlbum?: boolean
   ) => {
     if (selectedTracks.length === 0) {
       toast.error("No tracks selected");
@@ -183,15 +172,12 @@ export function useDownload() {
 
     for (let i = 0; i < selectedTracks.length; i++) {
       if (shouldStopDownloadRef.current) {
-        toast.info(
-          `Download stopped. ${successCount} tracks downloaded, ${selectedTracks.length - i} skipped.`
-        );
+        toast.info(`Download stopped. ${successCount} tracks downloaded, ${selectedTracks.length - i} skipped.`);
         break;
       }
 
       const isrc = selectedTracks[i];
       const track = allTracks.find((t) => t.isrc === isrc);
-
       setDownloadingTrack(isrc);
 
       if (track) {
@@ -199,16 +185,9 @@ export function useDownload() {
       }
 
       try {
-        // Use sequential numbering (1, 2, 3...) for selected tracks
         if (!track) continue;
-        
-        const response = await downloadWithSpotiDownloader(
-          track,
-          settings,
-          playlistName,
-          isArtistDiscography,
-          i + 1 // Sequential position based on selection order
-        );
+        const releaseYear = track.release_date?.substring(0, 4);
+        const response = await downloadWithSpotiDownloader(track, settings, playlistName, i + 1, 0, isAlbum, releaseYear);
 
         if (response.success) {
           if (response.already_exists) {
@@ -245,18 +224,14 @@ export function useDownload() {
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
 
-    // Build summary message
     logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
     if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
     } else if (errorCount === 0 && successCount === 0) {
-      // All skipped
       toast.info(`${skippedCount} tracks already exist`);
     } else if (errorCount === 0) {
-      // Mix of downloaded and skipped
       toast.info(`${successCount} downloaded, ${skippedCount} skipped`);
     } else {
-      // Has errors
       const parts = [];
       if (successCount > 0) parts.push(`${successCount} downloaded`);
       if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
@@ -268,7 +243,7 @@ export function useDownload() {
   const handleDownloadAll = async (
     tracks: TrackMetadata[],
     playlistName?: string,
-    isArtistDiscography?: boolean
+    isAlbum?: boolean
   ) => {
     const tracksWithIsrc = tracks.filter((track) => track.isrc);
 
@@ -290,25 +265,17 @@ export function useDownload() {
 
     for (let i = 0; i < tracksWithIsrc.length; i++) {
       if (shouldStopDownloadRef.current) {
-        toast.info(
-          `Download stopped. ${successCount} tracks downloaded, ${tracksWithIsrc.length - i} skipped.`
-        );
+        toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksWithIsrc.length - i} skipped.`);
         break;
       }
 
       const track = tracksWithIsrc[i];
-
       setDownloadingTrack(track.isrc);
       setCurrentDownloadInfo({ name: track.name, artists: track.artists });
 
       try {
-        const response = await downloadWithSpotiDownloader(
-          track,
-          settings,
-          playlistName,
-          isArtistDiscography,
-          i + 1
-        );
+        const releaseYear = track.release_date?.substring(0, 4);
+        const response = await downloadWithSpotiDownloader(track, settings, playlistName, i + 1, 0, isAlbum, releaseYear);
 
         if (response.success) {
           if (response.already_exists) {
@@ -345,18 +312,14 @@ export function useDownload() {
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
 
-    // Build summary message
     logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
     if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
     } else if (errorCount === 0 && successCount === 0) {
-      // All skipped
       toast.info(`${skippedCount} tracks already exist`);
     } else if (errorCount === 0) {
-      // Mix of downloaded and skipped
       toast.info(`${successCount} downloaded, ${skippedCount} skipped`);
     } else {
-      // Has errors
       const parts = [];
       if (successCount > 0) parts.push(`${successCount} downloaded`);
       if (skippedCount > 0) parts.push(`${skippedCount} skipped`);

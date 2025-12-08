@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -187,6 +188,9 @@ func (s *SpotiDownloader) DownloadByISRC(
 	actualTrackNumber int,
 	useAlbumTrackNumber bool,
 ) (string, error) {
+	// Sanitize output directory path
+	outputDir = SanitizeFolderPath(outputDir)
+
 	// Get download links
 	downloadResp, err := s.GetDownloadLink(trackID)
 	if err != nil {
@@ -301,22 +305,85 @@ func SanitizeFilename(filename string) string {
 	for _, char := range invalid {
 		result = strings.ReplaceAll(result, char, "_")
 	}
-	return result
+	return strings.TrimSpace(result)
+}
+
+// SanitizeFolderPath sanitizes each component of a folder path and normalizes separators
+func SanitizeFolderPath(folderPath string) string {
+	// Normalize all forward slashes to backslashes on Windows
+	normalizedPath := strings.ReplaceAll(folderPath, "/", string(filepath.Separator))
+
+	// Detect separator
+	sep := string(filepath.Separator)
+
+	// Split path into components
+	parts := strings.Split(normalizedPath, sep)
+	sanitizedParts := make([]string, 0, len(parts))
+
+	for i, part := range parts {
+		// Keep drive letter intact on Windows (e.g., "C:")
+		if i == 0 && len(part) == 2 && part[1] == ':' {
+			sanitizedParts = append(sanitizedParts, part)
+			continue
+		}
+
+		// Sanitize each folder name (but don't replace / or \ since we already normalized)
+		sanitized := sanitizeFolderName(part)
+		if sanitized != "" {
+			sanitizedParts = append(sanitizedParts, sanitized)
+		}
+	}
+
+	return strings.Join(sanitizedParts, sep)
+}
+
+// sanitizeFolderName removes invalid characters from a single folder name
+func sanitizeFolderName(name string) string {
+	// Remove or replace invalid characters for folder names (excluding path separators)
+	invalid := []string{":", "*", "?", "\"", "<", ">", "|"}
+	result := name
+	for _, char := range invalid {
+		result = strings.ReplaceAll(result, char, "_")
+	}
+	return strings.TrimSpace(result)
 }
 
 // Helper function to build filename
 func BuildFilename(trackName, artistName, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
+	safeTitle := SanitizeFilename(trackName)
+	safeArtist := SanitizeFilename(artistName)
+
 	var filename string
 
-	switch format {
-	case "artist-title":
-		filename = fmt.Sprintf("%s - %s", artistName, trackName)
-	case "title":
-		filename = trackName
-	default: // "title-artist"
-		filename = fmt.Sprintf("%s - %s", trackName, artistName)
+	// Check if format is a template (contains {})
+	if strings.Contains(format, "{") {
+		filename = format
+		filename = strings.ReplaceAll(filename, "{title}", safeTitle)
+		filename = strings.ReplaceAll(filename, "{artist}", safeArtist)
+
+		// Handle track number - if position is 0, remove {track} and surrounding separators
+		if position > 0 {
+			filename = strings.ReplaceAll(filename, "{track}", fmt.Sprintf("%02d", position))
+		} else {
+			// Remove {track} with common separators like ". " or " - " or ". "
+			filename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(filename, "")
+			filename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(filename, "")
+			filename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(filename, "")
+		}
+		return filename
 	}
 
+	// Legacy format support
+	switch format {
+	case "artist-title":
+		filename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
+	case "title":
+		filename = safeTitle
+	default: // "title-artist"
+		filename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
+	}
+
+	// Add track number prefix if enabled (legacy behavior)
 	if includeTrackNumber && position > 0 {
 		filename = fmt.Sprintf("%02d. %s", position, filename)
 	}

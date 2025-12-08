@@ -29,6 +29,7 @@ interface TrackListProps {
   hideAlbumColumn?: boolean;
   folderName?: string;
   isArtistDiscography?: boolean;
+  isAlbum?: boolean;
   // Lyrics props
   downloadedLyrics?: Set<string>;
   failedLyrics?: Set<string>;
@@ -41,7 +42,7 @@ interface TrackListProps {
   downloadingCoverTrack?: string | null;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
-  onDownloadTrack: (track: TrackMetadata, folderName?: string, isArtistDiscography?: boolean) => void;
+  onDownloadTrack: (track: TrackMetadata, folderName?: string, isArtistDiscography?: boolean, isAlbum?: boolean, position?: number) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
   onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string) => void;
   onPageChange: (page: number) => void;
@@ -66,6 +67,7 @@ export function TrackList({
   hideAlbumColumn = false,
   folderName,
   isArtistDiscography = false,
+  isAlbum = false,
   downloadedLyrics,
   failedLyrics,
   skippedLyrics,
@@ -283,12 +285,12 @@ export function TrackList({
                     {formatDuration(track.duration_ms)}
                   </td>
                   <td className="p-4 align-middle text-center">
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center gap-1">
                       {track.isrc && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
-                              onClick={() => onDownloadTrack(track, folderName, isArtistDiscography)}
+                              onClick={() => onDownloadTrack(track, folderName, isArtistDiscography, isAlbum, startIndex + index + 1)}
                               size="sm"
                               disabled={isDownloading || downloadingTrack === track.isrc}
                             >
@@ -320,24 +322,24 @@ export function TrackList({
                           </TooltipContent>
                         </Tooltip>
                       )}
-                      {track.id && onDownloadLyrics && (
+                      {track.spotify_id && onDownloadLyrics && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
                               onClick={() =>
-                                onDownloadLyrics(track.id!, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1)
+                                onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1)
                               }
                               size="sm"
                               variant="outline"
-                              disabled={downloadingLyricsTrack === track.id}
+                              disabled={downloadingLyricsTrack === track.spotify_id}
                             >
-                              {downloadingLyricsTrack === track.id ? (
+                              {downloadingLyricsTrack === track.spotify_id ? (
                                 <Spinner />
-                              ) : skippedLyrics?.has(track.id) ? (
+                              ) : skippedLyrics?.has(track.spotify_id) ? (
                                 <FileCheck className="h-4 w-4 text-yellow-500" />
-                              ) : downloadedLyrics?.has(track.id) ? (
+                              ) : downloadedLyrics?.has(track.spotify_id) ? (
                                 <CheckCircle className="h-4 w-4 text-green-500" />
-                              ) : failedLyrics?.has(track.id) ? (
+                              ) : failedLyrics?.has(track.spotify_id) ? (
                                 <XCircle className="h-4 w-4 text-red-500" />
                               ) : (
                                 <FileText className="h-4 w-4" />
@@ -345,13 +347,13 @@ export function TrackList({
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {downloadingLyricsTrack === track.id ? (
+                            {downloadingLyricsTrack === track.spotify_id ? (
                               <p>Downloading lyrics...</p>
-                            ) : skippedLyrics?.has(track.id) ? (
+                            ) : skippedLyrics?.has(track.spotify_id) ? (
                               <p>Lyrics already exists</p>
-                            ) : downloadedLyrics?.has(track.id) ? (
+                            ) : downloadedLyrics?.has(track.spotify_id) ? (
                               <p>Lyrics downloaded</p>
-                            ) : failedLyrics?.has(track.id) ? (
+                            ) : failedLyrics?.has(track.spotify_id) ? (
                               <p>Lyrics failed</p>
                             ) : (
                               <p>Download Lyrics</p>
@@ -364,20 +366,20 @@ export function TrackList({
                           <TooltipTrigger asChild>
                             <Button
                               onClick={() => {
-                                const trackId = track.id || `${track.name}-${track.artists}`;
+                                const trackId = track.spotify_id || `${track.name}-${track.artists}`;
                                 onDownloadCover(track.images, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1, trackId);
                               }}
                               size="sm"
                               variant="outline"
-                              disabled={downloadingCoverTrack === (track.id || `${track.name}-${track.artists}`)}
+                              disabled={downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)}
                             >
-                              {downloadingCoverTrack === (track.id || `${track.name}-${track.artists}`) ? (
+                              {downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`) ? (
                                 <Spinner />
-                              ) : skippedCovers?.has(track.id || `${track.name}-${track.artists}`) ? (
+                              ) : skippedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
                                 <FileCheck className="h-4 w-4 text-yellow-500" />
-                              ) : downloadedCovers?.has(track.id || `${track.name}-${track.artists}`) ? (
+                              ) : downloadedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
                                 <CheckCircle className="h-4 w-4 text-green-500" />
-                              ) : failedCovers?.has(track.id || `${track.name}-${track.artists}`) ? (
+                              ) : failedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
                                 <XCircle className="h-4 w-4 text-red-500" />
                               ) : (
                                 <ImageDown className="h-4 w-4" />
@@ -385,13 +387,13 @@ export function TrackList({
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {downloadingCoverTrack === (track.id || `${track.name}-${track.artists}`) ? (
+                            {downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`) ? (
                               <p>Downloading cover...</p>
-                            ) : skippedCovers?.has(track.id || `${track.name}-${track.artists}`) ? (
+                            ) : skippedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
                               <p>Cover already exists</p>
-                            ) : downloadedCovers?.has(track.id || `${track.name}-${track.artists}`) ? (
+                            ) : downloadedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
                               <p>Cover downloaded</p>
-                            ) : failedCovers?.has(track.id || `${track.name}-${track.artists}`) ? (
+                            ) : failedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
                               <p>Cover failed</p>
                             ) : (
                               <p>Download Cover</p>

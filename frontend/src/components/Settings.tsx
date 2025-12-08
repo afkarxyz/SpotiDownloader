@@ -16,12 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw, Info, X, Volume2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, type Settings as SettingsType } from "@/lib/settings";
+import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder } from "../../wailsjs/go/main/App";
 
@@ -52,7 +51,6 @@ export function Settings() {
     applyThemeMode(savedSettings.themeMode);
     applyTheme(savedSettings.theme);
 
-    // Setup listener for system theme changes
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
       if (savedSettings.themeMode === "auto") {
@@ -62,10 +60,7 @@ export function Settings() {
     };
 
     mediaQuery.addEventListener("change", handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener("change", handleChange);
-    };
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [savedSettings.themeMode, savedSettings.theme]);
 
   // Apply temp settings for preview when dialog is open
@@ -74,12 +69,10 @@ export function Settings() {
       applyThemeMode(tempSettings.themeMode);
       applyTheme(tempSettings.theme);
       
-      // Update isDark state after theme is applied
       setTimeout(() => {
         setIsDark(document.documentElement.classList.contains('dark'));
       }, 0);
 
-      // Setup listener for system theme changes during preview
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const handleChange = () => {
         if (tempSettings.themeMode === "auto") {
@@ -92,15 +85,11 @@ export function Settings() {
       };
 
       mediaQuery.addEventListener("change", handleChange);
-
-      return () => {
-        mediaQuery.removeEventListener("change", handleChange);
-      };
+      return () => mediaQuery.removeEventListener("change", handleChange);
     }
   }, [open, tempSettings.themeMode, tempSettings.theme]);
 
   useEffect(() => {
-    // Load settings with defaults from backend on mount
     const loadDefaults = async () => {
       if (!savedSettings.downloadPath) {
         setIsLoadingDefaults(true);
@@ -113,7 +102,6 @@ export function Settings() {
     loadDefaults();
   }, []);
 
-  // Reset temp settings when dialog opens
   useEffect(() => {
     if (open) {
       setTempSettings(savedSettings);
@@ -130,24 +118,19 @@ export function Settings() {
     const defaultSettings = await resetToDefaultSettings();
     setTempSettings(defaultSettings);
     setSavedSettings(defaultSettings);
-    
-    // Apply default theme mode and theme
     applyThemeMode(defaultSettings.themeMode);
     applyTheme(defaultSettings.theme);
   };
 
   const handleCancel = () => {
-    // Revert to saved settings
     applyThemeMode(savedSettings.themeMode);
     applyTheme(savedSettings.theme);
-    
     setTempSettings(savedSettings);
     setOpen(false);
   };
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
-      // Dialog is closing, revert to saved settings
       applyThemeMode(savedSettings.themeMode);
       applyTheme(savedSettings.theme);
       setTempSettings(savedSettings);
@@ -155,32 +138,11 @@ export function Settings() {
     setOpen(newOpen);
   };
 
-  const handleDownloadPathChange = (value: string) => {
-    setTempSettings((prev) => ({ ...prev, downloadPath: value }));
-  };
-
-  const handleAudioFormatChange = (value: "mp3" | "flac") => {
-    setTempSettings((prev) => ({ ...prev, audioFormat: value }));
-  };
-
-  const handleThemeChange = (value: string) => {
-    setTempSettings((prev) => ({ ...prev, theme: value }));
-  };
-
-  const handleThemeModeChange = (value: "auto" | "light" | "dark") => {
-    setTempSettings((prev) => ({ ...prev, themeMode: value }));
-  };
-
   const handleBrowseFolder = async () => {
     try {
-      // Call backend to open folder selection dialog
       const selectedPath = await SelectFolder(tempSettings.downloadPath || "");
-      console.log("Selected path:", selectedPath);
-      
       if (selectedPath && selectedPath.trim() !== "") {
         setTempSettings((prev) => ({ ...prev, downloadPath: selectedPath }));
-      } else {
-        console.log("No folder selected or user cancelled");
       }
     } catch (error) {
       console.error("Error selecting folder:", error);
@@ -217,7 +179,7 @@ export function Settings() {
                 <InputWithContext
                   id="download-path"
                   value={tempSettings.downloadPath}
-                  onChange={(e) => handleDownloadPathChange(e.target.value)}
+                  onChange={(e) => setTempSettings((prev) => ({ ...prev, downloadPath: e.target.value }))}
                   placeholder="C:\Users\YourUsername\Music"
                 />
                 <Button type="button" onClick={handleBrowseFolder} className="gap-1.5">
@@ -236,29 +198,23 @@ export function Settings() {
                     <Info className="h-4 w-4 text-muted-foreground cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent side="right" className="max-w-xs">
-                    <p>FLAC is still in beta and may occasionally fail. If download fails, please try again or switch to MP3.</p>
+                    <p>FLAC is still in beta and may occasionally fail.</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
               <Select
                 value={tempSettings.audioFormat}
-                onValueChange={handleAudioFormatChange}
+                onValueChange={(value: "mp3" | "flac") => setTempSettings((prev) => ({ ...prev, audioFormat: value }))}
               >
                 <SelectTrigger id="audioFormat">
                   <SelectValue placeholder="Select audio format" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="mp3">
-                    <span className="flex items-center">
-                      <Mp3Icon />
-                      MP3
-                    </span>
+                    <span className="flex items-center"><Mp3Icon />MP3</span>
                   </SelectItem>
                   <SelectItem value="flac">
-                    <span className="flex items-center">
-                      <FlacIcon />
-                      FLAC
-                    </span>
+                    <span className="flex items-center"><FlacIcon />FLAC</span>
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -267,7 +223,10 @@ export function Settings() {
             {/* Theme Mode Selection */}
             <div className="space-y-2">
               <Label htmlFor="theme-mode">Mode</Label>
-              <Select value={tempSettings.themeMode} onValueChange={handleThemeModeChange}>
+              <Select
+                value={tempSettings.themeMode}
+                onValueChange={(value: "auto" | "light" | "dark") => setTempSettings((prev) => ({ ...prev, themeMode: value }))}
+              >
                 <SelectTrigger id="theme-mode">
                   <SelectValue placeholder="Select theme mode" />
                 </SelectTrigger>
@@ -282,7 +241,10 @@ export function Settings() {
             {/* Accent Selection */}
             <div className="space-y-2">
               <Label htmlFor="theme">Accent</Label>
-              <Select value={tempSettings.theme} onValueChange={handleThemeChange}>
+              <Select
+                value={tempSettings.theme}
+                onValueChange={(value) => setTempSettings((prev) => ({ ...prev, theme: value }))}
+              >
                 <SelectTrigger id="theme">
                   <SelectValue placeholder="Select a theme" />
                 </SelectTrigger>
@@ -309,81 +271,102 @@ export function Settings() {
 
           {/* Right Column */}
           <div className="space-y-4">
-            {/* Filename Format */}
+            {/* Folder Structure */}
             <div className="space-y-2">
-              <Label className="text-sm">Filename Format</Label>
-              <RadioGroup
-                value={tempSettings.filenameFormat}
-                onValueChange={(value) => setTempSettings(prev => ({ ...prev, filenameFormat: value as any }))}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Folder Structure</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p className="text-xs whitespace-nowrap">Variables: {TEMPLATE_VARIABLES.map(v => v.key).join(", ")}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <Select
+                value={tempSettings.folderPreset}
+                onValueChange={(value: FolderPreset) => {
+                  const preset = FOLDER_PRESETS[value];
+                  setTempSettings(prev => ({
+                    ...prev,
+                    folderPreset: value,
+                    folderTemplate: value === "custom" ? prev.folderTemplate : preset.template
+                  }));
+                }}
               >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="title-artist" id="title-artist" />
-                  <Label htmlFor="title-artist" className="cursor-pointer font-normal text-sm">Title - Artist</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="artist-title" id="artist-title" />
-                  <Label htmlFor="artist-title" className="cursor-pointer font-normal text-sm">Artist - Title</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="title" id="title" />
-                  <Label htmlFor="title" className="cursor-pointer font-normal text-sm">Title</Label>
-                </div>
-              </RadioGroup>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FOLDER_PRESETS).map(([key, { label }]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {tempSettings.folderPreset === "custom" && (
+                <InputWithContext
+                  value={tempSettings.folderTemplate}
+                  onChange={(e) => setTempSettings(prev => ({ ...prev, folderTemplate: e.target.value }))}
+                  placeholder="{artist}/{album}"
+                  className="h-9 text-sm"
+                />
+              )}
+              {tempSettings.folderTemplate && (
+                <p className="text-xs text-muted-foreground">
+                  Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, "Taylor Swift").replace(/\{album\}/g, "1989").replace(/\{year\}/g, "2014")}/</span>
+                </p>
+              )}
             </div>
 
             <div className="border-t" />
 
-            {/* Folder Settings */}
+            {/* Filename Format */}
             <div className="space-y-2">
-              <h3 className="font-medium text-sm">Folder Settings</h3>
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="track-number"
-                  checked={tempSettings.trackNumber}
-                  onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, trackNumber: checked as boolean }))}
-                />
-                <Label htmlFor="track-number" className="cursor-pointer text-sm">Track Number</Label>
+                <Label className="text-sm">Filename Format</Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs">
-                    <p className="text-xs text-center">Adds track numbers to filenames. Uses album track numbers when Album Subfolder is enabled, otherwise uses playlist position</p>
+                  <TooltipContent side="top">
+                    <p className="text-xs whitespace-nowrap">Variables: {TEMPLATE_VARIABLES.map(v => v.key).join(", ")}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="artist-subfolder"
-                  checked={tempSettings.artistSubfolder}
-                  onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, artistSubfolder: checked as boolean }))}
+              <Select
+                value={tempSettings.filenamePreset}
+                onValueChange={(value: FilenamePreset) => {
+                  const preset = FILENAME_PRESETS[value];
+                  setTempSettings(prev => ({
+                    ...prev,
+                    filenamePreset: value,
+                    filenameTemplate: value === "custom" ? prev.filenameTemplate : preset.template
+                  }));
+                }}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FILENAME_PRESETS).map(([key, { label }]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {tempSettings.filenamePreset === "custom" && (
+                <InputWithContext
+                  value={tempSettings.filenameTemplate}
+                  onChange={(e) => setTempSettings(prev => ({ ...prev, filenameTemplate: e.target.value }))}
+                  placeholder="{track}. {title}"
+                  className="h-9 text-sm"
                 />
-                <Label htmlFor="artist-subfolder" className="cursor-pointer text-sm">Artist Subfolder</Label>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs">
-                    <p className="text-xs text-center">Playlist only</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="album-subfolder"
-                  checked={tempSettings.albumSubfolder}
-                  onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, albumSubfolder: checked as boolean }))}
-                />
-                <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder</Label>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs">
-                    <p className="text-xs text-center">Playlist & Discography</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
+              )}
+              {tempSettings.filenameTemplate && (
+                <p className="text-xs text-muted-foreground">
+                  Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Taylor Swift").replace(/\{title\}/g, "Shake It Off").replace(/\{track\}/g, "01").replace(/\{year\}/g, "2014")}.{tempSettings.audioFormat}</span>
+                </p>
+              )}
             </div>
 
             <div className="border-t" />
