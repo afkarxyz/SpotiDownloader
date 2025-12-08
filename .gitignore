@@ -6,7 +6,7 @@ build/
 
 # Binary files (except get_token.exe in backend/bin for Windows dev)
 *.exe
-!backend/bin/get_token.exe
+backend/bin/get_token.exe
 
 # Token fetcher binary for unix (built by CI)
 backend/bin/get_token
