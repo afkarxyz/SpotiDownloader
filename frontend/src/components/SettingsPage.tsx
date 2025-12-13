@@ -246,7 +246,7 @@ export function SettingsPage() {
             />
           </div>
 
-          <div className="border-t pt-4" />
+          <div className="border-t pt-2" />
 
           {/* Folder Structure */}
           <div className="space-y-2">
@@ -296,7 +296,7 @@ export function SettingsPage() {
             )}
           </div>
 
-          <div className="border-t pt-4" />
+          <div className="border-t pt-2" />
 
           {/* Filename Format */}
           <div className="space-y-2">
