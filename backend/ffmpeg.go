@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ulikunitz/xz"
@@ -76,11 +75,7 @@ func IsFFmpegInstalled() (bool, error) {
 	// Verify it's executable
 	cmd := exec.Command(ffmpegPath, "-version")
 	// Hide console window on Windows
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow: true,
-		}
-	}
+	setHideWindow(cmd)
 	err = cmd.Run()
 	return err == nil, nil
 }
@@ -392,11 +387,7 @@ func ConvertAudio(req ConvertAudioRequest) ([]ConvertAudioResult, error) {
 
 			cmd := exec.Command(ffmpegPath, args...)
 			// Hide console window on Windows
-			if runtime.GOOS == "windows" {
-				cmd.SysProcAttr = &syscall.SysProcAttr{
-					HideWindow: true,
-				}
-			}
+			setHideWindow(cmd)
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				result.Error = fmt.Sprintf("conversion failed: %s - %s", err.Error(), string(output))
@@ -542,11 +533,7 @@ func InstallFFmpegFromFile(filePath string) error {
 		
 		cmd := exec.Command(ffmpegPath, "-version")
 		// Hide console window on Windows
-		if runtime.GOOS == "windows" {
-			cmd.SysProcAttr = &syscall.SysProcAttr{
-				HideWindow: true,
-			}
-		}
+		setHideWindow(cmd)
 		verifyErr = cmd.Run()
 		if verifyErr == nil {
 			break
