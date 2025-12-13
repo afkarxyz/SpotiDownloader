@@ -329,13 +329,56 @@ func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string) (string
 
 // Helper function to sanitize filename
 func SanitizeFilename(filename string) string {
-	// Remove or replace invalid characters
+	// First, remove invalid filesystem characters
 	invalid := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
 	result := filename
 	for _, char := range invalid {
 		result = strings.ReplaceAll(result, char, "_")
 	}
-	return strings.TrimSpace(result)
+	
+	// Remove control characters and emoji
+	var sanitized strings.Builder
+	for _, r := range result {
+		// Keep printable characters and valid Unicode characters
+		// Remove control characters, but keep spaces, tabs, newlines for now
+		if r < 0x20 && r != 0x09 && r != 0x0A && r != 0x0D {
+			continue
+		}
+		if r == 0x7F {
+			continue
+		}
+		// Remove emoji ranges (most emoji are in these ranges)
+		if (r >= 0x1F300 && r <= 0x1F9FF) || // Miscellaneous Symbols and Pictographs, Emoticons
+			(r >= 0x2600 && r <= 0x26FF) ||   // Miscellaneous Symbols
+			(r >= 0x2700 && r <= 0x27BF) ||   // Dingbats
+			(r >= 0xFE00 && r <= 0xFE0F) ||   // Variation Selectors
+			(r >= 0x1F900 && r <= 0x1F9FF) || // Supplemental Symbols and Pictographs
+			(r >= 0x1F600 && r <= 0x1F64F) || // Emoticons
+			(r >= 0x1F680 && r <= 0x1F6FF) || // Transport and Map Symbols
+			(r >= 0x1F1E0 && r <= 0x1F1FF) {  // Regional Indicator Symbols (flags)
+			continue
+		}
+		sanitized.WriteRune(r)
+	}
+	
+	result = sanitized.String()
+	result = strings.TrimSpace(result)
+	
+	// Remove leading/trailing dots and spaces (Windows doesn't allow these)
+	result = strings.Trim(result, ". ")
+	
+	// Remove consecutive spaces and underscores
+	re := regexp.MustCompile(`[\s_]+`)
+	result = re.ReplaceAllString(result, "_")
+	
+	// Remove leading/trailing underscores
+	result = strings.Trim(result, "_")
+	
+	if result == "" {
+		return "Unknown"
+	}
+	
+	return result
 }
 
 // SanitizeFolderPath sanitizes each component of a folder path and normalizes separators
@@ -375,13 +418,8 @@ func SanitizeFolderPath(folderPath string) string {
 
 // sanitizeFolderName removes invalid characters from a single folder name
 func sanitizeFolderName(name string) string {
-	// Remove or replace invalid characters for folder names (excluding path separators)
-	invalid := []string{":", "*", "?", "\"", "<", ">", "|"}
-	result := name
-	for _, char := range invalid {
-		result = strings.ReplaceAll(result, char, "_")
-	}
-	return strings.TrimSpace(result)
+	// Use the same sanitization as filename
+	return SanitizeFilename(name)
 }
 
 // Helper function to build filename
