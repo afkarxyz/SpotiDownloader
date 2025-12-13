@@ -77,9 +77,24 @@ func (s *SpotiDownloader) IsFlacAvailable(trackID string) (bool, error) {
 		return false, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Read body first to handle encoding issues
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return false, fmt.Errorf("API returned empty response")
+	}
+
 	var result FlacAvailableResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return false, err
+	if err := json.Unmarshal(body, &result); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return false, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	return result.Available, nil
@@ -113,9 +128,24 @@ func (s *SpotiDownloader) GetDownloadLink(trackID string) (*DownloadResponse, er
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Read body first to handle encoding issues and provide better error messages
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("API returned empty response")
+	}
+
 	var result DownloadResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &result); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("failed to decode API response: %w (response: %s)", err, bodyStr)
 	}
 
 	if !result.Success {
@@ -323,6 +353,12 @@ func SanitizeFolderPath(folderPath string) string {
 	for i, part := range parts {
 		// Keep drive letter intact on Windows (e.g., "C:")
 		if i == 0 && len(part) == 2 && part[1] == ':' {
+			sanitizedParts = append(sanitizedParts, part)
+			continue
+		}
+
+		// Keep empty first part for absolute paths on Unix (e.g., "/Users/...")
+		if i == 0 && part == "" {
 			sanitizedParts = append(sanitizedParts, part)
 			continue
 		}

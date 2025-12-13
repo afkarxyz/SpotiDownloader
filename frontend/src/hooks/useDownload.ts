@@ -23,6 +23,7 @@ export function useDownload() {
 
   const downloadWithSpotiDownloader = async (
     track: TrackMetadata,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     settings: any,
     playlistName?: string,
     position?: number,
@@ -57,6 +58,8 @@ export function useDownload() {
           outputDir = joinPath(os, outputDir, sanitizePath(part, os));
         }
       }
+
+      // Use album track number if template contains {album}
       if (settings.folderTemplate.includes("{album}")) {
         useAlbumTrackNumber = true;
       }
@@ -81,6 +84,8 @@ export function useDownload() {
       track_number: settings.trackNumber,
       position,
       use_album_track_number: useAlbumTrackNumber,
+      spotify_id: track.spotify_id,
+      embed_lyrics: settings.embedLyrics,
       item_id: itemID,
     });
 

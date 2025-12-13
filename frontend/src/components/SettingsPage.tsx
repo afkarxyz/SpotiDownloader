@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderOpen, Save, RotateCcw, Info, Volume2 } from "lucide-react";
+import { FolderOpen, Save, RotateCcw, Info } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
@@ -126,37 +126,6 @@ export function SettingsPage() {
             </div>
           </div>
 
-          {/* Audio Format */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="audioFormat">Format</Label>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-xs">
-                  <p>FLAC is still in beta and may occasionally fail.</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <Select
-              value={tempSettings.audioFormat}
-              onValueChange={(value: "mp3" | "flac") => setTempSettings((prev) => ({ ...prev, audioFormat: value }))}
-            >
-              <SelectTrigger id="audioFormat">
-                <SelectValue placeholder="Select audio format" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mp3">
-                  <span className="flex items-center"><Mp3Icon />MP3</span>
-                </SelectItem>
-                <SelectItem value="flac">
-                  <span className="flex items-center"><FlacIcon />FLAC</span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Theme Mode */}
           <div className="space-y-2">
             <Label htmlFor="theme-mode">Mode</Label>
@@ -222,10 +191,63 @@ export function SettingsPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Sound Effects */}
+          <div className="flex items-center gap-3">
+            <Label htmlFor="sfx-enabled" className="cursor-pointer text-sm">Sound Effects</Label>
+            <Switch
+              id="sfx-enabled"
+              checked={tempSettings.sfxEnabled}
+              onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, sfxEnabled: checked }))}
+            />
+          </div>
         </div>
 
         {/* Right Column */}
         <div className="space-y-4">
+          {/* Audio Format */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="audioFormat" className="text-sm">Format</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  <p className="text-xs">FLAC is still in beta and may occasionally fail.</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <Select
+              value={tempSettings.audioFormat}
+              onValueChange={(value: "mp3" | "flac") => setTempSettings((prev) => ({ ...prev, audioFormat: value }))}
+            >
+              <SelectTrigger id="audioFormat" className="h-9">
+                <SelectValue placeholder="Select audio format" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mp3">
+                  <span className="flex items-center"><Mp3Icon />MP3</span>
+                </SelectItem>
+                <SelectItem value="flac">
+                  <span className="flex items-center"><FlacIcon />FLAC</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Embed Lyrics */}
+          <div className="flex items-center gap-3">
+            <Label htmlFor="embed-lyrics" className="cursor-pointer text-sm">Embed Lyrics</Label>
+            <Switch
+              id="embed-lyrics"
+              checked={tempSettings.embedLyrics}
+              onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedLyrics: checked }))}
+            />
+          </div>
+
+          <div className="border-t pt-4" />
+
           {/* Folder Structure */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -322,19 +344,6 @@ export function SettingsPage() {
                 Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Taylor Swift").replace(/\{title\}/g, "Shake It Off").replace(/\{track\}/g, "01").replace(/\{year\}/g, "2014")}.{tempSettings.audioFormat}</span>
               </p>
             )}
-          </div>
-
-          <div className="border-t pt-4" />
-
-          {/* Sound Effects */}
-          <div className="flex items-center gap-3">
-            <Volume2 className="h-4 w-4 text-muted-foreground" />
-            <Label htmlFor="sfx-enabled" className="cursor-pointer text-sm">Sound Effects</Label>
-            <Switch
-              id="sfx-enabled"
-              checked={tempSettings.sfxEnabled}
-              onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, sfxEnabled: checked }))}
-            />
           </div>
         </div>
       </div>

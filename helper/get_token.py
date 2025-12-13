@@ -1,7 +1,7 @@
 from DrissionPage import ChromiumPage
 import time
 
-def get_session_token_sync(max_wait=10):
+def get_session_token_sync(max_wait=5):
     page = None
     try:
         page = ChromiumPage()
