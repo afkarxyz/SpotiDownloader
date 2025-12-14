@@ -218,6 +218,7 @@ func (s *SpotiDownloader) DownloadByISRC(
 	coverURL string,
 	actualTrackNumber int,
 	discNumber int,
+	totalTracks int,
 	useAlbumTrackNumber bool,
 	embedMaxQualityCover bool,
 ) (string, error) {
@@ -280,18 +281,15 @@ func (s *SpotiDownloader) DownloadByISRC(
 		}
 	}
 
-	// Extract year from release date (format: YYYY-MM-DD or YYYY)
-	year := extractYear(releaseDate)
-
 	// Embed metadata for both MP3 and FLAC
 	metadata := Metadata{
 		Title:       trackName,
 		Artist:      artistName,
 		Album:       albumName,
 		AlbumArtist: albumArtist,
-		Date:        year,        // Recorded date (year only)
-		ReleaseDate: releaseDate,  // Release date (full date: YYYY-MM-DD)
+		Date:        releaseDate, // Recorded date (full date YYYY-MM-DD)
 		TrackNumber: actualTrackNumber,
+		TotalTracks: totalTracks, // Total tracks in album from Spotify
 		DiscNumber:  discNumber,
 		ISRC:        isrc,
 		Description: "https://github.com/afkarxyz/SpotiDownloader",
@@ -316,7 +314,7 @@ func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string, embedMa
 		coverClient := NewCoverClient()
 		coverURL = coverClient.getMaxResolutionURL(coverURL)
 	}
-	
+
 	resp, err := s.httpClient.Get(coverURL)
 	if err != nil {
 		return "", err
@@ -347,13 +345,13 @@ func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string, embedMa
 func SanitizeFilename(filename string) string {
 	// Replace forward slash with space (more natural than underscore)
 	result := strings.ReplaceAll(filename, "/", " ")
-	
+
 	// Remove other invalid filesystem characters (replace with space)
 	invalid := []string{"\\", ":", "*", "?", "\"", "<", ">", "|"}
 	for _, char := range invalid {
 		result = strings.ReplaceAll(result, char, " ")
 	}
-	
+
 	// Remove control characters and emoji
 	var sanitized strings.Builder
 	for _, r := range result {
@@ -367,39 +365,39 @@ func SanitizeFilename(filename string) string {
 		}
 		// Remove emoji ranges (most emoji are in these ranges)
 		if (r >= 0x1F300 && r <= 0x1F9FF) || // Miscellaneous Symbols and Pictographs, Emoticons
-			(r >= 0x2600 && r <= 0x26FF) ||   // Miscellaneous Symbols
-			(r >= 0x2700 && r <= 0x27BF) ||   // Dingbats
-			(r >= 0xFE00 && r <= 0xFE0F) ||   // Variation Selectors
+			(r >= 0x2600 && r <= 0x26FF) || // Miscellaneous Symbols
+			(r >= 0x2700 && r <= 0x27BF) || // Dingbats
+			(r >= 0xFE00 && r <= 0xFE0F) || // Variation Selectors
 			(r >= 0x1F900 && r <= 0x1F9FF) || // Supplemental Symbols and Pictographs
 			(r >= 0x1F600 && r <= 0x1F64F) || // Emoticons
 			(r >= 0x1F680 && r <= 0x1F6FF) || // Transport and Map Symbols
-			(r >= 0x1F1E0 && r <= 0x1F1FF) {  // Regional Indicator Symbols (flags)
+			(r >= 0x1F1E0 && r <= 0x1F1FF) { // Regional Indicator Symbols (flags)
 			continue
 		}
 		sanitized.WriteRune(r)
 	}
-	
+
 	result = sanitized.String()
 	result = strings.TrimSpace(result)
-	
+
 	// Remove leading/trailing dots and spaces (Windows doesn't allow these)
 	result = strings.Trim(result, ". ")
-	
+
 	// Normalize consecutive spaces to single space
 	re := regexp.MustCompile(`\s+`)
 	result = re.ReplaceAllString(result, " ")
-	
+
 	// Normalize consecutive underscores to single underscore
 	re = regexp.MustCompile(`_+`)
 	result = re.ReplaceAllString(result, "_")
-	
+
 	// Remove leading/trailing underscores and spaces
 	result = strings.Trim(result, "_ ")
-	
+
 	if result == "" {
 		return "Unknown"
 	}
-	
+
 	return result
 }
 

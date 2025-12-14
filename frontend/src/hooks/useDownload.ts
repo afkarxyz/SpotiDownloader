@@ -85,6 +85,7 @@ export function useDownload() {
       cover_url: track.images,
       album_track_number: track.track_number,
       disc_number: track.disc_number,
+      total_tracks: track.total_tracks, // Total tracks in album from Spotify
       output_dir: outputDir,
       audio_format: settings.audioFormat,
       filename_format: settings.filenameTemplate,

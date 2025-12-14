@@ -13,6 +13,7 @@ export interface TrackMetadata {
   images: string;
   release_date: string;
   track_number: number;
+  total_tracks?: number; // Total tracks in album
   disc_number?: number;
   external_urls: string;
   isrc: string;
@@ -121,6 +122,7 @@ export interface DownloadRequest {
   cover_url?: string;
   album_track_number?: number;
   disc_number?: number;
+  total_tracks?: number; // Total tracks in album from Spotify
   output_dir?: string;
   audio_format?: string;
   filename_format?: string;
