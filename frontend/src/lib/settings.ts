@@ -28,6 +28,7 @@ export interface Settings {
   trackNumber: boolean;
   sfxEnabled: boolean;
   embedLyrics: boolean;
+  embedMaxQualityCover: boolean;
   operatingSystem: "Windows" | "linux/MacOS"
 }
 
@@ -87,13 +88,14 @@ export const DEFAULT_SETTINGS: Settings = {
   trackNumber: false,
   sfxEnabled: true,
   embedLyrics: false,
+  embedMaxQualityCover: false,
   operatingSystem: detectOS()
 };
 
 export const FONT_OPTIONS: { value: FontFamily; label: string; fontFamily: string }[] = [
   { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
   { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
-  { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist Sans", system-ui, sans-serif' },
+  { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
   { value: "google-sans", label: "Google Sans Flex", fontFamily: '"Google Sans Flex", system-ui, sans-serif' },
   { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
   { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },

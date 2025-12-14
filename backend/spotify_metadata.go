@@ -61,10 +61,12 @@ type TrackMetadata struct {
 	Artists     string `json:"artists"`
 	Name        string `json:"name"`
 	AlbumName   string `json:"album_name"`
+	AlbumArtist string `json:"album_artist,omitempty"`
 	DurationMS  int    `json:"duration_ms"`
 	Images      string `json:"images"`
 	ReleaseDate string `json:"release_date"`
 	TrackNumber int    `json:"track_number"`
+	DiscNumber  int    `json:"disc_number,omitempty"`
 	ExternalURL string `json:"external_urls"`
 	ISRC        string `json:"isrc"`
 }
@@ -82,10 +84,12 @@ type AlbumTrackMetadata struct {
 	Artists     string         `json:"artists"`
 	Name        string         `json:"name"`
 	AlbumName   string         `json:"album_name"`
+	AlbumArtist string         `json:"album_artist,omitempty"`
 	DurationMS  int            `json:"duration_ms"`
 	Images      string         `json:"images"`
 	ReleaseDate string         `json:"release_date"`
 	TrackNumber int            `json:"track_number"`
+	DiscNumber  int            `json:"disc_number,omitempty"`
 	ExternalURL string         `json:"external_urls"`
 	ISRC        string         `json:"isrc"`
 	AlbumType   string         `json:"album_type,omitempty"`
@@ -227,6 +231,7 @@ type trackSimplified struct {
 	Name        string      `json:"name"`
 	DurationMS  int         `json:"duration_ms"`
 	TrackNumber int         `json:"track_number"`
+	DiscNumber  int         `json:"disc_number"`
 	ExternalURL externalURL `json:"external_urls"`
 	Artists     []artist    `json:"artists"`
 }
@@ -236,6 +241,7 @@ type trackFull struct {
 	Name        string          `json:"name"`
 	DurationMS  int             `json:"duration_ms"`
 	TrackNumber int             `json:"track_number"`
+	DiscNumber  int             `json:"disc_number"`
 	ExternalURL externalURL     `json:"external_urls"`
 	ExternalID  externalID      `json:"external_ids"`
 	Album       albumSimplified `json:"album"`
@@ -511,10 +517,12 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *playlistRaw) PlaylistRes
 			Artists:     joinArtists(item.Track.Artists),
 			Name:        item.Track.Name,
 			AlbumName:   item.Track.Album.Name,
+			AlbumArtist: joinArtists(item.Track.Album.Artists),
 			DurationMS:  item.Track.DurationMS,
 			Images:      firstNonEmpty(firstImageURL(item.Track.Album.Images), info.Owner.Images),
 			ReleaseDate: item.Track.Album.ReleaseDate,
 			TrackNumber: item.Track.TrackNumber,
+			DiscNumber:  item.Track.DiscNumber,
 			ExternalURL: item.Track.ExternalURL.Spotify,
 			ISRC:        item.Track.ExternalID.ISRC,
 			AlbumID:     item.Track.Album.ID,
@@ -560,10 +568,12 @@ func (c *SpotifyMetadataClient) formatAlbumData(ctx context.Context, raw *albumR
 			Artists:     joinArtists(item.Artists),
 			Name:        item.Name,
 			AlbumName:   raw.Data.Name,
+			AlbumArtist: joinArtists(raw.Data.Artists),
 			DurationMS:  item.DurationMS,
 			Images:      albumImage,
 			ReleaseDate: raw.Data.ReleaseDate,
 			TrackNumber: item.TrackNumber,
+			DiscNumber:  item.DiscNumber,
 			ExternalURL: item.ExternalURL.Spotify,
 			ISRC:        isrc,
 		})
@@ -638,11 +648,13 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 				Artists:     joinArtists(tr.Artists),
 				Name:        tr.Name,
 				AlbumName:   alb.Name,
+				AlbumArtist: joinArtists(alb.Artists),
 				AlbumType:   alb.AlbumType,
 				DurationMS:  tr.DurationMS,
 				Images:      albumImage,
 				ReleaseDate: alb.ReleaseDate,
 				TrackNumber: tr.TrackNumber,
+				DiscNumber:  tr.DiscNumber,
 				ExternalURL: tr.ExternalURL.Spotify,
 				ISRC:        isrc,
 				AlbumID:     alb.ID,
@@ -685,10 +697,12 @@ func formatTrackData(raw *trackFull) TrackResponse {
 			Artists:     joinArtists(raw.Artists),
 			Name:        raw.Name,
 			AlbumName:   raw.Album.Name,
+			AlbumArtist: joinArtists(raw.Album.Artists),
 			DurationMS:  raw.DurationMS,
 			Images:      firstImageURL(raw.Album.Images),
 			ReleaseDate: raw.Album.ReleaseDate,
 			TrackNumber: raw.TrackNumber,
+			DiscNumber:  raw.DiscNumber,
 			ExternalURL: raw.ExternalURL.Spotify,
 			ISRC:        raw.ExternalID.ISRC,
 		},

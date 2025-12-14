@@ -36,26 +36,31 @@ export function useDownload() {
     let outputDir = settings.downloadPath;
     let useAlbumTrackNumber = false;
 
+    // Replace forward slashes in template data values to prevent them from being interpreted as path separators
+    const placeholder = "__SLASH_PLACEHOLDER__";
     const templateData: TemplateData = {
-      artist: track.artists,
-      album: track.album_name,
-      title: track.name,
+      artist: track.artists?.replace(/\//g, placeholder) || undefined,
+      album: track.album_name?.replace(/\//g, placeholder) || undefined,
+      title: track.name?.replace(/\//g, placeholder) || undefined,
       track: position,
       year: releaseYear || track.release_date?.substring(0, 4),
-      playlist: playlistName,
+      playlist: playlistName?.replace(/\//g, placeholder) || undefined,
       isrc: track.isrc,
     };
 
     if (playlistName && !isAlbum) {
-      outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+      outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
     }
 
     if (settings.folderTemplate) {
       const folderPath = parseTemplate(settings.folderTemplate, templateData);
       if (folderPath) {
+        // Split by / (template separators), then restore placeholders as spaces
         const parts = folderPath.split("/").filter((p: string) => p.trim());
         for (const part of parts) {
-          outputDir = joinPath(os, outputDir, sanitizePath(part, os));
+          // Restore any slashes that were in the original values as spaces
+          const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+          outputDir = joinPath(os, outputDir, sanitizePath(sanitizedPart, os));
         }
       }
 
@@ -75,9 +80,11 @@ export function useDownload() {
       track_name: track.name,
       artist_name: track.artists,
       album_name: track.album_name,
+      album_artist: track.album_artist,
       release_date: track.release_date,
       cover_url: track.images,
       album_track_number: track.track_number,
+      disc_number: track.disc_number,
       output_dir: outputDir,
       audio_format: settings.audioFormat,
       filename_format: settings.filenameTemplate,
@@ -86,6 +93,7 @@ export function useDownload() {
       use_album_track_number: useAlbumTrackNumber,
       spotify_id: track.spotify_id,
       embed_lyrics: settings.embedLyrics,
+      embed_max_quality_cover: settings.embedMaxQualityCover,
       item_id: itemID,
     });
 

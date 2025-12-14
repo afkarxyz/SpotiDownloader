@@ -43,9 +43,11 @@ type DownloadRequest struct {
 	TrackName           string `json:"track_name,omitempty"`
 	ArtistName          string `json:"artist_name,omitempty"`
 	AlbumName           string `json:"album_name,omitempty"`
+	AlbumArtist         string `json:"album_artist,omitempty"`
 	ReleaseDate         string `json:"release_date,omitempty"`
 	CoverURL            string `json:"cover_url,omitempty"`
 	AlbumTrackNumber    int    `json:"album_track_number,omitempty"`
+	DiscNumber          int    `json:"disc_number,omitempty"`
 	OutputDir           string `json:"output_dir,omitempty"`
 	AudioFormat         string `json:"audio_format,omitempty"`
 	FilenameFormat      string `json:"filename_format,omitempty"`
@@ -54,6 +56,7 @@ type DownloadRequest struct {
 	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"` // Use album track number instead of playlist position
 	SpotifyID           string `json:"spotify_id,omitempty"`             // Spotify track ID
 	EmbedLyrics         bool   `json:"embed_lyrics,omitempty"`           // Whether to embed lyrics into the audio file
+	EmbedMaxQualityCover bool   `json:"embed_max_quality_cover,omitempty"` // Whether to embed max quality cover art
 	ItemID              string `json:"item_id,omitempty"`                // Optional queue item ID for tracking
 }
 
@@ -188,8 +191,11 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	downloader := backend.NewSpotiDownloader(req.SessionToken)
 
 	// Determine actual track number to use
+	// Priority: AlbumTrackNumber > Position
+	// If AlbumTrackNumber is available, use it (even for single track downloads)
+	// Otherwise, use Position (for playlist downloads)
 	actualTrackNumber := req.Position
-	if req.UseAlbumTrackNumber && req.AlbumTrackNumber > 0 {
+	if req.AlbumTrackNumber > 0 {
 		actualTrackNumber = req.AlbumTrackNumber
 	}
 
@@ -204,10 +210,13 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.TrackName,
 		req.ArtistName,
 		req.AlbumName,
+		req.AlbumArtist,
 		req.ReleaseDate,
 		req.CoverURL,
 		actualTrackNumber,
+		req.DiscNumber,
 		req.UseAlbumTrackNumber,
+		req.EmbedMaxQualityCover,
 	)
 
 	if err != nil {

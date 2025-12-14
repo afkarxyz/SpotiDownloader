@@ -8,10 +8,12 @@ export interface TrackMetadata {
   artists: string;
   name: string;
   album_name: string;
+  album_artist?: string;
   duration_ms: number;
   images: string;
   release_date: string;
   track_number: number;
+  disc_number?: number;
   external_urls: string;
   isrc: string;
   album_type?: string;
@@ -114,9 +116,11 @@ export interface DownloadRequest {
   track_name?: string;
   artist_name?: string;
   album_name?: string;
+  album_artist?: string;
   release_date?: string;
   cover_url?: string;
   album_track_number?: number;
+  disc_number?: number;
   output_dir?: string;
   audio_format?: string;
   filename_format?: string;
@@ -125,6 +129,7 @@ export interface DownloadRequest {
   use_album_track_number?: boolean;
   spotify_id?: string; // Spotify track ID
   embed_lyrics?: boolean; // Whether to embed lyrics into the audio file
+  embed_max_quality_cover?: boolean; // Whether to embed max quality cover art
   item_id?: string; // Optional queue item ID for tracking
 }
 

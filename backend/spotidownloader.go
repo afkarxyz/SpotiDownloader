@@ -213,10 +213,13 @@ func (s *SpotiDownloader) DownloadByISRC(
 	trackName string,
 	artistName string,
 	albumName string,
+	albumArtist string,
 	releaseDate string,
 	coverURL string,
 	actualTrackNumber int,
+	discNumber int,
 	useAlbumTrackNumber bool,
+	embedMaxQualityCover bool,
 ) (string, error) {
 	// Sanitize output directory path
 	outputDir = SanitizeFolderPath(outputDir)
@@ -270,21 +273,28 @@ func (s *SpotiDownloader) DownloadByISRC(
 	// Download cover image if provided
 	var coverPath string
 	if coverURL != "" {
-		coverPath, err = s.downloadCoverImage(coverURL, outputDir)
+		coverPath, err = s.downloadCoverImage(coverURL, outputDir, embedMaxQualityCover)
 		if err != nil {
 			fmt.Printf("Warning: Failed to download cover image: %v\n", err)
 			coverPath = "" // Continue without cover
 		}
 	}
 
+	// Extract year from release date (format: YYYY-MM-DD or YYYY)
+	year := extractYear(releaseDate)
+
 	// Embed metadata for both MP3 and FLAC
 	metadata := Metadata{
 		Title:       trackName,
 		Artist:      artistName,
 		Album:       albumName,
-		Date:        releaseDate,
+		AlbumArtist: albumArtist,
+		Date:        year,        // Recorded date (year only)
+		ReleaseDate: releaseDate,  // Release date (full date: YYYY-MM-DD)
 		TrackNumber: actualTrackNumber,
+		DiscNumber:  discNumber,
 		ISRC:        isrc,
+		Description: "https://github.com/afkarxyz/SpotiDownloader",
 	}
 
 	if err := EmbedMetadata(outputPath, metadata, coverPath); err != nil {
@@ -300,7 +310,13 @@ func (s *SpotiDownloader) DownloadByISRC(
 }
 
 // downloadCoverImage downloads the cover image from URL
-func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string) (string, error) {
+func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string, embedMaxQualityCover bool) (string, error) {
+	// Use max quality URL if setting is enabled
+	if embedMaxQualityCover {
+		coverClient := NewCoverClient()
+		coverURL = coverClient.getMaxResolutionURL(coverURL)
+	}
+	
 	resp, err := s.httpClient.Get(coverURL)
 	if err != nil {
 		return "", err
@@ -329,11 +345,13 @@ func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string) (string
 
 // Helper function to sanitize filename
 func SanitizeFilename(filename string) string {
-	// First, remove invalid filesystem characters
-	invalid := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
-	result := filename
+	// Replace forward slash with space (more natural than underscore)
+	result := strings.ReplaceAll(filename, "/", " ")
+	
+	// Remove other invalid filesystem characters (replace with space)
+	invalid := []string{"\\", ":", "*", "?", "\"", "<", ">", "|"}
 	for _, char := range invalid {
-		result = strings.ReplaceAll(result, char, "_")
+		result = strings.ReplaceAll(result, char, " ")
 	}
 	
 	// Remove control characters and emoji
@@ -367,12 +385,16 @@ func SanitizeFilename(filename string) string {
 	// Remove leading/trailing dots and spaces (Windows doesn't allow these)
 	result = strings.Trim(result, ". ")
 	
-	// Remove consecutive spaces and underscores
-	re := regexp.MustCompile(`[\s_]+`)
+	// Normalize consecutive spaces to single space
+	re := regexp.MustCompile(`\s+`)
+	result = re.ReplaceAllString(result, " ")
+	
+	// Normalize consecutive underscores to single underscore
+	re = regexp.MustCompile(`_+`)
 	result = re.ReplaceAllString(result, "_")
 	
-	// Remove leading/trailing underscores
-	result = strings.Trim(result, "_")
+	// Remove leading/trailing underscores and spaces
+	result = strings.Trim(result, "_ ")
 	
 	if result == "" {
 		return "Unknown"
@@ -463,4 +485,17 @@ func BuildFilename(trackName, artistName, format string, includeTrackNumber bool
 	}
 
 	return filename
+}
+
+// extractYear extracts the year from a release date string
+// Handles formats: "YYYY-MM-DD", "YYYY-MM", "YYYY"
+func extractYear(releaseDate string) string {
+	if releaseDate == "" {
+		return ""
+	}
+	// Try to extract year (first 4 digits)
+	if len(releaseDate) >= 4 {
+		return releaseDate[:4]
+	}
+	return releaseDate
 }

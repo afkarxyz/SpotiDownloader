@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	pathfilepath "path/filepath"
 	"strconv"
 	"strings"
@@ -17,11 +18,14 @@ type Metadata struct {
 	Title       string
 	Artist      string
 	Album       string
-	Date        string
+	AlbumArtist string
+	Date        string // Recorded date (year only)
+	ReleaseDate string // Release date (full date)
 	TrackNumber int
 	DiscNumber  int
 	ISRC        string
 	Lyrics      string
+	Description string
 }
 
 func EmbedMetadata(filePath string, metadata Metadata, coverPath string) error {
@@ -62,6 +66,9 @@ func embedFlacMetadata(filePath string, metadata Metadata, coverPath string) err
 	if metadata.Album != "" {
 		_ = cmt.Add(flacvorbis.FIELD_ALBUM, metadata.Album)
 	}
+	if metadata.AlbumArtist != "" {
+		_ = cmt.Add("ALBUMARTIST", metadata.AlbumArtist)
+	}
 	if metadata.Date != "" {
 		_ = cmt.Add(flacvorbis.FIELD_DATE, metadata.Date)
 	}
@@ -74,6 +81,10 @@ func embedFlacMetadata(filePath string, metadata Metadata, coverPath string) err
 	if metadata.ISRC != "" {
 		_ = cmt.Add(flacvorbis.FIELD_ISRC, metadata.ISRC)
 	}
+	if metadata.Description != "" {
+		_ = cmt.Add("DESCRIPTION", metadata.Description)
+	}
+	// Lyrics is added last to keep it at the bottom
 	if metadata.Lyrics != "" {
 		_ = cmt.Add("LYRICS", metadata.Lyrics) // Or "UNSYNCEDLYRICS" for unsynced
 	}
@@ -115,17 +126,32 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 	if metadata.Album != "" {
 		tag.SetAlbum(metadata.Album)
 	}
+	if metadata.AlbumArtist != "" {
+		// TPE2 is the ID3v2 frame for Album Artist/Performer
+		tag.AddTextFrame("TPE2", tag.DefaultEncoding(), metadata.AlbumArtist)
+	}
 	if metadata.Date != "" {
 		tag.SetYear(metadata.Date)
 	}
 	if metadata.TrackNumber > 0 {
 		tag.AddTextFrame(tag.CommonID("Track number/Position in set"), tag.DefaultEncoding(), strconv.Itoa(metadata.TrackNumber))
 	}
+	if metadata.DiscNumber > 0 {
+		tag.AddTextFrame(tag.CommonID("Part of a set"), tag.DefaultEncoding(), strconv.Itoa(metadata.DiscNumber))
+	}
 
 	// Add ISRC (International Standard Recording Code)
 	if metadata.ISRC != "" {
 		// TSRC is the ID3v2 frame for ISRC
 		tag.AddTextFrame("TSRC", tag.DefaultEncoding(), metadata.ISRC)
+	}
+	// Add Description
+	if metadata.Description != "" {
+		// TXXX is User Defined Text Information frame for custom fields
+		// Format: Description\0<value> where \0 is null terminator
+		// Using AddTextFrame with proper format for TXXX
+		descriptionText := "Description\x00" + metadata.Description
+		tag.AddTextFrame("TXXX", tag.DefaultEncoding(), descriptionText)
 	}
 
 	// Add cover art if provided
@@ -136,7 +162,7 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 				Encoding:    id3v2.EncodingUTF8,
 				MimeType:    "image/jpeg",
 				PictureType: id3v2.PTFrontCover,
-				Description: "Front cover",
+				Description: "Cover",
 				Picture:     artwork,
 			}
 			tag.AddAttachedPicture(pic)
@@ -184,7 +210,7 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// EmbedLyricsOnly adds lyrics to a FLAC or MP3 file while preserving existing metadata
+// EmbedLyricsOnly adds lyrics to a FLAC, MP3, or M4A file while preserving existing metadata
 func EmbedLyricsOnly(filepath string, lyrics string) error {
 	if lyrics == "" {
 		return nil
@@ -196,6 +222,8 @@ func EmbedLyricsOnly(filepath string, lyrics string) error {
 		return embedLyricsToFlac(filepath, lyrics)
 	case ".mp3":
 		return embedLyricsToMp3(filepath, lyrics)
+	case ".m4a":
+		return embedLyricsToM4A(filepath, lyrics)
 	default:
 		return fmt.Errorf("unsupported file format for lyrics embedding: %s", ext)
 	}
@@ -279,6 +307,57 @@ func embedLyricsToMp3(filepath string, lyrics string) error {
 		return fmt.Errorf("failed to save MP3 tags: %w", err)
 	}
 
+	return nil
+}
+
+// embedLyricsToM4A adds lyrics to an M4A file using ffmpeg
+func embedLyricsToM4A(filepath string, lyrics string) error {
+	// Use ffmpeg to embed lyrics into M4A file
+	// M4A uses iTunes metadata format with atom '©lyr' for lyrics
+	ffmpegPath, err := GetFFmpegPath()
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found: %w", err)
+	}
+
+	// Create temporary output file with proper extension so ffmpeg can detect format
+	tmpOutputFile := strings.TrimSuffix(filepath, pathfilepath.Ext(filepath)) + ".tmp" + pathfilepath.Ext(filepath)
+	defer func() {
+		// Only remove if file still exists (rename might have failed)
+		if _, err := os.Stat(tmpOutputFile); err == nil {
+			os.Remove(tmpOutputFile)
+		}
+	}()
+
+	// Use ffmpeg to copy file and add lyrics metadata
+	// For M4A, we need to use the correct metadata tag format and specify output format
+	// Use -f ipod for M4A format (iPod format is compatible with M4A)
+	cmd := exec.Command(ffmpegPath,
+		"-i", filepath,
+		"-map", "0",
+		"-map_metadata", "0",
+		"-metadata", "lyrics-eng="+lyrics,
+		"-metadata", "lyrics="+lyrics,
+		"-codec", "copy",
+		"-f", "ipod", // Explicitly specify M4A/iPod format
+		"-y", // Overwrite
+		tmpOutputFile,
+	)
+
+	// Hide console window on Windows
+	setHideWindow(cmd)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("[FFmpeg] Error embedding lyrics to M4A: %s\n", string(output))
+		return fmt.Errorf("ffmpeg failed to embed lyrics: %s - %w", string(output), err)
+	}
+
+	// Replace original file with new file
+	if err := os.Rename(tmpOutputFile, filepath); err != nil {
+		return fmt.Errorf("failed to replace original file: %w", err)
+	}
+
+	fmt.Printf("[FFmpeg] Lyrics embedded to M4A successfully: %d characters\n", len(lyrics))
 	return nil
 }
 
@@ -517,14 +596,22 @@ func extractLyricsFromMp3(filePath string) (string, error) {
 
 	usltFrames := tag.GetFrames(tag.CommonID("Unsynchronised lyrics/text transcription"))
 	if len(usltFrames) == 0 {
+		fmt.Printf("[ExtractLyrics] No USLT frames found in MP3: %s\n", filePath)
 		return "", nil
 	}
 
 	uslt, ok := usltFrames[0].(id3v2.UnsynchronisedLyricsFrame)
 	if !ok {
+		fmt.Printf("[ExtractLyrics] USLT frame type assertion failed in MP3: %s\n", filePath)
 		return "", nil
 	}
 
+	if uslt.Lyrics == "" {
+		fmt.Printf("[ExtractLyrics] USLT frame has empty lyrics in MP3: %s\n", filePath)
+		return "", nil
+	}
+
+	fmt.Printf("[ExtractLyrics] Successfully extracted lyrics from MP3: %s (%d characters)\n", filePath, len(uslt.Lyrics))
 	return uslt.Lyrics, nil
 }
 
@@ -548,13 +635,16 @@ func extractLyricsFromFlac(filePath string) (string, error) {
 				if len(parts) == 2 {
 					fieldName := strings.ToUpper(parts[0])
 					if fieldName == "LYRICS" || fieldName == "UNSYNCEDLYRICS" {
-						return parts[1], nil
+						lyrics := parts[1]
+						fmt.Printf("[ExtractLyrics] Successfully extracted lyrics from FLAC: %s (%d characters)\n", filePath, len(lyrics))
+						return lyrics, nil
 					}
 				}
 			}
 		}
 	}
 
+	fmt.Printf("[ExtractLyrics] No lyrics found in FLAC: %s\n", filePath)
 	return "", nil
 }
 
@@ -601,7 +691,7 @@ func embedCoverToMp3(filePath string, coverPath string) error {
 		Encoding:    id3v2.EncodingUTF8,
 		MimeType:    "image/jpeg",
 		PictureType: id3v2.PTFrontCover,
-		Description: "Front cover",
+		Description: "Cover",
 		Picture:     artwork,
 	}
 	tag.AddAttachedPicture(pic)
