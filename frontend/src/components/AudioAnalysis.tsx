@@ -8,7 +8,8 @@ import {
   TrendingUp,
   FileAudio,
   Clock,
-  Gauge
+  Gauge,
+  HardDrive
 } from "lucide-react";
 import type { AnalysisResult } from "@/types/api";
 
@@ -74,6 +75,14 @@ export function AudioAnalysis({
 
   const formatNumber = (num: number) => num.toFixed(2);
 
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
   const nyquistFreq = result.sample_rate / 2;
 
   return (
@@ -112,6 +121,13 @@ export function AudioAnalysis({
             <span className="text-muted-foreground">Nyquist:</span>
             <span className="font-semibold">{(nyquistFreq / 1000).toFixed(1)} kHz</span>
           </div>
+          {result.file_size > 0 && (
+            <div className="flex items-center gap-1">
+              <HardDrive className="h-3 w-3 text-muted-foreground" />
+              <span className="text-muted-foreground">Size:</span>
+              <span className="font-semibold">{formatFileSize(result.file_size)}</span>
+            </div>
+          )}
         </div>
 
         {/* Dynamic Range - Single line */}
