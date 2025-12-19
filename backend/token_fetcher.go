@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // getSpotiDownloaderDir returns the path to ~/.spotidownloader directory
@@ -55,20 +56,53 @@ func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 		}
 	}
 
-	// Jalankan executable dengan parameter timeout dan retry
-	cmd := exec.Command(exePath, "--timeout", fmt.Sprintf("%d", timeout), "--retry", fmt.Sprintf("%d", retry))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to execute get_token: %v, output: %s", err, string(output))
+	// Retry logic at Go level (in case binary doesn't handle retry properly on some platforms)
+	var lastErr error
+	maxAttempts := retry
+	if maxAttempts < 1 {
+		maxAttempts = 1
 	}
 
-	// Ambil output dan bersihkan whitespace
-	token := strings.TrimSpace(string(output))
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		fmt.Printf("[TokenFetcher] Attempt %d/%d (timeout: %ds)\n", attempt, maxAttempts, timeout)
 
-	// Validasi token (harus dimulai dengan eyJ untuk JWT)
-	if token == "" || !strings.HasPrefix(token, "eyJ") {
-		return "", fmt.Errorf("get_token did not return a valid token: %s", token)
+		// Run executable with timeout parameter only, retry handled here
+		cmd := exec.Command(exePath, "--timeout", fmt.Sprintf("%d", timeout), "--retry", "1")
+		output, err := cmd.CombinedOutput()
+		outputStr := strings.TrimSpace(string(output))
+
+		if err != nil {
+			lastErr = fmt.Errorf("get_token execution failed (attempt %d): %v, output: %s", attempt, err, outputStr)
+			fmt.Printf("[TokenFetcher] %v\n", lastErr)
+			if attempt < maxAttempts {
+				time.Sleep(1 * time.Second)
+			}
+			continue
+		}
+
+		// Check if output is empty
+		if outputStr == "" {
+			lastErr = fmt.Errorf("get_token returned empty output (attempt %d)", attempt)
+			fmt.Printf("[TokenFetcher] %v\n", lastErr)
+			if attempt < maxAttempts {
+				time.Sleep(1 * time.Second)
+			}
+			continue
+		}
+
+		// Validate token (must start with eyJ for JWT)
+		if !strings.HasPrefix(outputStr, "eyJ") {
+			lastErr = fmt.Errorf("get_token returned invalid token (attempt %d): %s", attempt, outputStr)
+			fmt.Printf("[TokenFetcher] %v\n", lastErr)
+			if attempt < maxAttempts {
+				time.Sleep(1 * time.Second)
+			}
+			continue
+		}
+
+		fmt.Printf("[TokenFetcher] Token fetched successfully on attempt %d\n", attempt)
+		return outputStr, nil
 	}
 
-	return token, nil
+	return "", fmt.Errorf("failed to fetch token after %d attempts: %v", maxAttempts, lastErr)
 }
