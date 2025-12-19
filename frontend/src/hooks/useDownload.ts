@@ -301,7 +301,8 @@ export function useDownload() {
         setFailedTracks((prev) => new Set(prev).add(isrc));
       }
 
-      setDownloadProgress(Math.round(((skippedCount + successCount + errorCount + i + 1 - existingISRCs.size) / total) * 100));
+      const completedCount = skippedCount + successCount + errorCount;
+      setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
     }
 
     setDownloadingTrack(null);
@@ -438,7 +439,8 @@ export function useDownload() {
         setFailedTracks((prev) => new Set(prev).add(track.isrc));
       }
 
-      setDownloadProgress(Math.round(((skippedCount + successCount + errorCount + i + 1 - existingISRCs.size) / total) * 100));
+      const completedCount = skippedCount + successCount + errorCount;
+      setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
     }
 
     setDownloadingTrack(null);

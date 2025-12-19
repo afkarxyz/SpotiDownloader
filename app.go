@@ -519,6 +519,11 @@ func (a *App) IsFFmpegInstalled() (bool, error) {
 	return backend.IsFFmpegInstalled()
 }
 
+// IsFFprobeInstalled checks if ffprobe is installed
+func (a *App) IsFFprobeInstalled() (bool, error) {
+	return backend.IsFFprobeInstalled()
+}
+
 // GetFFmpegPath returns the path to ffmpeg
 func (a *App) GetFFmpegPath() (string, error) {
 	return backend.GetFFmpegPath()

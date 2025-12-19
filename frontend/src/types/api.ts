@@ -213,3 +213,13 @@ export interface CoverDownloadResponse {
   error?: string;
   already_exists?: boolean;
 }
+
+export interface AudioMetadata {
+  title: string;
+  artist: string;
+  album: string;
+  album_artist: string;
+  track_number: number;
+  disc_number: number;
+  year: string;
+}
