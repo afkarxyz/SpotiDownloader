@@ -7,6 +7,27 @@ import { joinPath, sanitizePath } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
 
+// Type definitions for new backend functions
+interface CheckFileExistenceRequest {
+  isrc: string;
+  track_name: string;
+  artist_name: string;
+}
+
+interface FileExistenceResult {
+  isrc: string;
+  exists: boolean;
+  file_path?: string;
+  track_name?: string;
+  artist_name?: string;
+}
+
+// These functions will be available after Wails regenerates bindings
+const CheckFilesExistence = (outputDir: string, audioFormat: string, tracks: CheckFileExistenceRequest[]): Promise<FileExistenceResult[]> =>
+  (window as any)["go"]["main"]["App"]["CheckFilesExistence"](outputDir, audioFormat, tracks);
+const SkipDownloadItem = (itemID: string, filePath: string): Promise<void> =>
+  (window as any)["go"]["main"]["App"]["SkipDownloadItem"](itemID, filePath);
+
 export function useDownload() {
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -41,8 +62,10 @@ export function useDownload() {
     const templateData: TemplateData = {
       artist: track.artists?.replace(/\//g, placeholder) || undefined,
       album: track.album_name?.replace(/\//g, placeholder) || undefined,
+      album_artist: track.album_artist?.replace(/\//g, placeholder) || track.artists?.replace(/\//g, placeholder) || undefined,
       title: track.name?.replace(/\//g, placeholder) || undefined,
       track: position,
+      disc: track.disc_number,
       year: releaseYear || track.release_date?.substring(0, 4),
       playlist: playlistName?.replace(/\//g, placeholder) || undefined,
       isrc: track.isrc,
@@ -179,38 +202,87 @@ export function useDownload() {
     setBulkDownloadType("selected");
     setDownloadProgress(0);
 
+    // Build output directory path
+    let outputDir = settings.downloadPath;
+    const os = settings.operatingSystem;
+    if (playlistName && !isAlbum) {
+      outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
+    }
+
+    // Get selected track objects
+    const selectedTrackObjects = selectedTracks
+      .map((isrc) => allTracks.find((t) => t.isrc === isrc))
+      .filter((t): t is TrackMetadata => t !== undefined);
+
+    // Check file existence in parallel first
+    logger.info(`checking existing files in parallel...`);
+    const existenceChecks = selectedTrackObjects.map((track) => ({
+      isrc: track.isrc,
+      track_name: track.name || "",
+      artist_name: track.artists || "",
+    }));
+
+    const existenceResults = await CheckFilesExistence(outputDir, settings.audioFormat, existenceChecks);
+    const existingISRCs = new Set<string>();
+    const existingFilePaths = new Map<string, string>();
+
+    for (const result of existenceResults) {
+      if (result.exists) {
+        existingISRCs.add(result.isrc);
+        existingFilePaths.set(result.isrc, result.file_path || "");
+      }
+    }
+
+    logger.info(`found ${existingISRCs.size} existing files`);
+
+    // Mark existing files as skipped immediately and add to queue
+    const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
+    for (const track of selectedTrackObjects) {
+      if (existingISRCs.has(track.isrc)) {
+        const itemID = await AddToDownloadQueue(track.isrc, track.name || "", track.artists || "", track.album_name || "");
+        const filePath = existingFilePaths.get(track.isrc) || "";
+        setTimeout(() => SkipDownloadItem(itemID, filePath), 10);
+        setSkippedTracks((prev) => new Set(prev).add(track.isrc));
+        setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
+      }
+    }
+
+    // Filter out existing tracks
+    const tracksToDownload = selectedTrackObjects.filter((track) => !existingISRCs.has(track.isrc));
+
     let successCount = 0;
     let errorCount = 0;
-    let skippedCount = 0;
+    let skippedCount = existingISRCs.size;
     const total = selectedTracks.length;
 
-    for (let i = 0; i < selectedTracks.length; i++) {
+    // Update progress to reflect already-skipped tracks
+    setDownloadProgress(Math.round((skippedCount / total) * 100));
+
+    for (let i = 0; i < tracksToDownload.length; i++) {
       if (shouldStopDownloadRef.current) {
-        toast.info(`Download stopped. ${successCount} tracks downloaded, ${selectedTracks.length - i} skipped.`);
+        toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - i} remaining.`);
         break;
       }
 
-      const isrc = selectedTracks[i];
-      const track = allTracks.find((t) => t.isrc === isrc);
+      const track = tracksToDownload[i];
+      const isrc = track.isrc;
+      // Calculate original position in selected list
+      const originalIndex = selectedTracks.indexOf(isrc);
       setDownloadingTrack(isrc);
-
-      if (track) {
-        setCurrentDownloadInfo({ name: track.name, artists: track.artists });
-      }
+      setCurrentDownloadInfo({ name: track.name, artists: track.artists });
 
       try {
-        if (!track) continue;
         const releaseYear = track.release_date?.substring(0, 4);
-        const response = await downloadWithSpotiDownloader(track, settings, playlistName, i + 1, 0, isAlbum, releaseYear);
+        const response = await downloadWithSpotiDownloader(track, settings, playlistName, originalIndex + 1, 0, isAlbum, releaseYear);
 
         if (response.success) {
           if (response.already_exists) {
             skippedCount++;
-            logger.info(`skipped: ${track?.name} - ${track?.artists} (already exists)`);
+            logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
             setSkippedTracks((prev) => new Set(prev).add(isrc));
           } else {
             successCount++;
-            logger.success(`downloaded: ${track?.name} - ${track?.artists}`);
+            logger.success(`downloaded: ${track.name} - ${track.artists}`);
           }
           setDownloadedTracks((prev) => new Set(prev).add(isrc));
           setFailedTracks((prev) => {
@@ -220,16 +292,16 @@ export function useDownload() {
           });
         } else {
           errorCount++;
-          logger.error(`failed: ${track?.name} - ${track?.artists}`);
+          logger.error(`failed: ${track.name} - ${track.artists}`);
           setFailedTracks((prev) => new Set(prev).add(isrc));
         }
       } catch (err) {
         errorCount++;
-        logger.error(`error: ${track?.name} - ${err}`);
+        logger.error(`error: ${track.name} - ${err}`);
         setFailedTracks((prev) => new Set(prev).add(isrc));
       }
 
-      setDownloadProgress(Math.round(((i + 1) / total) * 100));
+      setDownloadProgress(Math.round(((skippedCount + successCount + errorCount + i + 1 - existingISRCs.size) / total) * 100));
     }
 
     setDownloadingTrack(null);
@@ -272,24 +344,73 @@ export function useDownload() {
     setBulkDownloadType("all");
     setDownloadProgress(0);
 
+    // Build output directory path (same logic as downloadWithSpotiDownloader)
+    let outputDir = settings.downloadPath;
+    const os = settings.operatingSystem;
+    if (playlistName && !isAlbum) {
+      outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
+    }
+
+    // Check file existence in parallel first
+    logger.info(`checking existing files in parallel...`);
+    const existenceChecks = tracksWithIsrc.map((track) => ({
+      isrc: track.isrc,
+      track_name: track.name || "",
+      artist_name: track.artists || "",
+    }));
+
+    const existenceResults = await CheckFilesExistence(outputDir, settings.audioFormat, existenceChecks);
+    const existingISRCs = new Set<string>();
+    const existingFilePaths = new Map<string, string>();
+
+    for (const result of existenceResults) {
+      if (result.exists) {
+        existingISRCs.add(result.isrc);
+        existingFilePaths.set(result.isrc, result.file_path || "");
+      }
+    }
+
+    logger.info(`found ${existingISRCs.size} existing files`);
+
+    // Mark existing files as skipped immediately and add to queue
+    const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
+    for (const track of tracksWithIsrc) {
+      if (existingISRCs.has(track.isrc)) {
+        const itemID = await AddToDownloadQueue(track.isrc, track.name || "", track.artists || "", track.album_name || "");
+        const filePath = existingFilePaths.get(track.isrc) || "";
+        // Use a small delay to ensure the item is added before skipping
+        setTimeout(() => SkipDownloadItem(itemID, filePath), 10);
+        setSkippedTracks((prev) => new Set(prev).add(track.isrc));
+        setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
+      }
+    }
+
+    // Filter out existing tracks
+    const tracksToDownload = tracksWithIsrc.filter((track) => !existingISRCs.has(track.isrc));
+
     let successCount = 0;
     let errorCount = 0;
-    let skippedCount = 0;
+    let skippedCount = existingISRCs.size;
     const total = tracksWithIsrc.length;
 
-    for (let i = 0; i < tracksWithIsrc.length; i++) {
+    // Update progress to reflect already-skipped tracks
+    setDownloadProgress(Math.round((skippedCount / total) * 100));
+
+    for (let i = 0; i < tracksToDownload.length; i++) {
       if (shouldStopDownloadRef.current) {
-        toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksWithIsrc.length - i} skipped.`);
+        toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - i} remaining.`);
         break;
       }
 
-      const track = tracksWithIsrc[i];
+      const track = tracksToDownload[i];
+      // Calculate original position in full list
+      const originalIndex = tracksWithIsrc.findIndex((t) => t.isrc === track.isrc);
       setDownloadingTrack(track.isrc);
       setCurrentDownloadInfo({ name: track.name, artists: track.artists });
 
       try {
         const releaseYear = track.release_date?.substring(0, 4);
-        const response = await downloadWithSpotiDownloader(track, settings, playlistName, i + 1, 0, isAlbum, releaseYear);
+        const response = await downloadWithSpotiDownloader(track, settings, playlistName, originalIndex + 1, 0, isAlbum, releaseYear);
 
         if (response.success) {
           if (response.already_exists) {
@@ -317,7 +438,7 @@ export function useDownload() {
         setFailedTracks((prev) => new Set(prev).add(track.isrc));
       }
 
-      setDownloadProgress(Math.round(((i + 1) / total) * 100));
+      setDownloadProgress(Math.round(((skippedCount + successCount + errorCount + i + 1 - existingISRCs.size) / total) * 100));
     }
 
     setDownloadingTrack(null);

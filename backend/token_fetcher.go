@@ -19,6 +19,11 @@ func getSpotiDownloaderDir() (string, error) {
 
 // FetchSessionToken menjalankan get_token dan mengembalikan session token
 func FetchSessionToken() (string, error) {
+	return FetchSessionTokenWithParams(5, 1)
+}
+
+// FetchSessionTokenWithParams menjalankan get_token dengan parameter timeout dan retry
+func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 	// Get the .spotidownloader directory path
 	spotiDir, err := getSpotiDownloaderDir()
 	if err != nil {
@@ -50,8 +55,8 @@ func FetchSessionToken() (string, error) {
 		}
 	}
 
-	// Jalankan executable
-	cmd := exec.Command(exePath)
+	// Jalankan executable dengan parameter timeout dan retry
+	cmd := exec.Command(exePath, "--timeout", fmt.Sprintf("%d", timeout), "--retry", fmt.Sprintf("%d", retry))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to execute get_token: %v, output: %s", err, string(output))

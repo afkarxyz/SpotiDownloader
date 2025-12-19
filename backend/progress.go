@@ -47,8 +47,6 @@ var (
 	// Download queue tracking
 	downloadQueue       []DownloadItem
 	downloadQueueLock   sync.RWMutex
-	currentItemID       string
-	currentItemLock     sync.RWMutex
 	totalDownloaded     float64
 	totalDownloadedLock sync.RWMutex
 	sessionStartTime    int64
@@ -244,10 +242,6 @@ func StartDownloadItem(id string) {
 			break
 		}
 	}
-
-	currentItemLock.Lock()
-	currentItemID = id
-	currentItemLock.Unlock()
 }
 
 // UpdateItemProgress updates the progress of the current download item
@@ -399,10 +393,6 @@ func ClearAllDownloads() {
 	sessionStartLock.Lock()
 	sessionStartTime = 0
 	sessionStartLock.Unlock()
-
-	currentItemLock.Lock()
-	currentItemID = ""
-	currentItemLock.Unlock()
 
 	// Reset current progress and speed
 	SetDownloadProgress(0)

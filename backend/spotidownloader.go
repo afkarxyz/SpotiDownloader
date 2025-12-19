@@ -222,8 +222,8 @@ func (s *SpotiDownloader) DownloadByISRC(
 	useAlbumTrackNumber bool,
 	embedMaxQualityCover bool,
 ) (string, error) {
-	// Sanitize output directory path
-	outputDir = SanitizeFolderPath(outputDir)
+	// Only normalize path separators for user's download path
+	outputDir = NormalizePath(outputDir)
 
 	// Get download links
 	downloadResp, err := s.GetDownloadLink(trackID)
@@ -401,7 +401,15 @@ func SanitizeFilename(filename string) string {
 	return result
 }
 
+// NormalizePath only normalizes path separators without modifying folder names
+// Use this for user-provided paths that already exist on the filesystem
+func NormalizePath(folderPath string) string {
+	// Normalize all forward slashes to backslashes on Windows
+	return strings.ReplaceAll(folderPath, "/", string(filepath.Separator))
+}
+
 // SanitizeFolderPath sanitizes each component of a folder path and normalizes separators
+// Use this only for NEW folders being created (artist names, album names, etc.)
 func SanitizeFolderPath(folderPath string) string {
 	// Normalize all forward slashes to backslashes on Windows
 	normalizedPath := strings.ReplaceAll(folderPath, "/", string(filepath.Separator))
@@ -483,17 +491,4 @@ func BuildFilename(trackName, artistName, format string, includeTrackNumber bool
 	}
 
 	return filename
-}
-
-// extractYear extracts the year from a release date string
-// Handles formats: "YYYY-MM-DD", "YYYY-MM", "YYYY"
-func extractYear(releaseDate string) string {
-	if releaseDate == "" {
-		return ""
-	}
-	// Try to extract year (first 4 digits)
-	if len(releaseDate) >= 4 {
-		return releaseDate[:4]
-	}
-	return releaseDate
 }

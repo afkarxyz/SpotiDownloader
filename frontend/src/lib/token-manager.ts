@@ -1,4 +1,4 @@
-import { FetchSessionToken } from "../../wailsjs/go/main/App";
+import { FetchSessionTokenWithParams } from "../../wailsjs/go/main/App";
 import { getSettings, updateSettings, isTokenExpired } from "./settings";
 
 let isFetchingToken = false;
@@ -25,11 +25,13 @@ export async function ensureValidToken(forceRefresh: boolean = false): Promise<s
     await new Promise(resolve => setTimeout(resolve, 2000 - (now - lastFetchTime)));
   }
 
-  // Fetch new token
+  // Fetch new token with settings from Advanced Settings
   isFetchingToken = true;
   lastFetchTime = Date.now();
   try {
-    const response = await FetchSessionToken();
+    const timeout = settings.tokenTimeout || 5;
+    const retry = settings.tokenRetry || 1;
+    const response = await FetchSessionTokenWithParams(timeout, retry);
     updateSettings({
       sessionToken: response.token,
       sessionTokenExpiry: response.expires_at,

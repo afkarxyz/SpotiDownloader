@@ -1,5 +1,6 @@
 from DrissionPage import ChromiumPage
 import time
+import sys
 
 def get_session_token_sync(max_wait=5):
     page = None
@@ -54,15 +55,31 @@ def get_session_token_sync(max_wait=5):
 async def main():
     return get_session_token_sync()
 
-def get_token(max_retries=3):
+def get_token(max_retries=1, timeout=5):
     for attempt in range(max_retries):
-        token = get_session_token_sync()
+        token = get_session_token_sync(max_wait=timeout)
         if token:
             return token
         time.sleep(0.5)
     return None
 
 if __name__ == "__main__":
-    token = get_token()
+    timeout = 5
+    retry = 1
+    
+    args = sys.argv[1:]
+    for i, arg in enumerate(args):
+        if arg == "--timeout" and i + 1 < len(args):
+            try:
+                timeout = int(args[i + 1])
+            except ValueError:
+                pass
+        elif arg == "--retry" and i + 1 < len(args):
+            try:
+                retry = int(args[i + 1])
+            except ValueError:
+                pass
+    
+    token = get_token(max_retries=retry, timeout=timeout)
     if token:
         print(token)

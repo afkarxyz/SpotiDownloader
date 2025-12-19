@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  GO_VERSION: '1.25.4'
+  GO_VERSION: '1.25.5'
   NODE_VERSION: '24'
   PYTHON_VERSION: '3.12'
   APP_NAME: 'SpotiDownloader'
