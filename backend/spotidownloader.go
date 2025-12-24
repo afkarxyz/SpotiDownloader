@@ -256,7 +256,7 @@ func (s *SpotiDownloader) DownloadByISRC(
 		}
 	}
 
-	filename := BuildFilename(trackName, artistName, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	filename := BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate, discNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filename = SanitizeFilename(filename) + fileExt
 
 	outputPath := filepath.Join(outputDir, filename)
@@ -451,9 +451,17 @@ func sanitizeFolderName(name string) string {
 }
 
 // Helper function to build filename
-func BuildFilename(trackName, artistName, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
+func BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate string, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
 	safeTitle := SanitizeFilename(trackName)
 	safeArtist := SanitizeFilename(artistName)
+	safeAlbum := SanitizeFilename(albumName)
+	safeAlbumArtist := SanitizeFilename(albumArtist)
+
+	// Extract year from release date (format: YYYY-MM-DD or YYYY)
+	year := ""
+	if len(releaseDate) >= 4 {
+		year = releaseDate[:4]
+	}
 
 	var filename string
 
@@ -462,6 +470,16 @@ func BuildFilename(trackName, artistName, format string, includeTrackNumber bool
 		filename = format
 		filename = strings.ReplaceAll(filename, "{title}", safeTitle)
 		filename = strings.ReplaceAll(filename, "{artist}", safeArtist)
+		filename = strings.ReplaceAll(filename, "{album}", safeAlbum)
+		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
+		filename = strings.ReplaceAll(filename, "{year}", year)
+
+		// Handle disc number
+		if discNumber > 0 {
+			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
+		} else {
+			filename = strings.ReplaceAll(filename, "{disc}", "")
+		}
 
 		// Handle track number - if position is 0, remove {track} and surrounding separators
 		if position > 0 {

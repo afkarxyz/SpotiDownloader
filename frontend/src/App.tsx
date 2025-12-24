@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,9 +9,9 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Search, X } from "lucide-react";
+import { Search, X, ArrowUp } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getSettings, applyThemeMode, applyFont } from "@/lib/settings";
+import { getSettings, getSettingsWithDefaults, saveSettings, applyThemeMode, applyFont } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
 import { OpenFolder } from "../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
@@ -54,9 +54,11 @@ function App() {
   const [hasUpdate, setHasUpdate] = useState(false);
   const [releaseDate, setReleaseDate] = useState<string | null>(null);
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.4";
+  const CURRENT_VERSION = "6.5";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -66,10 +68,19 @@ function App() {
 
 
   useEffect(() => {
-    const settings = getSettings();
-    applyThemeMode(settings.themeMode);
-    applyTheme(settings.theme);
-    applyFont(settings.fontFamily);
+    const initSettings = async () => {
+      const settings = getSettings();
+      applyThemeMode(settings.themeMode);
+      applyTheme(settings.theme);
+      applyFont(settings.fontFamily);
+
+      // Initialize default download path if not set
+      if (!settings.downloadPath) {
+        const settingsWithDefaults = await getSettingsWithDefaults();
+        saveSettings(settingsWithDefaults);
+      }
+    };
+    initSettings();
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
@@ -84,9 +95,20 @@ function App() {
     checkForUpdates();
     loadHistory();
 
+    // Scroll listener for jump to top button
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300);
+    };
+    window.addEventListener("scroll", handleScroll);
+
     return () => {
       mediaQuery.removeEventListener("change", handleChange);
+      window.removeEventListener("scroll", handleScroll);
     };
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
   useEffect(() => {
@@ -277,9 +299,16 @@ function App() {
           failedLyrics={lyrics.failedLyrics}
           skippedLyrics={lyrics.skippedLyrics}
           downloadingCover={cover.downloadingCover}
+          downloadedCover={cover.downloadedCovers.has(track.spotify_id || "")}
+          failedCover={cover.failedCovers.has(track.spotify_id || "")}
+          skippedCover={cover.skippedCovers.has(track.spotify_id || "")}
           onDownload={download.handleDownloadTrack}
-          onDownloadLyrics={lyrics.handleDownloadLyrics}
-          onDownloadCover={cover.handleDownloadCover}
+          onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, undefined, undefined, undefined, albumArtist, releaseDate, discNumber)
+          }
+          onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _isArtistDiscography, _position, trackId, albumArtist, releaseDate, discNumber) =>
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, undefined, undefined, undefined, trackId, albumArtist, releaseDate, discNumber)
+          }
           onOpenFolder={handleOpenFolder}
         />
       );
@@ -318,11 +347,11 @@ function App() {
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
-          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, false, position)
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, false, position, albumArtist, releaseDate, discNumber)
           }
-          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId) =>
-            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, false, position, trackId)
+          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) =>
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, false, position, trackId, albumArtist, releaseDate, discNumber)
           }
           onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, album_info.name)}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name)}
@@ -383,11 +412,11 @@ function App() {
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
-          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name, false, position)
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name, false, position, albumArtist, releaseDate, discNumber)
           }
-          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId) =>
-            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlist_info.owner.name, false, position, trackId)
+          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) =>
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlist_info.owner.name, false, position, trackId, albumArtist, releaseDate, discNumber)
           }
           onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, playlist_info.owner.name)}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlist_info.owner.name)}
@@ -454,11 +483,11 @@ function App() {
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
-          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography, position) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography, position)
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography, position, albumArtist, releaseDate, discNumber) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography, position, albumArtist, releaseDate, discNumber)
           }
-          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, isArtistDiscography, position, trackId) =>
-            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, isArtistDiscography, position, trackId)
+          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) =>
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber)
           }
           onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, artist_info.name, true)}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, artist_info.name, true)}
@@ -613,13 +642,22 @@ function App() {
               loading={metadata.loading}
               onUrlChange={setSpotifyUrl}
               onFetch={handleFetchMetadata}
+              onFetchUrl={async (url) => {
+                setSpotifyUrl(url);
+                const updatedUrl = await metadata.handleFetchMetadata(url);
+                if (updatedUrl) {
+                  setSpotifyUrl(updatedUrl);
+                }
+              }}
               history={fetchHistory}
               onHistorySelect={handleHistorySelect}
               onHistoryRemove={removeFromHistory}
               hasResult={!!metadata.metadata}
+              searchMode={isSearchMode}
+              onSearchModeChange={setIsSearchMode}
             />
 
-            {metadata.metadata && renderMetadata()}
+            {!isSearchMode && metadata.metadata && renderMetadata()}
           </>
         );
     }
@@ -646,6 +684,17 @@ function App() {
           isOpen={downloadQueue.isOpen}
           onClose={downloadQueue.closeQueue}
         />
+
+        {/* Jump to Top Button - Bottom Right */}
+        {showScrollTop && (
+          <Button
+            onClick={scrollToTop}
+            className="fixed bottom-6 right-6 z-50 h-10 w-10 rounded-full shadow-lg"
+            size="icon"
+          >
+            <ArrowUp className="h-5 w-5" />
+          </Button>
+        )}
       </div>
     </TooltipProvider>
   );

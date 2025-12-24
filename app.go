@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -100,6 +101,56 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 	return string(jsonData), nil
 }
 
+// SpotifySearchRequest represents the request structure for searching Spotify
+type SpotifySearchRequest struct {
+	Query string `json:"query"`
+	Limit int    `json:"limit"`
+}
+
+// SearchSpotify searches for tracks, albums, artists, and playlists on Spotify
+func (a *App) SearchSpotify(req SpotifySearchRequest) (*backend.SearchResponse, error) {
+	if req.Query == "" {
+		return nil, fmt.Errorf("search query is required")
+	}
+
+	if req.Limit <= 0 {
+		req.Limit = 10
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return backend.SearchSpotify(ctx, req.Query, req.Limit)
+}
+
+// SpotifySearchByTypeRequest represents the request for searching by specific type with offset
+type SpotifySearchByTypeRequest struct {
+	Query      string `json:"query"`
+	SearchType string `json:"search_type"` // track, album, artist, playlist
+	Limit      int    `json:"limit"`
+	Offset     int    `json:"offset"`
+}
+
+// SearchSpotifyByType searches for a specific type with offset support for pagination
+func (a *App) SearchSpotifyByType(req SpotifySearchByTypeRequest) ([]backend.SearchResult, error) {
+	if req.Query == "" {
+		return nil, fmt.Errorf("search query is required")
+	}
+
+	if req.SearchType == "" {
+		return nil, fmt.Errorf("search type is required")
+	}
+
+	if req.Limit <= 0 {
+		req.Limit = 50
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return backend.SearchSpotifyByType(ctx, req.Query, req.SearchType, req.Limit, req.Offset)
+}
+
 // DownloadTrack downloads a track using spotidownloader API
 func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	if req.TrackID == "" && req.ISRC == "" {
@@ -167,7 +218,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		if req.AudioFormat == "flac" {
 			fileExt = ".flac"
 		}
-		expectedFilename := backend.BuildFilename(req.TrackName, req.ArtistName, req.FilenameFormat, req.TrackNumber, req.Position, req.UseAlbumTrackNumber)
+		expectedFilename := backend.BuildFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.DiscNumber, req.FilenameFormat, req.TrackNumber, req.Position, req.UseAlbumTrackNumber)
 		expectedFilename = backend.SanitizeFilename(expectedFilename) + fileExt
 		expectedPath := filepath.Join(req.OutputDir, expectedFilename)
 
@@ -433,11 +484,15 @@ type LyricsDownloadRequest struct {
 	SpotifyID           string `json:"spotify_id"`
 	TrackName           string `json:"track_name"`
 	ArtistName          string `json:"artist_name"`
+	AlbumName           string `json:"album_name"`
+	AlbumArtist         string `json:"album_artist"`
+	ReleaseDate         string `json:"release_date"`
 	OutputDir           string `json:"output_dir"`
 	FilenameFormat      string `json:"filename_format"`
 	TrackNumber         bool   `json:"track_number"`
 	Position            int    `json:"position"`
 	UseAlbumTrackNumber bool   `json:"use_album_track_number"`
+	DiscNumber          int    `json:"disc_number"`
 }
 
 // DownloadLyrics downloads lyrics for a single track
@@ -454,11 +509,15 @@ func (a *App) DownloadLyrics(req LyricsDownloadRequest) (backend.LyricsDownloadR
 		SpotifyID:           req.SpotifyID,
 		TrackName:           req.TrackName,
 		ArtistName:          req.ArtistName,
+		AlbumName:           req.AlbumName,
+		AlbumArtist:         req.AlbumArtist,
+		ReleaseDate:         req.ReleaseDate,
 		OutputDir:           req.OutputDir,
 		FilenameFormat:      req.FilenameFormat,
 		TrackNumber:         req.TrackNumber,
 		Position:            req.Position,
 		UseAlbumTrackNumber: req.UseAlbumTrackNumber,
+		DiscNumber:          req.DiscNumber,
 	}
 
 	resp, err := client.DownloadLyrics(backendReq)
@@ -477,10 +536,14 @@ type CoverDownloadRequest struct {
 	CoverURL       string `json:"cover_url"`
 	TrackName      string `json:"track_name"`
 	ArtistName     string `json:"artist_name"`
+	AlbumName      string `json:"album_name"`
+	AlbumArtist    string `json:"album_artist"`
+	ReleaseDate    string `json:"release_date"`
 	OutputDir      string `json:"output_dir"`
 	FilenameFormat string `json:"filename_format"`
 	TrackNumber    bool   `json:"track_number"`
 	Position       int    `json:"position"`
+	DiscNumber     int    `json:"disc_number"`
 }
 
 // DownloadCover downloads cover art for a single track
@@ -497,10 +560,14 @@ func (a *App) DownloadCover(req CoverDownloadRequest) (backend.CoverDownloadResp
 		CoverURL:       req.CoverURL,
 		TrackName:      req.TrackName,
 		ArtistName:     req.ArtistName,
+		AlbumName:      req.AlbumName,
+		AlbumArtist:    req.AlbumArtist,
+		ReleaseDate:    req.ReleaseDate,
 		OutputDir:      req.OutputDir,
 		FilenameFormat: req.FilenameFormat,
 		TrackNumber:    req.TrackNumber,
 		Position:       req.Position,
+		DiscNumber:     req.DiscNumber,
 	}
 
 	resp, err := client.DownloadCover(backendReq)
@@ -623,6 +690,49 @@ func (a *App) PreviewRenameFiles(files []string, format string) []backend.Rename
 // RenameFilesByMetadata renames files based on their metadata
 func (a *App) RenameFilesByMetadata(files []string, format string) []backend.RenameResult {
 	return backend.RenameFiles(files, format)
+}
+
+// ReadTextFile reads a text file and returns its content
+func (a *App) ReadTextFile(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+// RenameFileTo renames a file to a new name (keeping same directory)
+func (a *App) RenameFileTo(oldPath, newName string) error {
+	dir := filepath.Dir(oldPath)
+	ext := filepath.Ext(oldPath)
+	newPath := filepath.Join(dir, newName+ext)
+	return os.Rename(oldPath, newPath)
+}
+
+// ReadImageAsBase64 reads an image file and returns it as base64 data URL
+func (a *App) ReadImageAsBase64(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	
+	ext := strings.ToLower(filepath.Ext(filePath))
+	var mimeType string
+	switch ext {
+	case ".jpg", ".jpeg":
+		mimeType = "image/jpeg"
+	case ".png":
+		mimeType = "image/png"
+	case ".gif":
+		mimeType = "image/gif"
+	case ".webp":
+		mimeType = "image/webp"
+	default:
+		mimeType = "image/jpeg"
+	}
+	
+	encoded := base64.StdEncoding.EncodeToString(content)
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
 }
 
 // CheckFileExistenceRequest represents a track to check for existence

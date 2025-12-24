@@ -43,8 +43,8 @@ interface TrackListProps {
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (track: TrackMetadata, folderName?: string, isArtistDiscography?: boolean, isAlbum?: boolean, position?: number) => void;
-  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
-  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string) => void;
+  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
+  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
   onPageChange: (page: number) => void;
   onAlbumClick?: (album: { id: string; name: string; external_urls: string }) => void;
   onArtistClick?: (artist: { id: string; name: string; external_urls: string }) => void;
@@ -327,7 +327,7 @@ export function TrackList({
                           <TooltipTrigger asChild>
                             <Button
                               onClick={() =>
-                                onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1)
+                                onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1, track.album_artist, track.release_date, track.disc_number)
                               }
                               size="sm"
                               variant="outline"
@@ -367,7 +367,7 @@ export function TrackList({
                             <Button
                               onClick={() => {
                                 const trackId = track.spotify_id || `${track.name}-${track.artists}`;
-                                onDownloadCover(track.images, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1, trackId);
+                                onDownloadCover(track.images, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1, trackId, track.album_artist, track.release_date, track.disc_number);
                               }}
                               size="sm"
                               variant="outline"

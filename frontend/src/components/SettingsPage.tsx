@@ -78,6 +78,8 @@ export function SettingsPage() {
         const settingsWithDefaults = await getSettingsWithDefaults();
         setSavedSettings(settingsWithDefaults);
         setTempSettings(settingsWithDefaults);
+        // Save to localStorage so it persists on reload
+        saveSettings(settingsWithDefaults);
       }
     };
     loadDefaults();

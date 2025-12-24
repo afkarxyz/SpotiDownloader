@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck, ImageDown } from "lucide-react";
@@ -18,9 +17,12 @@ interface TrackInfoProps {
   failedLyrics?: Set<string>;
   skippedLyrics?: Set<string>;
   downloadingCover?: boolean;
+  downloadedCover?: boolean;
+  failedCover?: boolean;
+  skippedCover?: boolean;
   onDownload: (track: TrackMetadata) => void;
-  onDownloadLyrics?: (spotifyId: string, trackName: string, artistName: string, albumName?: string) => void;
-  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string) => void;
+  onDownloadLyrics?: (spotifyId: string, trackName: string, artistName: string, albumName?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
+  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string, playlistName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
   onOpenFolder: () => void;
 }
 
@@ -36,48 +38,25 @@ export function TrackInfo({
   failedLyrics,
   skippedLyrics,
   downloadingCover,
+  downloadedCover,
+  failedCover,
+  skippedCover,
   onDownload,
   onDownloadLyrics,
   onDownloadCover,
   onOpenFolder,
 }: TrackInfoProps) {
-  const [isHoveringCover, setIsHoveringCover] = useState(false);
-
   return (
     <Card>
       <CardContent className="px-6">
         <div className="flex gap-6 items-start">
           {track.images && (
-            <div 
-              className="relative shrink-0"
-              onMouseEnter={() => setIsHoveringCover(true)}
-              onMouseLeave={() => setIsHoveringCover(false)}
-            >
+            <div className="shrink-0">
               <img
                 src={track.images}
                 alt={track.name}
                 className="w-48 h-48 rounded-md shadow-lg object-cover"
               />
-              {isHoveringCover && onDownloadCover && (
-                <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        className="cursor-pointer"
-                        onClick={() => onDownloadCover(track.images, track.name, track.artists, track.album_name)}
-                        disabled={downloadingCover}
-                      >
-                        {downloadingCover ? <Spinner /> : <ImageDown className="h-5 w-5" />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Download Cover</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              )}
             </div>
           )}
           <div className="flex-1 space-y-4 min-w-0">
@@ -123,7 +102,7 @@ export function TrackInfo({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name)}
+                        onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name, track.album_artist, track.release_date, track.disc_number)}
                         variant="outline"
                         size="icon"
                         disabled={downloadingLyricsTrack === track.spotify_id}
@@ -152,6 +131,43 @@ export function TrackInfo({
                         <p>Lyrics failed</p>
                       ) : (
                         <p>Download Lyrics</p>
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {track.images && onDownloadCover && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => onDownloadCover(track.images, track.name, track.artists, track.album_name, undefined, undefined, undefined, track.spotify_id, track.album_artist, track.release_date, track.disc_number)}
+                        variant="outline"
+                        size="icon"
+                        disabled={downloadingCover}
+                      >
+                        {downloadingCover ? (
+                          <Spinner />
+                        ) : skippedCover ? (
+                          <FileCheck className="h-4 w-4 text-yellow-500" />
+                        ) : downloadedCover ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : failedCover ? (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        ) : (
+                          <ImageDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {downloadingCover ? (
+                        <p>Downloading cover...</p>
+                      ) : skippedCover ? (
+                        <p>Cover already exists</p>
+                      ) : downloadedCover ? (
+                        <p>Cover downloaded</p>
+                      ) : failedCover ? (
+                        <p>Cover failed</p>
+                      ) : (
+                        <p>Download Cover</p>
                       )}
                     </TooltipContent>
                   </Tooltip>

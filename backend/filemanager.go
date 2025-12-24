@@ -341,12 +341,18 @@ func GenerateFilename(metadata *AudioMetadata, format string, ext string) string
 
 	result := format
 
+	// Extract year (first 4 characters only)
+	year := metadata.Year
+	if len(year) >= 4 {
+		year = year[:4]
+	}
+
 	// Replace placeholders
 	result = strings.ReplaceAll(result, "{title}", sanitizeFilename(metadata.Title))
 	result = strings.ReplaceAll(result, "{artist}", sanitizeFilename(metadata.Artist))
 	result = strings.ReplaceAll(result, "{album}", sanitizeFilename(metadata.Album))
 	result = strings.ReplaceAll(result, "{album_artist}", sanitizeFilename(metadata.AlbumArtist))
-	result = strings.ReplaceAll(result, "{year}", sanitizeFilename(metadata.Year))
+	result = strings.ReplaceAll(result, "{year}", sanitizeFilename(year))
 
 	// Track number with padding
 	if metadata.TrackNumber > 0 {
