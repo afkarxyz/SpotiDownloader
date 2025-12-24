@@ -64,4 +64,4 @@ temp/
 
 # Build notes (optional - uncomment if you don't want to commit)
 # BUILD_NOTES.md
-build.txt
+push.bat
