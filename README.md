@@ -1,5 +1,7 @@
 [![GitHub All Releases](https://img.shields.io/github/downloads/afkarxyz/SpotiDownloader/total?style=for-the-badge)](https://github.com/afkarxyz/SpotiDownloader/releases)
 
+![Maintenance](https://maintenance.afkarxyz.fun?v=1)
+
 ![SpotiDownloader](https://github.com/user-attachments/assets/351a0205-8ffa-428c-9d6b-8755078eb69f)
 
 <div align="center">
