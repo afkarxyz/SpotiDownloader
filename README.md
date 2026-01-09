@@ -6,7 +6,7 @@
 
 <div align="center">
 
-Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
+Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API.
 
 ![Windows](https://img.shields.io/badge/Windows-10%2B-0078D6?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgMjAgMjAiPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTIwIDEwLjg3M1YyMEw4LjQ3OSAxOC41MzdsLjAwMS03LjY2NEgyMFptLTEzLjEyIDBsLS4wMDEgNy40NjFMMCAxNy40NjF2LTYuNTg4aDYuODhaTTIwIDkuMjczSDguNDhsLS4wMDEtNy44MUwyMCAwdjkuMjczWk02Ljg3OSAxLjY2NmwuMDAxIDcuNjA3SDBWMi41MzlsNi44NzktLjg3M1oiLz48L3N2Zz4=)
 ![macOS](https://img.shields.io/badge/macOS-10.13%2B-000000?style=for-the-badge&logo=apple&logoColor=white)
@@ -25,13 +25,18 @@ Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
 
 ![Image](https://github.com/user-attachments/assets/5ba4c581-1b1d-4736-9f24-35b9526a095c)
 
-## Other project
+## Other projects
 
 ### [SpotiFLAC](https://github.com/afkarxyz/SpotiFLAC)
 
 Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account required.
 
+### [SpotubeDL](https://spotubedl.com)
+Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.
+
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
+
+> Every coffee helps me keep going
 
 ## Disclaimer
 
