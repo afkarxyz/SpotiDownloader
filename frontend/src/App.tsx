@@ -51,7 +51,7 @@ function App() {
     const [showChromeErrorDialog, setShowChromeErrorDialog] = useState(false);
     const [chromeErrorMessage, setChromeErrorMessage] = useState("");
     const ITEMS_PER_PAGE = 50;
-    const CURRENT_VERSION = "6.8";
+    const CURRENT_VERSION = "6.9";
     const download = useDownload();
     const metadata = useMetadata();
     const lyrics = useLyrics();
