@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// getSpotiDownloaderDir returns the path to ~/.spotidownloader directory
 func getSpotiDownloaderDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -18,29 +17,34 @@ func getSpotiDownloaderDir() (string, error) {
 	return filepath.Join(homeDir, ".spotidownloader"), nil
 }
 
-// FetchSessionToken menjalankan get_token dan mengembalikan session token
 func FetchSessionToken() (string, error) {
 	return FetchSessionTokenWithParams(5, 1)
 }
 
-// FetchSessionTokenWithParams menjalankan get_token dengan parameter timeout dan retry
+var ErrChromeNotInstalled = fmt.Errorf("chrome_not_installed")
+
 func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
-	// Get the .spotidownloader directory path
+
+	chromeInstalled, _, err := IsChromeInstalled()
+	if err != nil {
+		return "", fmt.Errorf("failed to check Chrome installation: %v", err)
+	}
+	if !chromeInstalled {
+		return "", ErrChromeNotInstalled
+	}
+
 	spotiDir, err := getSpotiDownloaderDir()
 	if err != nil {
 		return "", err
 	}
 
-	// Create directory if it doesn't exist
 	if err := os.MkdirAll(spotiDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create .spotidownloader directory: %v", err)
 	}
 
-	// Get the appropriate binary for current OS (defined in platform-specific files)
 	binaryData, binaryName := getTokenBinary()
 	exePath := filepath.Join(spotiDir, binaryName)
 
-	// Check if binary already exists and has the same size
 	needsUpdate := true
 	if info, err := os.Stat(exePath); err == nil {
 		if info.Size() == int64(len(binaryData)) {
@@ -48,7 +52,6 @@ func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 		}
 	}
 
-	// Write binary if needed
 	if needsUpdate {
 		err = os.WriteFile(exePath, binaryData, 0755)
 		if err != nil {
@@ -56,17 +59,15 @@ func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 		}
 	}
 
-	// Retry logic at Go level (in case binary doesn't handle retry properly on some platforms)
 	var lastErr error
-	maxAttempts := retry
-	if maxAttempts < 1 {
-		maxAttempts = 1
+	if retry < 0 {
+		retry = 0
 	}
+	maxAttempts := retry + 1
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		fmt.Printf("[TokenFetcher] Attempt %d/%d (timeout: %ds)\n", attempt, maxAttempts, timeout)
 
-		// Run executable with timeout parameter only, retry handled here
 		cmd := exec.Command(exePath, "--timeout", fmt.Sprintf("%d", timeout), "--retry", "1")
 		output, err := cmd.CombinedOutput()
 		outputStr := strings.TrimSpace(string(output))
@@ -80,7 +81,6 @@ func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 			continue
 		}
 
-		// Check if output is empty
 		if outputStr == "" {
 			lastErr = fmt.Errorf("get_token returned empty output (attempt %d)", attempt)
 			fmt.Printf("[TokenFetcher] %v\n", lastErr)
@@ -90,7 +90,6 @@ func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 			continue
 		}
 
-		// Validate token (must start with eyJ for JWT)
 		if !strings.HasPrefix(outputStr, "eyJ") {
 			lastErr = fmt.Errorf("get_token returned invalid token (attempt %d): %s", attempt, outputStr)
 			fmt.Printf("[TokenFetcher] %v\n", lastErr)

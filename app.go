@@ -12,23 +12,18 @@ import (
 	"time"
 )
 
-// App struct
 type App struct {
 	ctx context.Context
 }
 
-// NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{}
 }
 
-// startup is called when the app starts. The context is saved
-// so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// SpotifyMetadataRequest represents the request structure for fetching Spotify metadata
 type SpotifyMetadataRequest struct {
 	URL     string  `json:"url"`
 	Batch   bool    `json:"batch"`
@@ -36,9 +31,7 @@ type SpotifyMetadataRequest struct {
 	Timeout float64 `json:"timeout"`
 }
 
-// DownloadRequest represents the request structure for downloading tracks
 type DownloadRequest struct {
-	ISRC                 string `json:"isrc"`
 	TrackID              string `json:"track_id,omitempty"`
 	SessionToken         string `json:"session_token"`
 	TrackName            string `json:"track_name,omitempty"`
@@ -49,30 +42,32 @@ type DownloadRequest struct {
 	CoverURL             string `json:"cover_url,omitempty"`
 	AlbumTrackNumber     int    `json:"album_track_number,omitempty"`
 	DiscNumber           int    `json:"disc_number,omitempty"`
-	TotalTracks          int    `json:"total_tracks,omitempty"` // Total tracks in album from Spotify
+	TotalTracks          int    `json:"total_tracks,omitempty"`
+	SpotifyTotalDiscs    int    `json:"spotify_total_discs,omitempty"`
+	Copyright            string `json:"copyright,omitempty"`
+	Publisher            string `json:"publisher,omitempty"`
 	OutputDir            string `json:"output_dir,omitempty"`
 	AudioFormat          string `json:"audio_format,omitempty"`
 	FilenameFormat       string `json:"filename_format,omitempty"`
 	TrackNumber          bool   `json:"track_number,omitempty"`
-	Position             int    `json:"position,omitempty"`                // Position in playlist/album (1-based)
-	UseAlbumTrackNumber  bool   `json:"use_album_track_number,omitempty"`  // Use album track number instead of playlist position
-	SpotifyID            string `json:"spotify_id,omitempty"`              // Spotify track ID
-	EmbedLyrics          bool   `json:"embed_lyrics,omitempty"`            // Whether to embed lyrics into the audio file
-	EmbedMaxQualityCover bool   `json:"embed_max_quality_cover,omitempty"` // Whether to embed max quality cover art
-	ItemID               string `json:"item_id,omitempty"`                 // Optional queue item ID for tracking
+	Position             int    `json:"position,omitempty"`
+	UseAlbumTrackNumber  bool   `json:"use_album_track_number,omitempty"`
+	SpotifyID            string `json:"spotify_id,omitempty"`
+	ISRC                 string `json:"isrc,omitempty"`
+	EmbedLyrics          bool   `json:"embed_lyrics,omitempty"`
+	EmbedMaxQualityCover bool   `json:"embed_max_quality_cover,omitempty"`
+	ItemID               string `json:"item_id,omitempty"`
 }
 
-// DownloadResponse represents the response structure for download operations
 type DownloadResponse struct {
 	Success       bool   `json:"success"`
 	Message       string `json:"message"`
 	File          string `json:"file,omitempty"`
 	Error         string `json:"error,omitempty"`
 	AlreadyExists bool   `json:"already_exists,omitempty"`
-	ItemID        string `json:"item_id,omitempty"` // Queue item ID for tracking
+	ItemID        string `json:"item_id,omitempty"`
 }
 
-// GetSpotifyMetadata fetches metadata from Spotify
 func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 	if req.URL == "" {
 		return "", fmt.Errorf("URL parameter is required")
@@ -101,13 +96,11 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 	return string(jsonData), nil
 }
 
-// SpotifySearchRequest represents the request structure for searching Spotify
 type SpotifySearchRequest struct {
 	Query string `json:"query"`
 	Limit int    `json:"limit"`
 }
 
-// SearchSpotify searches for tracks, albums, artists, and playlists on Spotify
 func (a *App) SearchSpotify(req SpotifySearchRequest) (*backend.SearchResponse, error) {
 	if req.Query == "" {
 		return nil, fmt.Errorf("search query is required")
@@ -123,15 +116,13 @@ func (a *App) SearchSpotify(req SpotifySearchRequest) (*backend.SearchResponse, 
 	return backend.SearchSpotify(ctx, req.Query, req.Limit)
 }
 
-// SpotifySearchByTypeRequest represents the request for searching by specific type with offset
 type SpotifySearchByTypeRequest struct {
 	Query      string `json:"query"`
-	SearchType string `json:"search_type"` // track, album, artist, playlist
+	SearchType string `json:"search_type"`
 	Limit      int    `json:"limit"`
 	Offset     int    `json:"offset"`
 }
 
-// SearchSpotifyByType searches for a specific type with offset support for pagination
 func (a *App) SearchSpotifyByType(req SpotifySearchByTypeRequest) ([]backend.SearchResult, error) {
 	if req.Query == "" {
 		return nil, fmt.Errorf("search query is required")
@@ -151,13 +142,12 @@ func (a *App) SearchSpotifyByType(req SpotifySearchByTypeRequest) ([]backend.Sea
 	return backend.SearchSpotifyByType(ctx, req.Query, req.SearchType, req.Limit, req.Offset)
 }
 
-// DownloadTrack downloads a track using spotidownloader API
 func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
-	if req.TrackID == "" && req.ISRC == "" {
+	if req.TrackID == "" && req.SpotifyID == "" {
 		return DownloadResponse{
 			Success: false,
-			Error:   "track ID or ISRC is required",
-		}, fmt.Errorf("track ID or ISRC is required")
+			Error:   "track ID or Spotify ID is required",
+		}, fmt.Errorf("track ID or Spotify ID is required")
 	}
 
 	if req.SessionToken == "" {
@@ -170,7 +160,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	if req.OutputDir == "" {
 		req.OutputDir = "."
 	} else {
-		// Only normalize path separators, don't sanitize user's existing folder names
+
 		req.OutputDir = backend.NormalizePath(req.OutputDir)
 	}
 
@@ -178,41 +168,77 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.AudioFormat = "mp3"
 	}
 
-	// Set default filename format if not provided
 	if req.FilenameFormat == "" {
 		req.FilenameFormat = "title-artist"
 	}
 
-	// ItemID should always be provided by frontend (created via AddToDownloadQueue)
-	// If not provided, generate one for backwards compatibility
 	itemID := req.ItemID
 	if itemID == "" {
-		itemID = fmt.Sprintf("%s-%d", req.ISRC, time.Now().UnixNano())
-		// Add to queue if no ItemID was provided (legacy support)
-		backend.AddToQueue(itemID, req.TrackName, req.ArtistName, req.AlbumName, req.ISRC)
+		trackIDForItemID := req.TrackID
+		if trackIDForItemID == "" {
+			trackIDForItemID = req.SpotifyID
+		}
+		itemID = fmt.Sprintf("%s-%d", trackIDForItemID, time.Now().UnixNano())
+
+		trackIDForISRC := req.TrackID
+		if trackIDForISRC == "" {
+			trackIDForISRC = req.SpotifyID
+		}
+		isrc := req.ISRC
+		if isrc == "" {
+			isrc = trackIDForISRC
+		}
+		backend.AddToQueue(itemID, req.TrackName, req.ArtistName, req.AlbumName, isrc)
 	}
 
-	// Mark item as downloading immediately
 	backend.SetDownloading(true)
 	backend.StartDownloadItem(itemID)
 	defer backend.SetDownloading(false)
 
-	// Early check: Check if file with same ISRC already exists
-	if req.ISRC != "" {
-		if existingFile, exists := backend.CheckISRCExists(req.OutputDir, req.ISRC, req.AudioFormat); exists {
-			fmt.Printf("File with ISRC %s already exists: %s\n", req.ISRC, existingFile)
-			backend.SkipDownloadItem(itemID, existingFile)
-			return DownloadResponse{
-				Success:       true,
-				Message:       "File with same ISRC already exists",
-				File:          existingFile,
-				AlreadyExists: true,
-				ItemID:        itemID,
-			}, nil
+	if req.SpotifyID != "" && (req.Copyright == "" || req.Publisher == "" || req.SpotifyTotalDiscs == 0 || req.ReleaseDate == "" || req.TotalTracks == 0 || req.AlbumTrackNumber == 0) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		trackURL := fmt.Sprintf("https://open.spotify.com/track/%s", req.SpotifyID)
+		trackData, err := backend.GetFilteredSpotifyData(ctx, trackURL, false, 0)
+		if err == nil {
+
+			var trackResp struct {
+				Track struct {
+					Copyright   string `json:"copyright"`
+					Publisher   string `json:"publisher"`
+					TotalDiscs  int    `json:"total_discs"`
+					TotalTracks int    `json:"total_tracks"`
+					TrackNumber int    `json:"track_number"`
+					ReleaseDate string `json:"release_date"`
+				} `json:"track"`
+			}
+			if jsonData, jsonErr := json.Marshal(trackData); jsonErr == nil {
+				if json.Unmarshal(jsonData, &trackResp) == nil {
+
+					if req.Copyright == "" && trackResp.Track.Copyright != "" {
+						req.Copyright = trackResp.Track.Copyright
+					}
+					if req.Publisher == "" && trackResp.Track.Publisher != "" {
+						req.Publisher = trackResp.Track.Publisher
+					}
+					if req.SpotifyTotalDiscs == 0 && trackResp.Track.TotalDiscs > 0 {
+						req.SpotifyTotalDiscs = trackResp.Track.TotalDiscs
+					}
+					if req.TotalTracks == 0 && trackResp.Track.TotalTracks > 0 {
+						req.TotalTracks = trackResp.Track.TotalTracks
+					}
+					if req.AlbumTrackNumber == 0 && trackResp.Track.TrackNumber > 0 {
+						req.AlbumTrackNumber = trackResp.Track.TrackNumber
+					}
+					if req.ReleaseDate == "" && trackResp.Track.ReleaseDate != "" {
+						req.ReleaseDate = trackResp.Track.ReleaseDate
+					}
+				}
+			}
 		}
 	}
 
-	// Fallback: if we have track metadata, check if file already exists by filename
 	if req.TrackName != "" && req.ArtistName != "" {
 		fileExt := ".mp3"
 		if req.AudioFormat == "flac" {
@@ -234,26 +260,20 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 	}
 
-	// Use TrackID if provided, otherwise use ISRC
 	trackID := req.TrackID
 	if trackID == "" {
-		trackID = req.ISRC
+		trackID = req.SpotifyID
 	}
 
 	downloader := backend.NewSpotiDownloader(req.SessionToken)
 
-	// Determine actual track number to use
-	// Priority: AlbumTrackNumber > Position
-	// If AlbumTrackNumber is available, use it (even for single track downloads)
-	// Otherwise, use Position (for playlist downloads)
-	actualTrackNumber := req.Position
-	if req.AlbumTrackNumber > 0 {
-		actualTrackNumber = req.AlbumTrackNumber
+	actualTrackNumber := req.AlbumTrackNumber
+	if actualTrackNumber == 0 {
+		actualTrackNumber = 1
 	}
 
 	filename, err := downloader.DownloadByISRC(
 		trackID,
-		req.ISRC,
 		req.OutputDir,
 		req.AudioFormat,
 		req.FilenameFormat,
@@ -270,6 +290,9 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.TotalTracks,
 		req.UseAlbumTrackNumber,
 		req.EmbedMaxQualityCover,
+		req.SpotifyTotalDiscs,
+		req.Copyright,
+		req.Publisher,
 	)
 
 	if err != nil {
@@ -281,14 +304,12 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}, err
 	}
 
-	// Check if file already existed
 	alreadyExists := false
 	if strings.HasPrefix(filename, "EXISTS:") {
 		alreadyExists = true
 		filename = strings.TrimPrefix(filename, "EXISTS:")
 	}
 
-	// Embed lyrics after successful download (only for new downloads with Spotify ID and if embedLyrics is enabled)
 	if !alreadyExists && req.SpotifyID != "" && req.EmbedLyrics && (strings.HasSuffix(filename, ".flac") || strings.HasSuffix(filename, ".mp3")) {
 		go func(filePath, spotifyID, trackName, artistName string) {
 			fmt.Printf("\n========== LYRICS FETCH START ==========\n")
@@ -299,8 +320,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 			lyricsClient := backend.NewLyricsClient()
 
-			// Try all sources with fallbacks
-			lyricsResp, source, err := lyricsClient.FetchLyricsAllSources(spotifyID, trackName, artistName)
+			lyricsResp, source, err := lyricsClient.FetchLyricsAllSources(spotifyID, trackName, artistName, 0)
 			if err != nil {
 				fmt.Printf("All sources failed: %v\n", err)
 				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
@@ -324,7 +344,6 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				return
 			}
 
-			// Show full lyrics in console for debugging
 			fmt.Printf("\n--- Full LRC Content ---\n")
 			fmt.Println(lyrics)
 			fmt.Printf("--- End LRC Content ---\n\n")
@@ -345,12 +364,12 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		message = "File already exists"
 		backend.SkipDownloadItem(itemID, filename)
 	} else {
-		// Get file size for completed download
+
 		if fileInfo, statErr := os.Stat(filename); statErr == nil {
-			finalSize := float64(fileInfo.Size()) / (1024 * 1024) // Convert to MB
+			finalSize := float64(fileInfo.Size()) / (1024 * 1024)
 			backend.CompleteDownloadItem(itemID, filename, finalSize)
 		} else {
-			// Fallback: mark as completed without size
+
 			backend.CompleteDownloadItem(itemID, filename, 0)
 		}
 	}
@@ -364,7 +383,6 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	}, nil
 }
 
-// OpenFolder opens a folder in the file explorer
 func (a *App) OpenFolder(path string) error {
 	if path == "" {
 		return fmt.Errorf("path is required")
@@ -378,17 +396,14 @@ func (a *App) OpenFolder(path string) error {
 	return nil
 }
 
-// SelectFolder opens a folder selection dialog and returns the selected path
 func (a *App) SelectFolder(defaultPath string) (string, error) {
 	return backend.SelectFolderDialog(a.ctx, defaultPath)
 }
 
-// SelectFile opens a file selection dialog and returns the selected file path
 func (a *App) SelectFile() (string, error) {
 	return backend.SelectFileDialog(a.ctx)
 }
 
-// AnalyzeTrack analyzes audio quality of a FLAC file
 func (a *App) AnalyzeTrack(filePath string) (string, error) {
 	if filePath == "" {
 		return "", fmt.Errorf("file path is required")
@@ -407,37 +422,36 @@ func (a *App) AnalyzeTrack(filePath string) (string, error) {
 	return string(jsonData), nil
 }
 
-// GetDefaults returns the default configuration
 func (a *App) GetDefaults() map[string]string {
 	return map[string]string{
 		"downloadPath": backend.GetDefaultMusicPath(),
 	}
 }
 
-// GetDownloadProgress returns current download progress
 func (a *App) GetDownloadProgress() backend.ProgressInfo {
 	return backend.GetDownloadProgress()
 }
 
-// TokenResponse represents the response with token and expiry time
 type TokenResponse struct {
 	Token     string `json:"token"`
-	ExpiresAt int64  `json:"expires_at"` // Unix timestamp
+	ExpiresAt int64  `json:"expires_at"`
 }
 
-// FetchSessionToken fetches session token by running get_token.exe
 func (a *App) FetchSessionToken() (TokenResponse, error) {
 	return a.FetchSessionTokenWithParams(5, 1)
 }
 
-// FetchSessionTokenWithParams fetches session token with custom timeout and retry settings
 func (a *App) FetchSessionTokenWithParams(timeout int, retry int) (TokenResponse, error) {
 	token, err := backend.FetchSessionTokenWithParams(timeout, retry)
 	if err != nil {
+
+		if err == backend.ErrChromeNotInstalled {
+			message := backend.GetChromeInstallationMessage()
+			return TokenResponse{}, fmt.Errorf("CHROME_NOT_INSTALLED: %s", message)
+		}
 		return TokenResponse{}, fmt.Errorf("failed to fetch session token: %v", err)
 	}
 
-	// Token expires in 3 minutes (180 seconds)
 	expiresAt := time.Now().Add(3 * time.Minute).Unix()
 
 	return TokenResponse{
@@ -446,40 +460,33 @@ func (a *App) FetchSessionTokenWithParams(timeout int, retry int) (TokenResponse
 	}, nil
 }
 
-// GetDownloadQueue returns the complete download queue state
 func (a *App) GetDownloadQueue() backend.DownloadQueueInfo {
 	return backend.GetDownloadQueue()
 }
 
-// AddToDownloadQueue adds a new item to the download queue and returns its ID
-func (a *App) AddToDownloadQueue(isrc, trackName, artistName, albumName string) string {
-	itemID := fmt.Sprintf("%s-%d", isrc, time.Now().UnixNano())
-	backend.AddToQueue(itemID, trackName, artistName, albumName, isrc)
+func (a *App) AddToDownloadQueue(trackID, trackName, artistName, albumName string) string {
+	itemID := fmt.Sprintf("%s-%d", trackID, time.Now().UnixNano())
+	backend.AddToQueue(itemID, trackName, artistName, albumName, trackID)
 	return itemID
 }
 
-// ClearCompletedDownloads clears completed, failed, and skipped items from the queue
 func (a *App) ClearCompletedDownloads() {
 	backend.ClearDownloadQueue()
 }
 
-// MarkDownloadItemFailed marks a download item as failed with an error message
 func (a *App) MarkDownloadItemFailed(itemID, errorMsg string) {
 	backend.FailDownloadItem(itemID, errorMsg)
 }
 
-// SkipDownloadItem marks a download item as skipped (file already exists)
 func (a *App) SkipDownloadItem(itemID, filePath string) {
 	backend.SkipDownloadItem(itemID, filePath)
 }
 
-// Quit closes the application
 func (a *App) Quit() {
-	// You can add cleanup logic here if needed
-	panic("quit") // This will trigger Wails to close the app
+
+	panic("quit")
 }
 
-// LyricsDownloadRequest represents the request structure for downloading lyrics
 type LyricsDownloadRequest struct {
 	SpotifyID           string `json:"spotify_id"`
 	TrackName           string `json:"track_name"`
@@ -495,7 +502,6 @@ type LyricsDownloadRequest struct {
 	DiscNumber          int    `json:"disc_number"`
 }
 
-// DownloadLyrics downloads lyrics for a single track
 func (a *App) DownloadLyrics(req LyricsDownloadRequest) (backend.LyricsDownloadResponse, error) {
 	if req.SpotifyID == "" {
 		return backend.LyricsDownloadResponse{
@@ -531,7 +537,6 @@ func (a *App) DownloadLyrics(req LyricsDownloadRequest) (backend.LyricsDownloadR
 	return *resp, nil
 }
 
-// CoverDownloadRequest represents the request structure for downloading cover art
 type CoverDownloadRequest struct {
 	CoverURL       string `json:"cover_url"`
 	TrackName      string `json:"track_name"`
@@ -546,7 +551,6 @@ type CoverDownloadRequest struct {
 	DiscNumber     int    `json:"disc_number"`
 }
 
-// DownloadCover downloads cover art for a single track
 func (a *App) DownloadCover(req CoverDownloadRequest) (backend.CoverDownloadResponse, error) {
 	if req.CoverURL == "" {
 		return backend.CoverDownloadResponse{
@@ -581,32 +585,145 @@ func (a *App) DownloadCover(req CoverDownloadRequest) (backend.CoverDownloadResp
 	return *resp, nil
 }
 
-// IsFFmpegInstalled checks if ffmpeg is installed
+type HeaderDownloadRequest struct {
+	HeaderURL  string `json:"header_url"`
+	ArtistName string `json:"artist_name"`
+	OutputDir  string `json:"output_dir"`
+}
+
+func (a *App) DownloadHeader(req HeaderDownloadRequest) (backend.HeaderDownloadResponse, error) {
+	if req.HeaderURL == "" {
+		return backend.HeaderDownloadResponse{
+			Success: false,
+			Error:   "Header URL is required",
+		}, fmt.Errorf("header URL is required")
+	}
+
+	if req.ArtistName == "" {
+		return backend.HeaderDownloadResponse{
+			Success: false,
+			Error:   "Artist name is required",
+		}, fmt.Errorf("artist name is required")
+	}
+
+	client := backend.NewCoverClient()
+	backendReq := backend.HeaderDownloadRequest{
+		HeaderURL:  req.HeaderURL,
+		ArtistName: req.ArtistName,
+		OutputDir:  req.OutputDir,
+	}
+
+	resp, err := client.DownloadHeader(backendReq)
+	if err != nil {
+		return backend.HeaderDownloadResponse{
+			Success: false,
+			Error:   err.Error(),
+		}, err
+	}
+
+	return *resp, nil
+}
+
+type GalleryImageDownloadRequest struct {
+	ImageURL   string `json:"image_url"`
+	ArtistName string `json:"artist_name"`
+	ImageIndex int    `json:"image_index"`
+	OutputDir  string `json:"output_dir"`
+}
+
+func (a *App) DownloadGalleryImage(req GalleryImageDownloadRequest) (backend.GalleryImageDownloadResponse, error) {
+	if req.ImageURL == "" {
+		return backend.GalleryImageDownloadResponse{
+			Success: false,
+			Error:   "Image URL is required",
+		}, fmt.Errorf("image URL is required")
+	}
+
+	if req.ArtistName == "" {
+		return backend.GalleryImageDownloadResponse{
+			Success: false,
+			Error:   "Artist name is required",
+		}, fmt.Errorf("artist name is required")
+	}
+
+	client := backend.NewCoverClient()
+	backendReq := backend.GalleryImageDownloadRequest{
+		ImageURL:   req.ImageURL,
+		ArtistName: req.ArtistName,
+		ImageIndex: req.ImageIndex,
+		OutputDir:  req.OutputDir,
+	}
+
+	resp, err := client.DownloadGalleryImage(backendReq)
+	if err != nil {
+		return backend.GalleryImageDownloadResponse{
+			Success: false,
+			Error:   err.Error(),
+		}, err
+	}
+
+	return *resp, nil
+}
+
+type AvatarDownloadRequest struct {
+	AvatarURL  string `json:"avatar_url"`
+	ArtistName string `json:"artist_name"`
+	OutputDir  string `json:"output_dir"`
+}
+
+func (a *App) DownloadAvatar(req AvatarDownloadRequest) (backend.AvatarDownloadResponse, error) {
+	if req.AvatarURL == "" {
+		return backend.AvatarDownloadResponse{
+			Success: false,
+			Error:   "Avatar URL is required",
+		}, fmt.Errorf("avatar URL is required")
+	}
+
+	if req.ArtistName == "" {
+		return backend.AvatarDownloadResponse{
+			Success: false,
+			Error:   "Artist name is required",
+		}, fmt.Errorf("artist name is required")
+	}
+
+	client := backend.NewCoverClient()
+	backendReq := backend.AvatarDownloadRequest{
+		AvatarURL:  req.AvatarURL,
+		ArtistName: req.ArtistName,
+		OutputDir:  req.OutputDir,
+	}
+
+	resp, err := client.DownloadAvatar(backendReq)
+	if err != nil {
+		return backend.AvatarDownloadResponse{
+			Success: false,
+			Error:   err.Error(),
+		}, err
+	}
+
+	return *resp, nil
+}
+
 func (a *App) IsFFmpegInstalled() (bool, error) {
 	return backend.IsFFmpegInstalled()
 }
 
-// IsFFprobeInstalled checks if ffprobe is installed
 func (a *App) IsFFprobeInstalled() (bool, error) {
 	return backend.IsFFprobeInstalled()
 }
 
-// GetFFmpegPath returns the path to ffmpeg
 func (a *App) GetFFmpegPath() (string, error) {
 	return backend.GetFFmpegPath()
 }
 
-// DownloadFFmpegRequest represents a request to download ffmpeg
 type DownloadFFmpegRequest struct{}
 
-// DownloadFFmpegResponse represents the response from downloading ffmpeg
 type DownloadFFmpegResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 	Error   string `json:"error,omitempty"`
 }
 
-// DownloadFFmpeg downloads and installs ffmpeg
 func (a *App) DownloadFFmpeg() DownloadFFmpegResponse {
 	err := backend.DownloadFFmpeg(func(progress int) {
 		fmt.Printf("[FFmpeg] Download progress: %d%%\n", progress)
@@ -624,15 +741,13 @@ func (a *App) DownloadFFmpeg() DownloadFFmpegResponse {
 	}
 }
 
-// ConvertAudioRequest represents a request to convert audio files
 type ConvertAudioRequest struct {
 	InputFiles   []string `json:"input_files"`
 	OutputFormat string   `json:"output_format"`
 	Bitrate      string   `json:"bitrate"`
-	Codec        string   `json:"codec"` // For m4a: "aac" (lossy) or "alac" (lossless)
+	Codec        string   `json:"codec"`
 }
 
-// ConvertAudio converts audio files using ffmpeg
 func (a *App) ConvertAudio(req ConvertAudioRequest) ([]backend.ConvertAudioResult, error) {
 	backendReq := backend.ConvertAudioRequest{
 		InputFiles:   req.InputFiles,
@@ -643,9 +758,8 @@ func (a *App) ConvertAudio(req ConvertAudioRequest) ([]backend.ConvertAudioResul
 	return backend.ConvertAudio(backendReq)
 }
 
-// SelectAudioFiles opens a file dialog to select audio files for conversion
 func (a *App) SelectAudioFiles() ([]string, error) {
-	// Import wails runtime for dialog
+
 	files, err := backend.SelectMultipleFiles(a.ctx)
 	if err != nil {
 		return nil, err
@@ -653,12 +767,10 @@ func (a *App) SelectAudioFiles() ([]string, error) {
 	return files, nil
 }
 
-// GetFileSizes returns file sizes for a list of file paths
 func (a *App) GetFileSizes(files []string) map[string]int64 {
 	return backend.GetFileSizes(files)
 }
 
-// ListDirectoryFiles lists files and folders in a directory
 func (a *App) ListDirectoryFiles(dirPath string) ([]backend.FileInfo, error) {
 	if dirPath == "" {
 		return nil, fmt.Errorf("directory path is required")
@@ -666,7 +778,6 @@ func (a *App) ListDirectoryFiles(dirPath string) ([]backend.FileInfo, error) {
 	return backend.ListDirectory(dirPath)
 }
 
-// ListAudioFilesInDir lists only audio files in a directory recursively
 func (a *App) ListAudioFilesInDir(dirPath string) ([]backend.FileInfo, error) {
 	if dirPath == "" {
 		return nil, fmt.Errorf("directory path is required")
@@ -674,7 +785,6 @@ func (a *App) ListAudioFilesInDir(dirPath string) ([]backend.FileInfo, error) {
 	return backend.ListAudioFiles(dirPath)
 }
 
-// ReadFileMetadata reads metadata from an audio file
 func (a *App) ReadFileMetadata(filePath string) (*backend.AudioMetadata, error) {
 	if filePath == "" {
 		return nil, fmt.Errorf("file path is required")
@@ -682,17 +792,14 @@ func (a *App) ReadFileMetadata(filePath string) (*backend.AudioMetadata, error) 
 	return backend.ReadAudioMetadata(filePath)
 }
 
-// PreviewRenameFiles generates a preview of rename operations
 func (a *App) PreviewRenameFiles(files []string, format string) []backend.RenamePreview {
 	return backend.PreviewRename(files, format)
 }
 
-// RenameFilesByMetadata renames files based on their metadata
 func (a *App) RenameFilesByMetadata(files []string, format string) []backend.RenameResult {
 	return backend.RenameFiles(files, format)
 }
 
-// ReadTextFile reads a text file and returns its content
 func (a *App) ReadTextFile(filePath string) (string, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -701,7 +808,6 @@ func (a *App) ReadTextFile(filePath string) (string, error) {
 	return string(content), nil
 }
 
-// RenameFileTo renames a file to a new name (keeping same directory)
 func (a *App) RenameFileTo(oldPath, newName string) error {
 	dir := filepath.Dir(oldPath)
 	ext := filepath.Ext(oldPath)
@@ -709,13 +815,12 @@ func (a *App) RenameFileTo(oldPath, newName string) error {
 	return os.Rename(oldPath, newPath)
 }
 
-// ReadImageAsBase64 reads an image file and returns it as base64 data URL
 func (a *App) ReadImageAsBase64(filePath string) (string, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
 	}
-	
+
 	ext := strings.ToLower(filepath.Ext(filePath))
 	var mimeType string
 	switch ext {
@@ -730,39 +835,110 @@ func (a *App) ReadImageAsBase64(filePath string) (string, error) {
 	default:
 		mimeType = "image/jpeg"
 	}
-	
+
 	encoded := base64.StdEncoding.EncodeToString(content)
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
 }
 
-// CheckFileExistenceRequest represents a track to check for existence
 type CheckFileExistenceRequest struct {
-	ISRC       string `json:"isrc"`
-	TrackName  string `json:"track_name"`
-	ArtistName string `json:"artist_name"`
+	SpotifyID           string `json:"spotify_id"`
+	TrackName           string `json:"track_name"`
+	ArtistName          string `json:"artist_name"`
+	AlbumName           string `json:"album_name,omitempty"`
+	AlbumArtist         string `json:"album_artist,omitempty"`
+	ReleaseDate         string `json:"release_date,omitempty"`
+	TrackNumber         int    `json:"track_number,omitempty"`
+	DiscNumber          int    `json:"disc_number,omitempty"`
+	Position            int    `json:"position,omitempty"`
+	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"`
+	FilenameFormat      string `json:"filename_format,omitempty"`
+	IncludeTrackNumber  bool   `json:"include_track_number,omitempty"`
+	AudioFormat         string `json:"audio_format,omitempty"`
 }
 
-// CheckFilesExistence checks if multiple files already exist in the output directory
-// This is done in parallel for better performance
-func (a *App) CheckFilesExistence(outputDir string, audioFormat string, tracks []CheckFileExistenceRequest) []backend.FileExistenceResult {
-	// Convert to backend struct format
-	backendTracks := make([]struct {
-		ISRC       string
-		TrackName  string
-		ArtistName string
-	}, len(tracks))
+type CheckFileExistenceResult struct {
+	SpotifyID  string `json:"spotify_id"`
+	Exists     bool   `json:"exists"`
+	FilePath   string `json:"file_path,omitempty"`
+	TrackName  string `json:"track_name,omitempty"`
+	ArtistName string `json:"artist_name,omitempty"`
+}
 
-	for i, t := range tracks {
-		backendTracks[i] = struct {
-			ISRC       string
-			TrackName  string
-			ArtistName string
-		}{
-			ISRC:       t.ISRC,
-			TrackName:  t.TrackName,
-			ArtistName: t.ArtistName,
-		}
+func (a *App) CheckFilesExistence(outputDir string, audioFormat string, tracks []CheckFileExistenceRequest) []CheckFileExistenceResult {
+	if len(tracks) == 0 {
+		return []CheckFileExistenceResult{}
 	}
 
-	return backend.CheckFilesExistParallel(outputDir, audioFormat, backendTracks)
+	outputDir = backend.NormalizePath(outputDir)
+
+	defaultFilenameFormat := "title-artist"
+
+	type result struct {
+		index  int
+		result CheckFileExistenceResult
+	}
+
+	resultsChan := make(chan result, len(tracks))
+
+	for i, track := range tracks {
+		go func(idx int, t CheckFileExistenceRequest) {
+			res := CheckFileExistenceResult{
+				SpotifyID:  t.SpotifyID,
+				TrackName:  t.TrackName,
+				ArtistName: t.ArtistName,
+				Exists:     false,
+			}
+
+			if t.TrackName == "" || t.ArtistName == "" {
+				resultsChan <- result{index: idx, result: res}
+				return
+			}
+
+			filenameFormat := t.FilenameFormat
+			if filenameFormat == "" {
+				filenameFormat = defaultFilenameFormat
+			}
+
+			trackNumber := t.Position
+			if t.UseAlbumTrackNumber && t.TrackNumber > 0 {
+				trackNumber = t.TrackNumber
+			}
+
+			fileExt := ".mp3"
+			if audioFormat == "flac" || t.AudioFormat == "flac" {
+				fileExt = ".flac"
+			}
+
+			expectedFilename := backend.BuildFilename(
+				t.TrackName,
+				t.ArtistName,
+				t.AlbumName,
+				t.AlbumArtist,
+				t.ReleaseDate,
+				t.DiscNumber,
+				filenameFormat,
+				t.IncludeTrackNumber,
+				trackNumber,
+				t.UseAlbumTrackNumber,
+			)
+			expectedFilename = backend.SanitizeFilename(expectedFilename) + fileExt
+
+			expectedPath := filepath.Join(outputDir, expectedFilename)
+
+			if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 100*1024 {
+				res.Exists = true
+				res.FilePath = expectedPath
+			}
+
+			resultsChan <- result{index: idx, result: res}
+		}(i, track)
+	}
+
+	results := make([]CheckFileExistenceResult, len(tracks))
+	for i := 0; i < len(tracks); i++ {
+		r := <-resultsChan
+		results[r.index] = r.result
+	}
+
+	return results
 }

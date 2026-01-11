@@ -9,7 +9,6 @@ import (
 	mewflac "github.com/mewkiz/flac"
 )
 
-// AnalysisResult contains the audio analysis data
 type AnalysisResult struct {
 	FilePath      string        `json:"file_path"`
 	FileSize      int64         `json:"file_size"`
@@ -25,19 +24,16 @@ type AnalysisResult struct {
 	Spectrum      *SpectrumData `json:"spectrum,omitempty"`
 }
 
-// AnalyzeTrack performs audio analysis on a FLAC file
 func AnalyzeTrack(filepath string) (*AnalysisResult, error) {
 	if !fileExists(filepath) {
 		return nil, fmt.Errorf("file does not exist: %s", filepath)
 	}
 
-	// Get file size
 	fileInfo, err := os.Stat(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
-	// Parse FLAC file
 	f, err := flac.ParseFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse FLAC file: %w", err)
@@ -48,7 +44,6 @@ func AnalyzeTrack(filepath string) (*AnalysisResult, error) {
 		FileSize: fileInfo.Size(),
 	}
 
-	// Extract basic audio properties from STREAMINFO block
 	if len(f.Meta) > 0 {
 		streamInfo := f.Meta[0]
 		if streamInfo.Type == flac.StreamInfo {
@@ -70,7 +65,6 @@ func AnalyzeTrack(filepath string) (*AnalysisResult, error) {
 		}
 	}
 
-	// Analyze spectrum and calculate real audio metrics
 	spectrum, err := AnalyzeSpectrum(filepath)
 	if err != nil {
 		fmt.Printf("Warning: failed to analyze spectrum: %v\n", err)

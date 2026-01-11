@@ -11,7 +11,9 @@
   },
   "info": {
     "productName": "SpotiDownloader",
-    "productVersion": "6.5"
+    "productVersion": "6.6",
+    "copyright": "© 2026 afkarxyz",
+    "comments": "Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API."
   },
   "wailsjsdir": "./frontend",
   "assetdir": "./frontend/dist",
