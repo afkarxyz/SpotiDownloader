@@ -528,13 +528,24 @@ jobs:
             <details>
             <summary><b>macOS Requirements</b></summary>
 
-            ChromeDriver is required for token fetching:
+            ChromeDriver is required for token fetching.
+
+            If Homebrew is not installed, install it first:
+
+            ```bash
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            ```
+
+            Then install ChromeDriver:
 
             ```bash
             brew install --cask chromedriver
             ```
 
             After installation, you may need to allow ChromeDriver in System Preferences > Security & Privacy.
+
+            If ChromeDriver still doesn't work, install Chrome browser:
+            https://www.google.com/chrome
 
             </details>
 
