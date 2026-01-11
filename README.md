@@ -16,14 +16,9 @@ Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API.
 
 ### [Download](https://github.com/afkarxyz/SpotiDownloader/releases)
 
-#
-
-> [!Important]
-**Google Chrome** is required to obtain the token.
-
 ## Screenshot
 
-![Image](https://github.com/user-attachments/assets/451fa0b6-034e-43a1-83bf-602388be1625)
+![Image](https://github.com/user-attachments/assets/1ecd1eda-7f73-40db-864a-9731c9483637)
 
 ## Other projects
 
