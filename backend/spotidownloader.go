@@ -291,6 +291,8 @@ func (s *SpotiDownloader) DownloadByISRC(
 
 func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string, embedMaxQualityCover bool) (string, error) {
 
+	coverURL = convertSmallToMedium(coverURL)
+
 	if embedMaxQualityCover {
 		coverClient := NewCoverClient()
 		coverURL = coverClient.getMaxResolutionURL(coverURL)
