@@ -51,7 +51,7 @@ function App() {
     const [showChromeErrorDialog, setShowChromeErrorDialog] = useState(false);
     const [chromeErrorMessage, setChromeErrorMessage] = useState("");
     const ITEMS_PER_PAGE = 50;
-    const CURRENT_VERSION = "6.9";
+    const CURRENT_VERSION = "7.0";
     const download = useDownload();
     const metadata = useMetadata();
     const lyrics = useLyrics();
@@ -198,7 +198,7 @@ function App() {
                 url: spotifyUrl,
                 type: "album",
                 name: album_info.name,
-                artist: `${album_info.total_tracks} tracks`,
+                artist: `${album_info.total_tracks.toLocaleString()} tracks`,
                 image: album_info.images,
             };
         }
@@ -208,7 +208,7 @@ function App() {
                 url: spotifyUrl,
                 type: "playlist",
                 name: playlist_info.owner.name,
-                artist: `${playlist_info.tracks.total} tracks`,
+                artist: `${playlist_info.tracks.total.toLocaleString()} tracks`,
                 image: playlist_info.cover || playlist_info.owner.images || "",
             };
         }
@@ -218,7 +218,7 @@ function App() {
                 url: spotifyUrl,
                 type: "artist",
                 name: artist_info.name,
-                artist: `${artist_info.total_albums} albums`,
+                artist: `${artist_info.total_albums.toLocaleString()} albums`,
                 image: artist_info.images,
             };
         }

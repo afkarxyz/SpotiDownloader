@@ -942,3 +942,7 @@ func (a *App) CheckFilesExistence(outputDir string, audioFormat string, tracks [
 
 	return results
 }
+
+func (a *App) GetPreviewURL(trackID string) (string, error) {
+	return backend.GetPreviewURL(trackID)
+}
