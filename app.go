@@ -464,6 +464,10 @@ func (a *App) GetDownloadQueue() backend.DownloadQueueInfo {
 	return backend.GetDownloadQueue()
 }
 
+func (a *App) ClearAllDownloads() {
+	backend.ClearAllDownloads()
+}
+
 func (a *App) AddToDownloadQueue(trackID, trackName, artistName, albumName string) string {
 	itemID := fmt.Sprintf("%s-%d", trackID, time.Now().UnixNano())
 	backend.AddToQueue(itemID, trackName, artistName, albumName, trackID)
