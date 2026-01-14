@@ -82,7 +82,9 @@ export function useDownload() {
             year: yearValue,
             playlist: playlistName?.replace(/\//g, placeholder) || undefined,
         };
-        if (playlistName && !isAlbum) {
+        const folderTemplate = settings.folderTemplate || "";
+        const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+        if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
             outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
         if (settings.folderTemplate) {
@@ -223,7 +225,9 @@ export function useDownload() {
         setDownloadProgress(0);
         let outputDir = settings.downloadPath;
         const os = settings.operatingSystem;
-        if (playlistName && !isAlbum) {
+        const folderTemplate = settings.folderTemplate || "";
+        const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+        if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
             outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
         const selectedTrackObjects = selectedTracks
@@ -363,7 +367,9 @@ export function useDownload() {
         setDownloadProgress(0);
         let outputDir = settings.downloadPath;
         const os = settings.operatingSystem;
-        if (playlistName && !isAlbum) {
+        const folderTemplate = settings.folderTemplate || "";
+        const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+        if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
             outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
         logger.info(`checking existing files in parallel...`);

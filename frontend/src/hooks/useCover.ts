@@ -1,12 +1,11 @@
 import { useState, useRef } from "react";
-import { downloadCover } from "@/lib/api";
+import { toast } from "sonner";
+import { DownloadCover } from "../../wailsjs/go/main/App";
 import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
-import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
-import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
-export function useCover() {
-    const [downloadingCover, setDownloadingCover] = useState(false);
+import { logger } from "@/lib/logger";
+export const useCover = () => {
     const [downloadingCoverTrack, setDownloadingCoverTrack] = useState<string | null>(null);
     const [downloadedCovers, setDownloadedCovers] = useState<Set<string>>(new Set());
     const [failedCovers, setFailedCovers] = useState<Set<string>>(new Set());
@@ -14,15 +13,14 @@ export function useCover() {
     const [isBulkDownloadingCovers, setIsBulkDownloadingCovers] = useState(false);
     const [coverDownloadProgress, setCoverDownloadProgress] = useState(0);
     const stopBulkDownloadRef = useRef(false);
-    const handleDownloadCover = async (coverUrl: string, trackName: string, artistName: string, albumName?: string, playlistName?: string, _isArtistDiscography?: boolean, position?: number, trackId?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => {
+    const handleDownloadCover = async (coverUrl: string, trackName: string, artistName: string, albumName?: string, playlistName?: string, _isArtistDiscography?: boolean, position?: number, trackId?: string, albumArtist?: string, releaseDate?: string, discNumber?: number, isAlbum?: boolean) => {
         if (!coverUrl) {
-            toast.error("No cover URL found for this track");
+            toast.error("No cover URL found");
             return;
         }
         const id = trackId || `${trackName}-${artistName}`;
         logger.info(`downloading cover: ${trackName} - ${artistName}`);
         const settings = getSettings();
-        setDownloadingCover(true);
         setDownloadingCoverTrack(id);
         try {
             const os = settings.operatingSystem;
@@ -35,7 +33,9 @@ export function useCover() {
                 track: position,
                 playlist: playlistName?.replace(/\//g, placeholder),
             };
-            if (playlistName) {
+            const folderTemplate = settings.folderTemplate || "";
+            const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+            if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
                 outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
             }
             if (settings.folderTemplate) {
@@ -48,10 +48,10 @@ export function useCover() {
                     }
                 }
             }
-            const response = await downloadCover({
+            const response = await DownloadCover({
                 cover_url: coverUrl,
-                track_name: trackName,
-                artist_name: artistName,
+                track_name: trackName || "",
+                artist_name: artistName || "",
                 album_name: albumName || "",
                 album_artist: albumArtist || "",
                 release_date: releaseDate || "",
@@ -86,13 +86,13 @@ export function useCover() {
             setFailedCovers((prev) => new Set(prev).add(id));
         }
         finally {
-            setDownloadingCover(false);
             setDownloadingCoverTrack(null);
         }
     };
-    const handleDownloadAllCovers = async (tracks: TrackMetadata[], playlistName?: string, _isArtistDiscography?: boolean) => {
-        if (tracks.length === 0) {
-            toast.error("No tracks to download covers");
+    const handleDownloadAllCovers = async (tracks: TrackMetadata[], playlistName?: string, _isArtistDiscography?: boolean, isAlbum?: boolean) => {
+        const tracksWithCover = tracks.filter((track) => track.images);
+        if (tracksWithCover.length === 0) {
+            toast.error("No tracks with cover URL available");
             return;
         }
         const settings = getSettings();
@@ -101,21 +101,18 @@ export function useCover() {
         stopBulkDownloadRef.current = false;
         let completed = 0;
         let success = 0;
-        let skipped = 0;
         let failed = 0;
-        for (let i = 0; i < tracks.length; i++) {
+        let skipped = 0;
+        const total = tracksWithCover.length;
+        for (let i = 0; i < tracksWithCover.length; i++) {
+            const track = tracksWithCover[i];
             if (stopBulkDownloadRef.current) {
-                toast.info("Cover download stopped");
+                toast.info("Cover download stopped by user");
                 break;
-            }
-            const track = tracks[i];
-            if (!track.images) {
-                completed++;
-                setCoverDownloadProgress(Math.round((completed / tracks.length) * 100));
-                continue;
             }
             const id = track.spotify_id || `${track.name}-${track.artists}`;
             setDownloadingCoverTrack(id);
+            setCoverDownloadProgress(Math.round((completed / total) * 100));
             try {
                 const os = settings.operatingSystem;
                 let outputDir = settings.downloadPath;
@@ -129,7 +126,9 @@ export function useCover() {
                     track: trackPosition,
                     playlist: playlistName?.replace(/\//g, placeholder),
                 };
-                if (playlistName) {
+                const folderTemplate = settings.folderTemplate || "";
+                const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+                if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
                     outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
                 }
                 if (settings.folderTemplate) {
@@ -142,18 +141,18 @@ export function useCover() {
                         }
                     }
                 }
-                const response = await downloadCover({
-                    cover_url: track.images,
-                    track_name: track.name,
-                    artist_name: track.artists,
-                    album_name: track.album_name,
-                    album_artist: track.album_artist,
-                    release_date: track.release_date,
+                const response = await DownloadCover({
+                    cover_url: track.images || "",
+                    track_name: track.name || "",
+                    artist_name: track.artists || "",
+                    album_name: track.album_name || "",
+                    album_artist: track.album_artist || "",
+                    release_date: track.release_date || "",
                     output_dir: outputDir,
                     filename_format: settings.filenameTemplate || "{title}",
                     track_number: settings.trackNumber,
                     position: trackPosition,
-                    disc_number: track.disc_number,
+                    disc_number: track.disc_number || 0,
                 });
                 if (response.success) {
                     if (response.already_exists) {
@@ -164,25 +163,28 @@ export function useCover() {
                         success++;
                         setDownloadedCovers((prev) => new Set(prev).add(id));
                     }
+                    setFailedCovers((prev) => {
+                        const newSet = new Set(prev);
+                        newSet.delete(id);
+                        return newSet;
+                    });
                 }
                 else {
                     failed++;
                     setFailedCovers((prev) => new Set(prev).add(id));
                 }
             }
-            catch {
+            catch (err) {
                 failed++;
+                logger.error(`error downloading cover: ${track.name} - ${err}`);
                 setFailedCovers((prev) => new Set(prev).add(id));
             }
             completed++;
-            setCoverDownloadProgress(Math.round((completed / tracks.length) * 100));
         }
-        setDownloadingCoverTrack(null);
         setIsBulkDownloadingCovers(false);
-        setCoverDownloadProgress(0);
-        if (!stopBulkDownloadRef.current) {
-            toast.success(`Covers: ${success} downloaded, ${skipped} skipped, ${failed} failed`);
-        }
+        setDownloadingCoverTrack(null);
+        setCoverDownloadProgress(100);
+        toast.info(`Cover download completed: ${success} success, ${skipped} skipped, ${failed} failed`);
     };
     const handleStopCoverDownload = () => {
         stopBulkDownloadRef.current = true;
@@ -193,7 +195,6 @@ export function useCover() {
         setSkippedCovers(new Set());
     };
     return {
-        downloadingCover,
         downloadingCoverTrack,
         downloadedCovers,
         failedCovers,
@@ -205,4 +206,4 @@ export function useCover() {
         handleStopCoverDownload,
         resetCoverState,
     };
-}
+};
