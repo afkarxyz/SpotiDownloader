@@ -29,9 +29,53 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 ### [SpotubeDL](https://spotubedl.com)
 Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.
 
-[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
+## FAQ (Frequently Asked Questions)
 
-> Every coffee helps me keep going
+### Is this software free?
+
+_Yes. This software is completely free.
+You do not need an account, login, or subscription.
+All you need is an internet connection._
+
+### Can using this software get my Spotify account suspended or banned?
+
+_No.
+This software has no connection to your Spotify account.
+Spotify data is obtained through reverse engineering of the Spotify Web Player, not through user authentication._
+
+### Where does the audio come from?
+
+_The audio is fetched using third-party APIs._
+
+### Why does metadata fetching sometimes fail?
+
+_This usually happens because your IP address has been rate-limited.
+You can wait and try again later, or use a VPN to bypass the rate limit._
+
+### Why does Windows Defender or antivirus flag or delete the file?
+
+_This is a false positive.
+It likely happens because the executable is compressed using UPX._
+
+_If you are concerned, you can fork the repository and build the software yourself from source._
+
+### Why does the app sometimes fail to obtain a token?
+
+_The target website uses Cloudflare protection.
+The app attempts to bypass it using ChromeDriver, which may require multiple retries._
+
+### Why do I get a 500 error when a download fails?
+
+_A 500 error indicates a server-side issue.
+This is outside of my control._
+
+### Want to support the project?
+
+_If this software is useful and brings you value,
+consider supporting the project by buying me a coffee.
+Your support helps keep development going._
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
 
 ## Disclaimer
 
