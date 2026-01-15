@@ -407,12 +407,10 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				if props.Format != "" {
 					itemFormat := props.Format
 					if itemFormat == "mp3" {
-
-						quality = "MP3 " + quality
 						format = "MP3"
 					} else if itemFormat == "flac" {
 						format = "FLAC"
-
+						quality = "16-bit/44.1kHz"
 					}
 				}
 			} else {
