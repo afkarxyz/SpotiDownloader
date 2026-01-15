@@ -6,10 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	goRuntime "runtime"
 	"spotidownloader/backend"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
@@ -22,6 +27,14 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	if err := backend.InitHistoryDB("SpotiDownloader"); err != nil {
+		fmt.Printf("Failed to init history DB: %v\n", err)
+	}
+}
+
+func (a *App) shutdown(ctx context.Context) {
+	backend.CloseHistoryDB()
 }
 
 type SpotifyMetadataRequest struct {
@@ -372,6 +385,56 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 			backend.CompleteDownloadItem(itemID, filename, 0)
 		}
+
+		go func(fPath, track, artist, album, sID, cover, format string) {
+			quality := "Unknown"
+			durationStr := "--:--"
+
+			props, err := backend.GetAudioProperties(fPath)
+			if err == nil && props != nil {
+
+				if br, err := strconv.Atoi(props.BitRate); err == nil {
+					quality = fmt.Sprintf("%dkbps", br/1000)
+				} else {
+					quality = props.BitRate
+				}
+
+				if val, err := strconv.ParseFloat(props.Duration, 64); err == nil {
+					d := int(val)
+					durationStr = fmt.Sprintf("%d:%02d", d/60, d%60)
+				}
+
+				if props.Format != "" {
+					itemFormat := props.Format
+					if itemFormat == "mp3" {
+
+						quality = "MP3 " + quality
+						format = "MP3"
+					} else if itemFormat == "flac" {
+						format = "FLAC"
+
+					}
+				}
+			} else {
+
+			}
+
+			item := backend.HistoryItem{
+				SpotifyID:   sID,
+				Title:       track,
+				Artists:     artist,
+				Album:       album,
+				DurationStr: durationStr,
+				CoverURL:    cover,
+				Quality:     quality,
+				Format:      format,
+				Path:        fPath,
+			}
+			if item.Format == "" {
+				item.Format = strings.ToUpper(strings.TrimPrefix(filepath.Ext(fPath), "."))
+			}
+			backend.AddHistoryItem(item, "SpotiDownloader")
+		}(filename, req.TrackName, req.ArtistName, req.AlbumName, req.SpotifyID, req.CoverURL, req.AudioFormat)
 	}
 
 	return DownloadResponse{
@@ -489,6 +552,14 @@ func (a *App) SkipDownloadItem(itemID, filePath string) {
 func (a *App) Quit() {
 
 	panic("quit")
+}
+
+func (a *App) GetDownloadHistory() ([]backend.HistoryItem, error) {
+	return backend.GetHistoryItems("SpotiDownloader")
+}
+
+func (a *App) ClearDownloadHistory() error {
+	return backend.ClearHistory("SpotiDownloader")
 }
 
 type LyricsDownloadRequest struct {
@@ -729,16 +800,19 @@ type DownloadFFmpegResponse struct {
 }
 
 func (a *App) DownloadFFmpeg() DownloadFFmpegResponse {
+	runtime.EventsEmit(a.ctx, "ffmpeg:status", "starting")
 	err := backend.DownloadFFmpeg(func(progress int) {
-		fmt.Printf("[FFmpeg] Download progress: %d%%\n", progress)
+		runtime.EventsEmit(a.ctx, "ffmpeg:progress", progress)
 	})
 	if err != nil {
+		runtime.EventsEmit(a.ctx, "ffmpeg:status", "failed")
 		return DownloadFFmpegResponse{
 			Success: false,
 			Error:   err.Error(),
 		}
 	}
 
+	runtime.EventsEmit(a.ctx, "ffmpeg:status", "completed")
 	return DownloadFFmpegResponse{
 		Success: true,
 		Message: "FFmpeg installed successfully",
@@ -1001,4 +1075,64 @@ func (a *App) LoadSettings() (map[string]interface{}, error) {
 	}
 
 	return settings, nil
+}
+
+func (a *App) CheckFFmpegInstalled() (bool, error) {
+	return backend.IsFFmpegInstalled()
+}
+
+func (a *App) GetOSInfo() (string, error) {
+	osType := goRuntime.GOOS
+	arch := goRuntime.GOARCH
+
+	switch osType {
+	case "windows":
+		out, err := exec.Command("wmic", "os", "get", "Caption,Version", "/value").Output()
+		if err != nil {
+			outVer, errVer := exec.Command("cmd", "/c", "ver").Output()
+			if errVer != nil {
+				return fmt.Sprintf("Windows %s", arch), nil
+			}
+			return strings.TrimSpace(string(outVer)), nil
+		}
+
+		lines := strings.Split(string(out), "\n")
+		var caption, version string
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "Caption=") {
+				caption = strings.TrimPrefix(line, "Caption=")
+			} else if strings.HasPrefix(line, "Version=") {
+				version = strings.TrimPrefix(line, "Version=")
+			}
+		}
+		if caption != "" && version != "" {
+			return fmt.Sprintf("%s (%s, %s)", caption, version, arch), nil
+		}
+		return strings.TrimSpace(string(out)), nil
+
+	case "darwin":
+		out, err := exec.Command("sw_vers", "-productVersion").Output()
+		if err != nil {
+			return fmt.Sprintf("macOS %s", arch), nil
+		}
+		version := strings.TrimSpace(string(out))
+		return fmt.Sprintf("macOS %s (%s)", version, arch), nil
+
+	case "linux":
+		out, err := exec.Command("cat", "/etc/os-release").Output()
+		if err == nil {
+			lines := strings.Split(string(out), "\n")
+			for _, line := range lines {
+				if strings.HasPrefix(line, "PRETTY_NAME=") {
+					name := strings.Trim(strings.TrimPrefix(line, "PRETTY_NAME="), "\"")
+					return fmt.Sprintf("%s (%s)", name, arch), nil
+				}
+			}
+		}
+		return fmt.Sprintf("Linux %s", arch), nil
+
+	default:
+		return fmt.Sprintf("%s %s", osType, arch), nil
+	}
 }

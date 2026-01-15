@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -668,5 +669,43 @@ func GetAudioFileInfo(filePath string) (*AudioFileInfo, error) {
 		Filename: filepath.Base(filePath),
 		Format:   ext,
 		Size:     info.Size(),
+	}, nil
+}
+
+type AudioProperties struct {
+	Format   string `json:"format_name"`
+	BitRate  string `json:"bit_rate"`
+	Duration string `json:"duration"`
+}
+
+func GetAudioProperties(filePath string) (*AudioProperties, error) {
+	ffprobePath, err := GetFFprobePath()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command(ffprobePath, "-v", "quiet", "-print_format", "json", "-show_format", filePath)
+	setHideWindow(cmd)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var resp struct {
+		Format struct {
+			FormatName string `json:"format_name"`
+			BitRate    string `json:"bit_rate"`
+			Duration   string `json:"duration"`
+		} `json:"format"`
+	}
+
+	if err := json.Unmarshal(output, &resp); err != nil {
+		return nil, err
+	}
+
+	return &AudioProperties{
+		Format:   resp.Format.FormatName,
+		BitRate:  resp.Format.BitRate,
+		Duration: resp.Format.Duration,
 	}, nil
 }
