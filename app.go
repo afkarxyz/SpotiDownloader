@@ -69,6 +69,8 @@ type DownloadRequest struct {
 	EmbedLyrics          bool   `json:"embed_lyrics,omitempty"`
 	EmbedMaxQualityCover bool   `json:"embed_max_quality_cover,omitempty"`
 	ItemID               string `json:"item_id,omitempty"`
+	PlaylistName         string `json:"playlist_name,omitempty"`
+	PlaylistOwner        string `json:"playlist_owner,omitempty"`
 }
 
 type DownloadResponse struct {
@@ -173,7 +175,12 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.OutputDir = "."
 	} else {
 
-		req.OutputDir = backend.NormalizePath(req.OutputDir)
+		if req.PlaylistName != "" {
+			sanitizedPlaylist := backend.SanitizeFilename(req.PlaylistName)
+			req.OutputDir = filepath.Join(req.OutputDir, sanitizedPlaylist)
+		}
+
+		req.OutputDir = backend.SanitizeFolderPath(req.OutputDir)
 	}
 
 	if req.AudioFormat == "" {
@@ -256,7 +263,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		if req.AudioFormat == "flac" {
 			fileExt = ".flac"
 		}
-		expectedFilename := backend.BuildFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.DiscNumber, req.FilenameFormat, req.TrackNumber, req.Position, req.UseAlbumTrackNumber)
+		expectedFilename := backend.BuildFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.DiscNumber, req.FilenameFormat, req.TrackNumber, req.Position, req.UseAlbumTrackNumber, req.PlaylistName, req.PlaylistOwner)
 		expectedFilename = backend.SanitizeFilename(expectedFilename) + fileExt
 		expectedPath := filepath.Join(req.OutputDir, expectedFilename)
 
@@ -305,6 +312,8 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.SpotifyTotalDiscs,
 		req.Copyright,
 		req.Publisher,
+		req.PlaylistName,
+		req.PlaylistOwner,
 	)
 
 	if err != nil {
@@ -559,6 +568,30 @@ func (a *App) ClearDownloadHistory() error {
 	return backend.ClearHistory("SpotiDownloader")
 }
 
+func (a *App) GetFetchHistory() ([]backend.FetchHistoryItem, error) {
+	return backend.GetFetchHistoryItems("SpotiDownloader")
+}
+
+func (a *App) AddFetchHistory(item backend.FetchHistoryItem) error {
+	return backend.AddFetchHistoryItem(item, "SpotiDownloader")
+}
+
+func (a *App) ClearFetchHistory() error {
+	return backend.ClearFetchHistory("SpotiDownloader")
+}
+
+func (a *App) DeleteDownloadHistoryItem(id string) error {
+	return backend.DeleteHistoryItem(id, "SpotiDownloader")
+}
+
+func (a *App) DeleteFetchHistoryItem(id string) error {
+	return backend.DeleteFetchHistoryItem(id, "SpotiDownloader")
+}
+
+func (a *App) ClearFetchHistoryByType(itemType string) error {
+	return backend.ClearFetchHistoryByType(itemType, "SpotiDownloader")
+}
+
 type LyricsDownloadRequest struct {
 	SpotifyID           string `json:"spotify_id"`
 	TrackName           string `json:"track_name"`
@@ -790,6 +823,27 @@ func (a *App) GetFFmpegPath() (string, error) {
 
 type DownloadFFmpegRequest struct{}
 
+func (a *App) UploadImage(filePath string) (string, error) {
+	return backend.UploadToSendNow(filePath)
+}
+
+func (a *App) UploadImageBytes(filename string, base64Data string) (string, error) {
+
+	if idx := strings.Index(base64Data, ","); idx != -1 {
+		base64Data = base64Data[idx+1:]
+	}
+
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64: %v", err)
+	}
+	return backend.UploadBytesToSendNow(filename, data)
+}
+
+func (a *App) SelectImageVideo() ([]string, error) {
+	return backend.SelectImageVideoDialog(a.ctx)
+}
+
 type DownloadFFmpegResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
@@ -929,6 +983,7 @@ type CheckFileExistenceRequest struct {
 	FilenameFormat      string `json:"filename_format,omitempty"`
 	IncludeTrackNumber  bool   `json:"include_track_number,omitempty"`
 	AudioFormat         string `json:"audio_format,omitempty"`
+	RelativePath        string `json:"relative_path,omitempty"`
 }
 
 type CheckFileExistenceResult struct {
@@ -995,10 +1050,17 @@ func (a *App) CheckFilesExistence(outputDir string, audioFormat string, tracks [
 				t.IncludeTrackNumber,
 				trackNumber,
 				t.UseAlbumTrackNumber,
+				"",
+				"",
 			)
 			expectedFilename = backend.SanitizeFilename(expectedFilename) + fileExt
 
-			expectedPath := filepath.Join(outputDir, expectedFilename)
+			targetDir := outputDir
+			if t.RelativePath != "" {
+				targetDir = filepath.Join(outputDir, t.RelativePath)
+			}
+
+			expectedPath := filepath.Join(targetDir, expectedFilename)
 
 			if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 100*1024 {
 				res.Exists = true

@@ -8,11 +8,14 @@ import (
 	"unicode/utf8"
 )
 
-func BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate string, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
+func BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate string, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool, playlistName, playlistOwner string) string {
 	safeTitle := SanitizeFilename(trackName)
 	safeArtist := SanitizeFilename(artistName)
 	safeAlbum := SanitizeFilename(albumName)
 	safeAlbumArtist := SanitizeFilename(albumArtist)
+
+	safePlaylist := SanitizeFilename(playlistName)
+	safeCreator := SanitizeFilename(playlistOwner)
 
 	year := ""
 	if len(releaseDate) >= 4 {
@@ -28,6 +31,8 @@ func BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate st
 		filename = strings.ReplaceAll(filename, "{album}", safeAlbum)
 		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
 		filename = strings.ReplaceAll(filename, "{year}", year)
+		filename = strings.ReplaceAll(filename, "{playlist}", safePlaylist)
+		filename = strings.ReplaceAll(filename, "{creator}", safeCreator)
 
 		if discNumber > 0 {
 			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))

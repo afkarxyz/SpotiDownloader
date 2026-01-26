@@ -11,7 +11,7 @@
   },
   "info": {
     "productName": "SpotiDownloader",
-    "productVersion": "7.0.1",
+    "productVersion": "7.0.2",
     "copyright": "© 2026 afkarxyz"
   },
   "wailsjsdir": "./frontend",

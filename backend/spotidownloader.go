@@ -215,6 +215,8 @@ func (s *SpotiDownloader) DownloadByISRC(
 	totalDiscs int,
 	copyright string,
 	publisher string,
+	playlistName string,
+	playlistOwner string,
 ) (string, error) {
 
 	outputDir = NormalizePath(outputDir)
@@ -239,7 +241,7 @@ func (s *SpotiDownloader) DownloadByISRC(
 		return "", fmt.Errorf("no download link available")
 	}
 
-	filename := BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate, discNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	filename := BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate, discNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber, playlistName, playlistOwner)
 	filename = SanitizeFilename(filename) + fileExt
 
 	outputPath := filepath.Join(outputDir, filename)

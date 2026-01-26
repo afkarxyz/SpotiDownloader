@@ -27,8 +27,9 @@ interface TrackInfoProps {
     onDownloadLyrics?: (spotifyId: string, trackName: string, artistName: string, albumName?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
     onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string, playlistName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
     onOpenFolder: () => void;
+    onBack?: () => void;
 }
-export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded, isFailed, isSkipped, downloadingLyricsTrack, downloadedLyrics, failedLyrics, skippedLyrics, downloadingCover, downloadedCover, failedCover, skippedCover, onDownload, onDownloadLyrics, onDownloadCover, onOpenFolder, }: TrackInfoProps) {
+export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded, isFailed, isSkipped, downloadingLyricsTrack, downloadedLyrics, failedLyrics, skippedLyrics, downloadingCover, downloadedCover, failedCover, skippedCover, onDownload, onDownloadLyrics, onDownloadCover, onOpenFolder, onBack, }: TrackInfoProps) {
     const { playPreview, loadingPreview, playingTrack } = usePreview();
     const formatDuration = (ms: number) => {
         const minutes = Math.floor(ms / 60000);
@@ -41,7 +42,12 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
             return plays;
         return num.toLocaleString();
     };
-    return (<Card>
+    return (<Card className="relative">
+    {onBack && (<div className="absolute top-4 right-4 z-10">
+        <Button variant="ghost" size="icon" onClick={onBack}>
+            <XCircle className="h-5 w-5"/>
+        </Button>
+    </div>)}
     <CardContent className="px-6">
       <div className="flex gap-6 items-start">
         {track.images && (<div className="shrink-0">
@@ -56,6 +62,7 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold wrap-break-word">{track.name}</h1>
+              {track.is_explicit && (<span className="inline-flex items-center justify-center bg-red-600 text-white text-[10px] h-4 w-4 rounded shrink-0" title="Explicit">E</span>)}
               {isSkipped ? (<FileCheck className="h-6 w-6 text-yellow-500 shrink-0"/>) : isDownloaded ? (<CheckCircle className="h-6 w-6 text-green-500 shrink-0"/>) : isFailed ? (<XCircle className="h-6 w-6 text-red-500 shrink-0"/>) : null}
             </div>
             <p className="text-lg text-muted-foreground">{track.artists}</p>

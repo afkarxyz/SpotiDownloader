@@ -20,6 +20,7 @@ interface CheckFileExistenceRequest {
     filename_format?: string;
     include_track_number?: boolean;
     audio_format?: string;
+    relative_path?: string;
 }
 interface FileExistenceResult {
     spotify_id: string;
@@ -236,6 +237,32 @@ export function useDownload() {
         logger.info(`checking existing files in parallel...`);
         const existenceChecks = selectedTrackObjects.map((track, index) => {
             const useAlbumTrackNumber = settings.folderTemplate?.includes("{album}") || false;
+            const placeholder = "__SLASH_PLACEHOLDER__";
+            const yearValue = track.release_date?.substring(0, 4) || "";
+            const finalTrackNumber = track.track_number || 0;
+            const trackNumberForTemplate = (settings.folderTemplate && settings.folderTemplate.trim() !== "" && finalTrackNumber > 0) ? finalTrackNumber : (index + 1);
+            const templateData: TemplateData = {
+                artist: (track.artists || "").replace(/\//g, placeholder),
+                album: (track.album_name || "").replace(/\//g, placeholder),
+                album_artist: (track.album_artist || track.artists || "").replace(/\//g, placeholder),
+                title: (track.name || "").replace(/\//g, placeholder),
+                track: trackNumberForTemplate,
+                disc: track.disc_number,
+                year: yearValue,
+                playlist: playlistName?.replace(/\//g, placeholder),
+            };
+            let relativePath = "";
+            if (settings.folderTemplate) {
+                const folderPath = parseTemplate(settings.folderTemplate, templateData);
+                if (folderPath) {
+                    const parts = folderPath.split("/").filter((p: string) => p.trim());
+                    const sanitizedParts = parts.map((part: string) => {
+                        const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+                        return sanitizePath(sanitizedPart, os);
+                    });
+                    relativePath = sanitizedParts.join(os === "Windows" ? "\\" : "/");
+                }
+            }
             return {
                 spotify_id: track.spotify_id || track.isrc,
                 track_name: track.name || "",
@@ -250,6 +277,7 @@ export function useDownload() {
                 filename_format: settings.filenameTemplate || "",
                 include_track_number: settings.trackNumber || false,
                 audio_format: settings.audioFormat,
+                relative_path: relativePath,
             };
         });
         const existenceResults = await CheckFilesExistence(outputDir, settings.audioFormat, existenceChecks);
@@ -373,8 +401,34 @@ export function useDownload() {
             outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
         logger.info(`checking existing files in parallel...`);
-        const useAlbumTrackNumber = settings.folderTemplate?.includes("{album}") || false;
         const existenceChecks = tracksWithIsrc.map((track, index) => {
+            const useAlbumTrackNumber = settings.folderTemplate?.includes("{album}") || false;
+            const placeholder = "__SLASH_PLACEHOLDER__";
+            const yearValue = track.release_date?.substring(0, 4) || "";
+            const finalTrackNumber = track.track_number || 0;
+            const trackNumberForTemplate = (settings.folderTemplate && settings.folderTemplate.trim() !== "" && finalTrackNumber > 0) ? finalTrackNumber : (index + 1);
+            const templateData: TemplateData = {
+                artist: (track.artists || "").replace(/\//g, placeholder),
+                album: (track.album_name || "").replace(/\//g, placeholder),
+                album_artist: (track.album_artist || track.artists || "").replace(/\//g, placeholder),
+                title: (track.name || "").replace(/\//g, placeholder),
+                track: trackNumberForTemplate,
+                disc: track.disc_number,
+                year: yearValue,
+                playlist: playlistName?.replace(/\//g, placeholder),
+            };
+            let relativePath = "";
+            if (settings.folderTemplate) {
+                const folderPath = parseTemplate(settings.folderTemplate, templateData);
+                if (folderPath) {
+                    const parts = folderPath.split("/").filter((p: string) => p.trim());
+                    const sanitizedParts = parts.map((part: string) => {
+                        const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+                        return sanitizePath(sanitizedPart, os);
+                    });
+                    relativePath = sanitizedParts.join(os === "Windows" ? "\\" : "/");
+                }
+            }
             return {
                 spotify_id: track.spotify_id || track.isrc,
                 track_name: track.name || "",
@@ -389,6 +443,7 @@ export function useDownload() {
                 filename_format: settings.filenameTemplate || "",
                 include_track_number: settings.trackNumber || false,
                 audio_format: settings.audioFormat || "mp3",
+                relative_path: relativePath,
             };
         });
         const existenceResults = await CheckFilesExistence(outputDir, settings.audioFormat, existenceChecks);

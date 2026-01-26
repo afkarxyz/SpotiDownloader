@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, ImageDown, FileText } from "lucide-react";
+import { Download, FolderOpen, ImageDown, FileText, XCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SearchAndSort } from "./SearchAndSort";
@@ -75,10 +75,16 @@ interface PlaylistInfoProps {
         external_urls: string;
     }) => void;
     onTrackClick: (track: TrackMetadata) => void;
+    onBack?: () => void;
 }
-export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, downloadingLyricsTrack, downloadedLyrics, failedLyrics, skippedLyrics, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, currentPage, itemsPerPage, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onAlbumClick, onArtistClick, onTrackClick, }: PlaylistInfoProps) {
+export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, downloadingLyricsTrack, downloadedLyrics, failedLyrics, skippedLyrics, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, currentPage, itemsPerPage, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onAlbumClick, onArtistClick, onTrackClick, onBack, }: PlaylistInfoProps) {
     return (<div className="space-y-6">
-      <Card>
+      <Card className="relative">
+      {onBack && (<div className="absolute top-4 right-4 z-10">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+              <XCircle className="h-5 w-5"/>
+          </Button>
+      </div>)}
         <CardContent className="px-6">
           <div className="flex gap-6 items-start">
             {playlistInfo.cover && (<img src={playlistInfo.cover} alt={playlistInfo.owner.name} className="w-48 h-48 rounded-md shadow-lg object-cover"/>)}
@@ -97,7 +103,7 @@ export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, sel
                     {playlistInfo.tracks.total.toLocaleString()} {playlistInfo.tracks.total === 1 ? "track" : "tracks"}
                   </span>
                   <span>•</span>
-                  <span>{playlistInfo.followers.total.toLocaleString()} followers</span>
+                  <span>{playlistInfo.followers.total.toLocaleString()} {playlistInfo.followers.total === 1 ? "follower" : "followers"}</span>
                 </div>
               </div>
               <div className="flex gap-2">

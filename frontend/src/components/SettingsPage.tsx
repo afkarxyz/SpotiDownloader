@@ -105,14 +105,14 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
             toast.error(`Error selecting folder: ${error}`);
         }
     };
-    return (<div className="space-y-6">
+    return (<div className="space-y-4">
     <h1 className="text-2xl font-bold">Settings</h1>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-      <div className="space-y-4">
+      <div className="space-y-3">
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="download-path">Download Path</Label>
           <div className="flex gap-2">
             <InputWithContext id="download-path" value={tempSettings.downloadPath} onChange={(e) => setTempSettings((prev) => ({ ...prev, downloadPath: e.target.value }))} placeholder="C:\Users\YourUsername\Music"/>
@@ -124,7 +124,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         </div>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="theme-mode">Mode</Label>
           <Select value={tempSettings.themeMode} onValueChange={(value: "auto" | "light" | "dark") => setTempSettings((prev) => ({ ...prev, themeMode: value }))}>
             <SelectTrigger id="theme-mode">
@@ -139,7 +139,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         </div>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="theme">Accent</Label>
           <Select value={tempSettings.theme} onValueChange={(value) => setTempSettings((prev) => ({ ...prev, theme: value }))}>
             <SelectTrigger id="theme">
@@ -159,7 +159,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         </div>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="font">Font</Label>
           <Select value={tempSettings.fontFamily} onValueChange={(value: FontFamily) => setTempSettings((prev) => ({ ...prev, fontFamily: value }))}>
             <SelectTrigger id="font">
@@ -181,9 +181,9 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
       </div>
 
 
-      <div className="space-y-4">
+      <div className="space-y-3">
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Label htmlFor="audioFormat" className="text-sm">Format</Label>
             <Tooltip>
@@ -225,7 +225,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         <div className="border-t"/>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Label className="text-sm">Folder Structure</Label>
             <Tooltip>
@@ -263,7 +263,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         <div className="border-t"/>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Label className="text-sm">Filename Format</Label>
             <Tooltip>
@@ -301,7 +301,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
     </div>
 
 
-    <div className="flex gap-2 justify-between pt-4 border-t">
+    <div className="flex gap-2 justify-between pt-3 border-t">
       <Button variant="outline" onClick={() => setShowResetConfirm(true)} className="gap-1.5">
         <RotateCcw className="h-4 w-4"/>
         Reset to Default
