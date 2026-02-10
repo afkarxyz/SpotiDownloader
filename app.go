@@ -97,6 +97,26 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.Timeout*float64(time.Second)))
 	defer cancel()
 
+	settings, err := a.LoadSettings()
+	if err == nil && settings != nil {
+		if useAPI, ok := settings["useSpotFetchAPI"].(bool); ok && useAPI {
+			if apiURL, ok := settings["spotFetchAPIUrl"].(string); ok && apiURL != "" {
+
+				data, err := backend.GetSpotifyDataWithAPI(ctx, req.URL, true, apiURL, req.Batch, time.Duration(req.Delay*float64(time.Second)))
+				if err != nil {
+					return "", fmt.Errorf("failed to fetch metadata from API: %v", err)
+				}
+
+				jsonData, err := json.MarshalIndent(data, "", "  ")
+				if err != nil {
+					return "", fmt.Errorf("failed to encode response: %v", err)
+				}
+
+				return string(jsonData), nil
+			}
+		}
+	}
+
 	data, err := backend.GetFilteredSpotifyData(ctx, req.URL, req.Batch, time.Duration(req.Delay*float64(time.Second)))
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch metadata: %v", err)
@@ -555,6 +575,76 @@ func (a *App) SkipDownloadItem(itemID, filePath string) {
 	backend.SkipDownloadItem(itemID, filePath)
 }
 
+func (a *App) ExportFailedDownloads() (string, error) {
+	queueInfo := backend.GetDownloadQueue()
+	var failedItems []string
+
+	hasFailed := false
+	for _, item := range queueInfo.Queue {
+		if item.Status == backend.StatusFailed {
+			hasFailed = true
+			break
+		}
+	}
+
+	if !hasFailed {
+		return "No failed downloads to export.", nil
+	}
+
+	failedItems = append(failedItems, fmt.Sprintf("Failed Downloads Report - %s", time.Now().Format("2006-01-02 15:04:05")))
+	failedItems = append(failedItems, strings.Repeat("-", 50))
+	failedItems = append(failedItems, "")
+
+	count := 0
+	for _, item := range queueInfo.Queue {
+		if item.Status == backend.StatusFailed {
+			count++
+			line := fmt.Sprintf("%d. %s - %s", count, item.TrackName, item.ArtistName)
+			if item.AlbumName != "" {
+				line += fmt.Sprintf(" (%s)", item.AlbumName)
+			}
+			failedItems = append(failedItems, line)
+			failedItems = append(failedItems, fmt.Sprintf("   Error: %s", item.ErrorMessage))
+
+			if item.ISRC != "" {
+				failedItems = append(failedItems, fmt.Sprintf("   ID: %s", item.ISRC))
+				if !strings.HasPrefix(item.ISRC, "http") {
+					failedItems = append(failedItems, fmt.Sprintf("   URL: https://open.spotify.com/track/%s", item.ISRC))
+				}
+			}
+			failedItems = append(failedItems, "")
+		}
+	}
+
+	content := strings.Join(failedItems, "\n")
+	defaultFilename := fmt.Sprintf("SpotiDownloader_%s_Failed.txt", time.Now().Format("20060102_150405"))
+
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename: defaultFilename,
+		Title:           "Export Failed Downloads",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "Text Files (*.txt)",
+				Pattern:     "*.txt",
+			},
+		},
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to open save dialog: %v", err)
+	}
+
+	if path == "" {
+		return "Export cancelled", nil
+	}
+
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %v", err)
+	}
+
+	return fmt.Sprintf("Successfully exported %d failed downloads to %s", count, path), nil
+}
+
 func (a *App) Quit() {
 
 	panic("quit")
@@ -994,12 +1084,15 @@ type CheckFileExistenceResult struct {
 	ArtistName string `json:"artist_name,omitempty"`
 }
 
-func (a *App) CheckFilesExistence(outputDir string, audioFormat string, tracks []CheckFileExistenceRequest) []CheckFileExistenceResult {
+func (a *App) CheckFilesExistence(outputDir string, rootDir string, audioFormat string, tracks []CheckFileExistenceRequest) []CheckFileExistenceResult {
 	if len(tracks) == 0 {
 		return []CheckFileExistenceResult{}
 	}
 
 	outputDir = backend.NormalizePath(outputDir)
+	if rootDir != "" {
+		rootDir = backend.NormalizePath(rootDir)
+	}
 
 	defaultFilenameFormat := "title-artist"
 
@@ -1009,6 +1102,30 @@ func (a *App) CheckFilesExistence(outputDir string, audioFormat string, tracks [
 	}
 
 	resultsChan := make(chan result, len(tracks))
+
+	var rootDirFiles map[string]string
+	rootDirFilesOnce := false
+	getRootDirFiles := func() map[string]string {
+		if rootDirFilesOnce {
+			return rootDirFiles
+		}
+		rootDirFiles = make(map[string]string)
+		if rootDir != "" && rootDir != outputDir {
+			filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return nil
+				}
+				if !info.IsDir() {
+					if strings.EqualFold(filepath.Ext(path), ".flac") || strings.EqualFold(filepath.Ext(path), ".mp3") {
+						rootDirFiles[info.Name()] = path
+					}
+				}
+				return nil
+			})
+		}
+		rootDirFilesOnce = true
+		return rootDirFiles
+	}
 
 	for i, track := range tracks {
 		go func(idx int, t CheckFileExistenceRequest) {
@@ -1065,6 +1182,8 @@ func (a *App) CheckFilesExistence(outputDir string, audioFormat string, tracks [
 			if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 100*1024 {
 				res.Exists = true
 				res.FilePath = expectedPath
+			} else {
+				res.FilePath = expectedFilename
 			}
 
 			resultsChan <- result{index: idx, result: res}
@@ -1072,9 +1191,38 @@ func (a *App) CheckFilesExistence(outputDir string, audioFormat string, tracks [
 	}
 
 	results := make([]CheckFileExistenceResult, len(tracks))
+	missingIndices := []int{}
+
 	for i := 0; i < len(tracks); i++ {
 		r := <-resultsChan
 		results[r.index] = r.result
+		if !results[r.index].Exists {
+			missingIndices = append(missingIndices, r.index)
+		}
+	}
+
+	if len(missingIndices) > 0 && rootDir != "" {
+		filesMap := getRootDirFiles()
+		if len(filesMap) > 0 {
+			for _, idx := range missingIndices {
+				expectedFilename := results[idx].FilePath
+				baseName := filepath.Base(expectedFilename)
+				if path, ok := filesMap[baseName]; ok {
+					results[idx].Exists = true
+					results[idx].FilePath = path
+				} else {
+					results[idx].FilePath = ""
+				}
+			}
+		} else {
+			for _, idx := range missingIndices {
+				results[idx].FilePath = ""
+			}
+		}
+	} else {
+		for _, idx := range missingIndices {
+			results[idx].FilePath = ""
+		}
 	}
 
 	return results
@@ -1142,4 +1290,53 @@ func (a *App) CheckFFmpegInstalled() (bool, error) {
 
 func (a *App) GetOSInfo() (string, error) {
 	return backend.GetOSInfo()
+}
+
+func (a *App) CreateM3U8File(m3u8Name string, outputDir string, filePaths []string) error {
+	if len(filePaths) == 0 {
+		return nil
+	}
+
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return err
+	}
+
+	fnName := m3u8Name
+
+	safeName := backend.SanitizeFilename(fnName)
+	if safeName == "" {
+		safeName = "playlist"
+	}
+
+	m3u8Path := filepath.Join(outputDir, safeName+".m3u8")
+
+	f, err := os.Create(m3u8Path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString("#EXTM3U\n"); err != nil {
+		return err
+	}
+
+	for _, path := range filePaths {
+		if path == "" {
+			continue
+		}
+
+		relPath, err := filepath.Rel(outputDir, path)
+		if err != nil {
+
+			relPath = path
+		}
+
+		relPath = filepath.ToSlash(relPath)
+
+		if _, err := f.WriteString(relPath + "\n"); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

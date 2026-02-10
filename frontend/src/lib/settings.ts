@@ -25,6 +25,11 @@ export interface Settings {
     operatingSystem: "Windows" | "linux/MacOS";
     tokenTimeout: number;
     tokenRetry: number;
+    useSpotFetchAPI: boolean;
+    spotFetchAPIUrl: string;
+    createPlaylistFolder: boolean;
+    createM3u8File: boolean;
+    useFirstArtistOnly: boolean;
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -98,7 +103,12 @@ export const DEFAULT_SETTINGS: Settings = {
     embedMaxQualityCover: false,
     operatingSystem: detectOS(),
     tokenTimeout: 5,
-    tokenRetry: 1
+    tokenRetry: 1,
+    useSpotFetchAPI: false,
+    spotFetchAPIUrl: "https://spotify.afkarxyz.fun/api",
+    createPlaylistFolder: true,
+    createM3u8File: false,
+    useFirstArtistOnly: false
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
@@ -243,6 +253,15 @@ export async function loadSettings(): Promise<Settings> {
                     parsed.filenamePreset = "title";
                     parsed.filenameTemplate = "{title}";
                 }
+            }
+            if (!('createPlaylistFolder' in parsed)) {
+                parsed.createPlaylistFolder = true;
+            }
+            if (!('createM3u8File' in parsed)) {
+                parsed.createM3u8File = false;
+            }
+            if (!('useFirstArtistOnly' in parsed)) {
+                parsed.useFirstArtistOnly = false;
             }
             parsed.operatingSystem = detectOS();
             cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
