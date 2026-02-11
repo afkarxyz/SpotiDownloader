@@ -364,9 +364,6 @@ func getBool(m map[string]interface{}, key string) bool {
 
 func extractArtists(artistsData map[string]interface{}) []map[string]interface{} {
 	items := getSlice(artistsData, "items")
-	if items == nil {
-		return []map[string]interface{}{}
-	}
 
 	artists := []map[string]interface{}{}
 	for _, item := range items {
@@ -384,7 +381,7 @@ func extractArtists(artistsData map[string]interface{}) []map[string]interface{}
 }
 
 func extractCoverImage(coverData map[string]interface{}) map[string]interface{} {
-	if coverData == nil || len(coverData) == 0 {
+	if len(coverData) == 0 {
 		return nil
 	}
 
@@ -401,7 +398,7 @@ func extractCoverImage(coverData map[string]interface{}) map[string]interface{} 
 		}
 	}
 
-	if sources == nil || len(sources) == 0 {
+	if len(sources) == 0 {
 		return nil
 	}
 
@@ -541,20 +538,18 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 	if len(artists) == 0 {
 		artists = []map[string]interface{}{}
 		firstArtistItems := getSlice(getMap(trackData, "firstArtist"), "items")
-		if firstArtistItems != nil {
-			for _, item := range firstArtistItems {
-				itemMap, ok := item.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				if profile, exists := itemMap["profile"]; exists {
-					profileMap, ok := profile.(map[string]interface{})
-					if ok {
-						artistInfo := map[string]interface{}{
-							"name": getString(profileMap, "name"),
-						}
-						artists = append(artists, artistInfo)
+		for _, item := range firstArtistItems {
+			itemMap, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if profile, exists := itemMap["profile"]; exists {
+				profileMap, ok := profile.(map[string]interface{})
+				if ok {
+					artistInfo := map[string]interface{}{
+						"name": getString(profileMap, "name"),
 					}
+					artists = append(artists, artistInfo)
 				}
 			}
 		}
@@ -709,6 +704,9 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 						albumArtistNames = append(albumArtistNames, getString(artist, "name"))
 					}
 					albumArtistsString = strings.Join(albumArtistNames, ", ")
+				}
+				if albumArtistsString == "" {
+					albumArtistsString = getString(albumUnionData, "artists")
 				}
 				albumLabel = getString(albumUnionData, "label")
 			}
@@ -977,6 +975,7 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 		"discs": map[string]interface{}{
 			"totalCount": totalDiscs,
 		},
+		"label": getString(albumData, "label"),
 	}
 
 	return filtered

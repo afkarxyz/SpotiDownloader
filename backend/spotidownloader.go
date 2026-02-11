@@ -194,7 +194,7 @@ func (s *SpotiDownloader) DownloadFile(downloadURL, outputPath string) error {
 	return err
 }
 
-func (s *SpotiDownloader) DownloadByISRC(
+func (s *SpotiDownloader) DownloadTrack(
 	trackID string,
 	outputDir string,
 	audioFormat string,
@@ -217,6 +217,7 @@ func (s *SpotiDownloader) DownloadByISRC(
 	publisher string,
 	playlistName string,
 	playlistOwner string,
+	useFirstArtistOnly bool,
 ) (string, error) {
 
 	outputDir = NormalizePath(outputDir)
@@ -241,7 +242,14 @@ func (s *SpotiDownloader) DownloadByISRC(
 		return "", fmt.Errorf("no download link available")
 	}
 
-	filename := BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate, discNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber, playlistName, playlistOwner)
+	filenameArtist := artistName
+	filenameAlbumArtist := albumArtist
+	if useFirstArtistOnly {
+		filenameArtist = GetFirstArtist(artistName)
+		filenameAlbumArtist = GetFirstArtist(albumArtist)
+	}
+
+	filename := BuildFilename(trackName, filenameArtist, albumName, filenameAlbumArtist, releaseDate, discNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber, playlistName, playlistOwner)
 	filename = SanitizeFilename(filename) + fileExt
 
 	outputPath := filepath.Join(outputDir, filename)
@@ -250,6 +258,16 @@ func (s *SpotiDownloader) DownloadByISRC(
 		fmt.Printf("File already exists: %s (%.2f MB)\n", outputPath, float64(fileInfo.Size())/(1024*1024))
 		return "EXISTS:" + outputPath, nil
 	}
+
+	isrcChan := make(chan string, 1)
+	go func() {
+		client := NewSongLinkClient()
+		if val, err := client.GetISRC(trackID); err == nil {
+			isrcChan <- val
+		} else {
+			isrcChan <- ""
+		}
+	}()
 
 	if err := s.DownloadFile(downloadURL, outputPath); err != nil {
 		return "", fmt.Errorf("failed to download file: %v", err)
@@ -262,6 +280,12 @@ func (s *SpotiDownloader) DownloadByISRC(
 			fmt.Printf("Warning: Failed to download cover image: %v\n", err)
 			coverPath = ""
 		}
+	}
+
+	var isrc string
+	isrc = <-isrcChan
+	if isrc != "" {
+		fmt.Printf("Found ISRC: %s\n", isrc)
 	}
 
 	metadata := Metadata{
@@ -278,6 +302,7 @@ func (s *SpotiDownloader) DownloadByISRC(
 		Copyright:   copyright,
 		Publisher:   publisher,
 		Description: "https://github.com/afkarxyz/SpotiDownloader",
+		ISRC:        isrc,
 	}
 
 	if err := EmbedMetadata(outputPath, metadata, coverPath); err != nil {

@@ -16,7 +16,6 @@ export interface TrackMetadata {
     total_discs?: number;
     disc_number?: number;
     external_urls: string;
-    isrc: string;
     album_type?: string;
     spotify_id?: string;
     album_id?: string;
@@ -109,7 +108,6 @@ export interface ArtistResponse {
 }
 export type SpotifyMetadataResponse = TrackResponse | AlbumResponse | PlaylistResponse | ArtistDiscographyResponse | ArtistResponse;
 export interface DownloadRequest {
-    isrc: string;
     track_id?: string;
     session_token: string;
     track_name?: string;
@@ -134,6 +132,7 @@ export interface DownloadRequest {
     embed_lyrics?: boolean;
     embed_max_quality_cover?: boolean;
     item_id?: string;
+    use_first_artist_only?: boolean;
 }
 export interface DownloadResponse {
     success: boolean;

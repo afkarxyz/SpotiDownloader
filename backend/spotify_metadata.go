@@ -42,7 +42,6 @@ type TrackMetadata struct {
 	DiscNumber  int    `json:"disc_number,omitempty"`
 	TotalDiscs  int    `json:"total_discs,omitempty"`
 	ExternalURL string `json:"external_urls"`
-	ISRC        string `json:"isrc"`
 	Copyright   string `json:"copyright,omitempty"`
 	Publisher   string `json:"publisher,omitempty"`
 	Plays       string `json:"plays,omitempty"`
@@ -70,7 +69,6 @@ type AlbumTrackMetadata struct {
 	DiscNumber  int            `json:"disc_number,omitempty"`
 	TotalDiscs  int            `json:"total_discs,omitempty"`
 	ExternalURL string         `json:"external_urls"`
-	ISRC        string         `json:"isrc"`
 	AlbumType   string         `json:"album_type,omitempty"`
 	AlbumID     string         `json:"album_id,omitempty"`
 	AlbumURL    string         `json:"album_url,omitempty"`
@@ -210,6 +208,7 @@ type apiAlbumResponse struct {
 	Cover       string `json:"cover"`
 	ReleaseDate string `json:"releaseDate"`
 	Count       int    `json:"count"`
+	Label       string `json:"label"`
 	Discs       struct {
 		TotalCount int `json:"totalCount"`
 	} `json:"discs"`
@@ -472,6 +471,8 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 										"items":      tracksItems,
 										"totalCount": albumResponse.Count,
 									},
+									"artists": albumResponse.Artists,
+									"label":   albumResponse.Label,
 								},
 							},
 						}
@@ -542,7 +543,7 @@ func (c *SpotifyMetadataClient) fetchAlbumWithClient(ctx context.Context, client
 		tracksData := getMap(albumData, "tracksV2")
 		items := getSlice(tracksData, "items")
 
-		if items == nil || len(items) == 0 {
+		if len(items) == 0 {
 			break
 		}
 
@@ -635,7 +636,7 @@ func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID st
 		content := getMap(playlistData, "content")
 		items := getSlice(content, "items")
 
-		if items == nil || len(items) == 0 {
+		if len(items) == 0 {
 			break
 		}
 
@@ -742,7 +743,7 @@ func (c *SpotifyMetadataClient) fetchArtistDiscography(ctx context.Context, pars
 		allData := getMap(discographyData, "all")
 		items := getSlice(allData, "items")
 
-		if items == nil || len(items) == 0 {
+		if len(items) == 0 {
 			break
 		}
 
@@ -886,7 +887,6 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 		DiscNumber:  raw.Disc,
 		TotalDiscs:  raw.Discs,
 		ExternalURL: externalURL,
-		ISRC:        raw.ID,
 		Copyright:   raw.Copyright,
 		Publisher:   raw.Album.Label,
 		Plays:       raw.Plays,
@@ -945,7 +945,6 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 			DiscNumber:  item.DiscNumber,
 			TotalDiscs:  raw.Discs.TotalCount,
 			ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", item.ID),
-			ISRC:        item.ID,
 			AlbumID:     raw.ID,
 			AlbumURL:    fmt.Sprintf("https://open.spotify.com/album/%s", raw.ID),
 			ArtistID:    artistID,
@@ -1005,7 +1004,6 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse) Pla
 			DiscNumber:  item.DiscNumber,
 			TotalDiscs:  0,
 			ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", item.ID),
-			ISRC:        item.ID,
 			AlbumID:     item.AlbumID,
 			AlbumURL:    fmt.Sprintf("https://open.spotify.com/album/%s", item.AlbumID),
 			ArtistID:    artistID,
@@ -1124,7 +1122,6 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 					TotalTracks: albumData.Count,
 					DiscNumber:  tr.DiscNumber,
 					ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", tr.ID),
-					ISRC:        tr.ID,
 					AlbumID:     albumID,
 					AlbumURL:    fmt.Sprintf("https://open.spotify.com/album/%s", albumID),
 					ArtistID:    artistID,

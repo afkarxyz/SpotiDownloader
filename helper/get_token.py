@@ -7,18 +7,18 @@ def get_session_token_sync(max_wait=5):
     try:
         page = ChromiumPage()
         page.get("https://spotidownloader.com/")
-        time.sleep(0.5)
+        time.sleep(1)
         
         spotify_url = "https://open.spotify.com/track/53iuhJlwXhSER5J2IYYv1W"
         input_element = page.ele('css:.searchInput')
         if input_element:
             input_element.input(spotify_url)
-            time.sleep(0.5)
+            time.sleep(1)
         
         download_button = page.ele('css:button[type="submit"]')
         if download_button:
             download_button.click()
-            time.sleep(0.5)
+            time.sleep(1)
         
         page.run_js("""
             window.originalFetch = window.fetch;
@@ -40,7 +40,7 @@ def get_session_token_sync(max_wait=5):
             token = page.run_js("return window.sessionToken")
             if token:
                 return token
-            time.sleep(0.5)
+            time.sleep(1)
         
         return None
     except:
@@ -60,7 +60,7 @@ def get_token(max_retries=1, timeout=5):
         token = get_session_token_sync(max_wait=timeout)
         if token:
             return token
-        time.sleep(0.5)
+        time.sleep(1)
     return None
 
 if __name__ == "__main__":

@@ -120,7 +120,7 @@ export function useDownload() {
         if (track.name && track.artists) {
             try {
                 const checkRequest: CheckFileExistenceRequest = {
-                    spotify_id: track.spotify_id || track.isrc,
+                    spotify_id: track.spotify_id || "",
                     track_name: track.name,
                     artist_name: displayArtist || "",
                     album_name: track.album_name,
@@ -150,15 +150,14 @@ export function useDownload() {
         }
         const sessionToken = await ensureValidToken();
         const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
-        const itemID = await AddToDownloadQueue(track.spotify_id || track.isrc, track.name || "", displayArtist || "", track.album_name || "");
+        const itemID = await AddToDownloadQueue(track.spotify_id || "", track.name || "", displayArtist || "", track.album_name || "");
         const response = await downloadTrack({
-            isrc: track.isrc,
-            track_id: track.spotify_id,
+            track_id: track.spotify_id || "",
             session_token: sessionToken,
             track_name: track.name,
-            artist_name: displayArtist,
+            artist_name: track.artists,
             album_name: track.album_name,
-            album_artist: displayAlbumArtist,
+            album_artist: track.album_artist || track.artists,
             release_date: finalReleaseDate || track.release_date,
             cover_url: track.images,
             album_track_number: finalTrackNumber || track.track_number,
@@ -170,6 +169,7 @@ export function useDownload() {
             output_dir: outputDir,
             audio_format: settings.audioFormat,
             filename_format: settings.filenameTemplate,
+            use_first_artist_only: settings.useFirstArtistOnly,
             track_number: settings.trackNumber,
             position: trackNumberForTemplate,
             use_album_track_number: useAlbumTrackNumber,
@@ -194,42 +194,44 @@ export function useDownload() {
         return response;
     };
     const handleDownloadTrack = async (track: TrackMetadata, playlistName?: string, _isArtistDiscography?: boolean, isAlbum?: boolean, position?: number) => {
-        if (!track.isrc) {
-            toast.error("No ISRC found for this track");
+        const id = track.spotify_id;
+        if (!id) {
+            toast.error("No ID found for this track");
             return;
         }
-        logger.info(`starting download: ${track.name} - ${track.artists}`);
         const settings = getSettings();
-        setDownloadingTrack(track.isrc);
+        const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
+        logger.info(`starting download: ${track.name} - ${displayArtist}`);
+        setDownloadingTrack(id);
         try {
             const response = await downloadWithSpotiDownloader(track, settings, playlistName, position, 0, isAlbum);
             if (response.success) {
                 if (response.already_exists) {
-                    logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
+                    logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
                     toast.info(response.message);
-                    setSkippedTracks((prev) => new Set(prev).add(track.isrc));
+                    setSkippedTracks((prev) => new Set(prev).add(id));
                 }
                 else {
-                    logger.success(`downloaded: ${track.name} - ${track.artists}`);
+                    logger.success(`downloaded: ${track.name} - ${displayArtist}`);
                     toast.success(response.message);
                 }
-                setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
-                setFailedTracks((prev) => {
+                setDownloadedTracks((prev: Set<string>) => new Set(prev).add(id));
+                setFailedTracks((prev: Set<string>) => {
                     const newSet = new Set(prev);
-                    newSet.delete(track.isrc);
+                    newSet.delete(id);
                     return newSet;
                 });
             }
             else {
-                logger.error(`failed: ${track.name} - ${track.artists} - ${response.error}`);
+                logger.error(`failed: ${track.name} - ${displayArtist} - ${response.error}`);
                 toast.error(response.error || "Download failed");
-                setFailedTracks((prev) => new Set(prev).add(track.isrc));
+                setFailedTracks((prev) => new Set(prev).add(id));
             }
         }
         catch (err) {
             logger.error(`error: ${track.name} - ${err}`);
             toast.error(err instanceof Error ? err.message : "Download failed");
-            setFailedTracks((prev) => new Set(prev).add(track.isrc));
+            setFailedTracks((prev) => new Set(prev).add(id));
         }
         finally {
             setDownloadingTrack(null);
@@ -257,7 +259,7 @@ export function useDownload() {
             outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
         const selectedTrackObjects = selectedTracks
-            .map((isrc) => allTracks.find((t) => t.isrc === isrc))
+            .map((id) => allTracks.find((t) => t.spotify_id === id))
             .filter((t): t is TrackMetadata => t !== undefined);
         logger.info(`checking existing files in parallel...`);
         const existenceChecks = selectedTrackObjects.map((track, index) => {
@@ -270,10 +272,12 @@ export function useDownload() {
                 finalTrackNumber > 0
                 ? finalTrackNumber
                 : index + 1;
+            const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
+            const displayAlbumArtist = settings.useFirstArtistOnly && track.album_artist ? getFirstArtist(track.album_artist) : (track.album_artist || track.artists || "");
             const templateData: TemplateData = {
-                artist: (track.artists || "").replace(/\//g, placeholder),
+                artist: (displayArtist || "").replace(/\//g, placeholder),
                 album: (track.album_name || "").replace(/\//g, placeholder),
-                album_artist: (track.album_artist || track.artists || "").replace(/\//g, placeholder),
+                album_artist: (displayAlbumArtist || "").replace(/\//g, placeholder),
                 title: (track.name || "").replace(/\//g, placeholder),
                 track: trackNumberForTemplate,
                 disc: track.disc_number,
@@ -293,11 +297,11 @@ export function useDownload() {
                 }
             }
             return {
-                spotify_id: track.spotify_id || track.isrc,
+                spotify_id: track.spotify_id || "",
                 track_name: track.name || "",
-                artist_name: track.artists || "",
+                artist_name: displayArtist || "",
                 album_name: track.album_name || "",
-                album_artist: track.album_artist || "",
+                album_artist: displayAlbumArtist || "",
                 release_date: track.release_date || "",
                 track_number: track.track_number || 0,
                 disc_number: track.disc_number || 0,
@@ -323,17 +327,18 @@ export function useDownload() {
         logger.info(`found ${existingSpotifyIDs.size} existing files`);
         const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
         for (const track of selectedTrackObjects) {
-            const trackID = track.spotify_id || track.isrc;
+            const trackID = track.spotify_id || "";
+            const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
             if (existingSpotifyIDs.has(trackID)) {
-                const itemID = await AddToDownloadQueue(track.spotify_id || track.isrc, track.name || "", track.artists || "", track.album_name || "");
+                const itemID = await AddToDownloadQueue(track.spotify_id || "", track.name || "", displayArtist || "", track.album_name || "");
                 const filePath = existingFilePathsBySpotifyID.get(trackID) || "";
                 setTimeout(() => SkipDownloadItem(itemID, filePath), 10);
-                setSkippedTracks((prev) => new Set(prev).add(track.isrc));
-                setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
+                setSkippedTracks((prev: Set<string>) => new Set(prev).add(trackID));
+                setDownloadedTracks((prev: Set<string>) => new Set(prev).add(trackID));
             }
         }
         const tracksToDownload = selectedTrackObjects.filter((track) => {
-            const trackID = track.spotify_id || track.isrc;
+            const trackID = track.spotify_id || "";
             return !existingSpotifyIDs.has(trackID);
         });
         let successCount = 0;
@@ -347,49 +352,74 @@ export function useDownload() {
                 break;
             }
             const track = tracksToDownload[i];
-            const isrc = track.isrc;
-            setDownloadingTrack(isrc);
-            setCurrentDownloadInfo({ name: track.name, artists: track.artists });
+            const id = track.spotify_id || "";
+            const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
+            setDownloadingTrack(id);
+            setCurrentDownloadInfo({ name: track.name, artists: displayArtist || "" });
             try {
                 const releaseYear = track.release_date?.substring(0, 4);
                 const useAlbumTrackNumber = settings.folderTemplate?.includes("{album}") || false;
-                const playlistIndex = selectedTracks.indexOf(isrc) + 1;
+                const playlistIndex = selectedTracks.indexOf(id) + 1;
                 const trackPosition = useAlbumTrackNumber && track.track_number > 0
                     ? track.track_number
                     : playlistIndex;
                 logger.debug(`[DEBUG] handleDownloadSelected - Track: ${track.name} | release_date: "${track.release_date}" | releaseYear: "${releaseYear}" | track.track_number: ${track.track_number} | useAlbumTrackNumber: ${useAlbumTrackNumber} | playlistIndex: ${playlistIndex} | trackPosition used: ${trackPosition}`);
-                const response = await downloadWithSpotiDownloader(track, settings, playlistName, trackPosition, 0, isAlbum, releaseYear);
+                const response = await downloadTrack({
+                    track_id: id,
+                    session_token: settings.sessionToken || "",
+                    track_name: track.name || "",
+                    artist_name: track.artists,
+                    album_name: track.album_name,
+                    album_artist: track.album_artist || track.artists,
+                    release_date: track.release_date,
+                    cover_url: track.images,
+                    album_track_number: track.track_number,
+                    disc_number: track.disc_number,
+                    total_tracks: track.total_tracks,
+                    spotify_total_discs: track.total_discs,
+                    copyright: track.copyright,
+                    publisher: track.publisher,
+                    output_dir: outputDir,
+                    audio_format: settings.audioFormat,
+                    filename_format: settings.filenameFormat,
+                    track_number: settings.trackNumber,
+                    position: trackPosition,
+                    use_album_track_number: useAlbumTrackNumber,
+                    embed_lyrics: settings.embedLyrics,
+                    embed_max_quality_cover: settings.embedMaxQualityCover,
+                    use_first_artist_only: settings.useFirstArtistOnly,
+                });
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;
-                        logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
-                        setSkippedTracks((prev) => new Set(prev).add(isrc));
+                        logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
+                        setSkippedTracks((prev) => new Set(prev).add(id));
                     }
                     else {
                         successCount++;
-                        logger.success(`downloaded: ${track.name} - ${track.artists}`);
+                        logger.success(`downloaded: ${track.name} - ${displayArtist}`);
                     }
                     if (response.file) {
-                        finalFilePaths.set(isrc, response.file);
-                        finalFilePaths.set(track.spotify_id || isrc, response.file);
+                        finalFilePaths.set(id, response.file);
+                        finalFilePaths.set(track.spotify_id || id, response.file);
                     }
-                    setDownloadedTracks((prev) => new Set(prev).add(isrc));
+                    setDownloadedTracks((prev) => new Set(prev).add(id));
                     setFailedTracks((prev) => {
                         const newSet = new Set(prev);
-                        newSet.delete(isrc);
+                        newSet.delete(id);
                         return newSet;
                     });
                 }
                 else {
                     errorCount++;
-                    logger.error(`failed: ${track.name} - ${track.artists}`);
-                    setFailedTracks((prev) => new Set(prev).add(isrc));
+                    logger.error(`failed: ${track.name} - ${displayArtist}`);
+                    setFailedTracks((prev) => new Set(prev).add(id));
                 }
             }
             catch (err) {
                 errorCount++;
                 logger.error(`error: ${track.name} - ${err}`);
-                setFailedTracks((prev) => new Set(prev).add(isrc));
+                setFailedTracks((prev) => new Set(prev).add(id));
             }
             const completedCount = skippedCount + successCount + errorCount;
             setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
@@ -401,7 +431,7 @@ export function useDownload() {
         shouldStopDownloadRef.current = false;
         if (settings.createM3u8File && playlistName) {
             const paths = selectedTrackObjects
-                .map((t) => finalFilePaths.get(t.spotify_id || t.isrc) || "")
+                .map((t) => finalFilePaths.get(t.spotify_id || "") || "")
                 .filter((p) => p !== "");
             if (paths.length > 0) {
                 try {
@@ -436,12 +466,12 @@ export function useDownload() {
         }
     };
     const handleDownloadAll = async (tracks: TrackMetadata[], playlistName?: string, isAlbum?: boolean) => {
-        const tracksWithIsrc = tracks.filter((track) => track.isrc);
-        if (tracksWithIsrc.length === 0) {
+        const tracksWithId = tracks.filter((track) => track.spotify_id);
+        if (tracksWithId.length === 0) {
             toast.error("No tracks available for download");
             return;
         }
-        logger.info(`starting batch download: ${tracksWithIsrc.length} tracks`);
+        logger.info(`starting batch download: ${tracksWithId.length} tracks`);
         const settings = getSettings();
         setIsDownloading(true);
         setBulkDownloadType("all");
@@ -458,7 +488,7 @@ export function useDownload() {
             outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
         logger.info(`checking existing files in parallel...`);
-        const existenceChecks = tracksWithIsrc.map((track, index) => {
+        const existenceChecks = tracksWithId.map((track, index) => {
             const useAlbumTrackNumber = settings.folderTemplate?.includes("{album}") || false;
             const placeholder = "__SLASH_PLACEHOLDER__";
             const yearValue = track.release_date?.substring(0, 4) || "";
@@ -468,10 +498,12 @@ export function useDownload() {
                 finalTrackNumber > 0
                 ? finalTrackNumber
                 : index + 1;
+            const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
+            const displayAlbumArtist = settings.useFirstArtistOnly && track.album_artist ? getFirstArtist(track.album_artist) : (track.album_artist || track.artists || "");
             const templateData: TemplateData = {
-                artist: (track.artists || "").replace(/\//g, placeholder),
+                artist: (displayArtist || "").replace(/\//g, placeholder),
                 album: (track.album_name || "").replace(/\//g, placeholder),
-                album_artist: (track.album_artist || track.artists || "").replace(/\//g, placeholder),
+                album_artist: (displayAlbumArtist || "").replace(/\//g, placeholder),
                 title: (track.name || "").replace(/\//g, placeholder),
                 track: trackNumberForTemplate,
                 disc: track.disc_number,
@@ -491,11 +523,11 @@ export function useDownload() {
                 }
             }
             return {
-                spotify_id: track.spotify_id || track.isrc,
+                spotify_id: track.spotify_id || "",
                 track_name: track.name || "",
-                artist_name: track.artists || "",
+                artist_name: displayArtist || "",
                 album_name: track.album_name || "",
-                album_artist: track.album_artist || "",
+                album_artist: displayAlbumArtist || "",
                 release_date: track.release_date || "",
                 track_number: track.track_number || 0,
                 disc_number: track.disc_number || 0,
@@ -508,7 +540,7 @@ export function useDownload() {
             };
         });
         const existenceResults = await CheckFilesExistence(outputDir, settings.downloadPath, settings.audioFormat, existenceChecks);
-        const finalFilePaths: string[] = new Array(tracksWithIsrc.length).fill("");
+        const finalFilePaths: string[] = new Array(tracksWithId.length).fill("");
         const existingSpotifyIDs = new Set<string>();
         const existingFilePaths = new Map<string, string>();
         for (let i = 0; i < existenceResults.length; i++) {
@@ -521,24 +553,25 @@ export function useDownload() {
         }
         logger.info(`found ${existingSpotifyIDs.size} existing files`);
         const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
-        for (const track of tracksWithIsrc) {
-            const trackID = track.spotify_id || track.isrc;
+        for (const track of tracksWithId) {
+            const trackID = track.spotify_id || "";
+            const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
             if (existingSpotifyIDs.has(trackID)) {
-                const itemID = await AddToDownloadQueue(track.spotify_id || track.isrc, track.name || "", track.artists || "", track.album_name || "");
+                const itemID = await AddToDownloadQueue(trackID, track.name || "", displayArtist || "", track.album_name || "");
                 const filePath = existingFilePaths.get(trackID) || "";
                 setTimeout(() => SkipDownloadItem(itemID, filePath), 10);
-                setSkippedTracks((prev) => new Set(prev).add(track.isrc));
-                setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
+                setSkippedTracks((prev: Set<string>) => new Set(prev).add(trackID));
+                setDownloadedTracks((prev: Set<string>) => new Set(prev).add(trackID));
             }
         }
-        const tracksToDownload = tracksWithIsrc.filter((track) => {
-            const trackID = track.spotify_id || track.isrc;
+        const tracksToDownload = tracksWithId.filter((track) => {
+            const trackID = track.spotify_id || "";
             return !existingSpotifyIDs.has(trackID);
         });
         let successCount = 0;
         let errorCount = 0;
         let skippedCount = existingSpotifyIDs.size;
-        const total = tracksWithIsrc.length;
+        const total = tracksWithId.length;
         setDownloadProgress(Math.round((skippedCount / total) * 100));
         for (let i = 0; i < tracksToDownload.length; i++) {
             if (shouldStopDownloadRef.current) {
@@ -546,26 +579,51 @@ export function useDownload() {
                 break;
             }
             const track = tracksToDownload[i];
-            setDownloadingTrack(track.isrc);
-            setCurrentDownloadInfo({ name: track.name, artists: track.artists });
+            const id = track.spotify_id || "";
+            const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
+            setDownloadingTrack(id);
+            setCurrentDownloadInfo({ name: track.name, artists: displayArtist || "" });
             try {
-                const releaseYear = track.release_date?.substring(0, 4);
-                const playlistIndex = tracksWithIsrc.findIndex((t) => t.isrc === track.isrc) + 1;
-                const response = await downloadWithSpotiDownloader(track, settings, playlistName, playlistIndex, 0, isAlbum, releaseYear);
+                const playlistIndex = tracksWithId.findIndex((t) => t.spotify_id === id) + 1;
+                const response = await downloadTrack({
+                    track_id: id,
+                    session_token: settings.sessionToken || "",
+                    track_name: track.name || "",
+                    artist_name: track.artists || "",
+                    album_name: track.album_name || "",
+                    album_artist: track.album_artist || track.artists || "",
+                    release_date: track.release_date || "",
+                    cover_url: track.images || "",
+                    album_track_number: track.track_number || 0,
+                    disc_number: track.disc_number || 0,
+                    total_tracks: track.total_tracks || 0,
+                    spotify_total_discs: track.total_discs || 0,
+                    copyright: track.copyright || "",
+                    publisher: track.publisher || "",
+                    output_dir: outputDir,
+                    audio_format: settings.audioFormat,
+                    filename_format: settings.filenameFormat,
+                    track_number: settings.trackNumber,
+                    position: playlistIndex,
+                    use_album_track_number: isAlbum,
+                    embed_lyrics: settings.embedLyrics,
+                    embed_max_quality_cover: settings.embedMaxQualityCover,
+                    use_first_artist_only: settings.useFirstArtistOnly,
+                });
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;
-                        logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
-                        setSkippedTracks((prev) => new Set(prev).add(track.isrc));
+                        logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
+                        setSkippedTracks((prev) => new Set(prev).add(id));
                     }
                     else {
                         successCount++;
-                        logger.success(`downloaded: ${track.name} - ${track.artists}`);
+                        logger.success(`downloaded: ${track.name} - ${displayArtist}`);
                     }
-                    setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
+                    setDownloadedTracks((prev) => new Set(prev).add(id));
                     setFailedTracks((prev) => {
                         const newSet = new Set(prev);
-                        newSet.delete(track.isrc);
+                        newSet.delete(id);
                         return newSet;
                     });
                     if (response.file) {
@@ -574,14 +632,14 @@ export function useDownload() {
                 }
                 else {
                     errorCount++;
-                    logger.error(`failed: ${track.name} - ${track.artists}`);
-                    setFailedTracks((prev) => new Set(prev).add(track.isrc));
+                    logger.error(`failed: ${track.name} - ${displayArtist}`);
+                    setFailedTracks((prev) => new Set(prev).add(id));
                 }
             }
             catch (err) {
                 errorCount++;
                 logger.error(`error: ${track.name} - ${err}`);
-                setFailedTracks((prev) => new Set(prev).add(track.isrc));
+                setFailedTracks((prev) => new Set(prev).add(id));
             }
             const completedCount = skippedCount + successCount + errorCount;
             setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));

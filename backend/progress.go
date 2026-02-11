@@ -22,7 +22,7 @@ type DownloadItem struct {
 	TrackName    string         `json:"track_name"`
 	ArtistName   string         `json:"artist_name"`
 	AlbumName    string         `json:"album_name"`
-	ISRC         string         `json:"isrc"`
+	SpotifyID    string         `json:"spotify_id"`
 	Status       DownloadStatus `json:"status"`
 	Progress     float64        `json:"progress"`
 	TotalSize    float64        `json:"total_size"`
@@ -190,7 +190,7 @@ func GetCurrentItemID() string {
 	return currentItemID
 }
 
-func AddToQueue(id, trackName, artistName, albumName, isrc string) {
+func AddToQueue(id, trackName, artistName, albumName, spotifyID string) {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
 
@@ -199,7 +199,7 @@ func AddToQueue(id, trackName, artistName, albumName, isrc string) {
 		TrackName:  trackName,
 		ArtistName: artistName,
 		AlbumName:  albumName,
-		ISRC:       isrc,
+		SpotifyID:  spotifyID,
 		Status:     StatusQueued,
 		Progress:   0,
 		TotalSize:  0,

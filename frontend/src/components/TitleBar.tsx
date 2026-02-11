@@ -17,6 +17,19 @@ export function TitleBar() {
             setTokenRetry(settings.tokenRetry || 1);
             setUseSpotFetchAPI(settings.useSpotFetchAPI || false);
         }
+        const handleSettingsUpdate = (event: any) => {
+            const updatedSettings = event.detail;
+            if (updatedSettings) {
+                if (typeof updatedSettings.tokenTimeout !== 'undefined')
+                    setTokenTimeout(updatedSettings.tokenTimeout);
+                if (typeof updatedSettings.tokenRetry !== 'undefined')
+                    setTokenRetry(updatedSettings.tokenRetry);
+                if (typeof updatedSettings.useSpotFetchAPI !== 'undefined')
+                    setUseSpotFetchAPI(updatedSettings.useSpotFetchAPI);
+            }
+        };
+        window.addEventListener('settingsUpdated', handleSettingsUpdate);
+        return () => window.removeEventListener('settingsUpdated', handleSettingsUpdate);
     }, []);
     const handleTimeoutChange = (value: string) => {
         const timeout = parseInt(value, 10);

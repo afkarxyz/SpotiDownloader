@@ -24,6 +24,19 @@ func NewApp() *App {
 	return &App{}
 }
 
+func (a *App) getFirstArtist(artistString string) string {
+	if artistString == "" {
+		return ""
+	}
+	delimiters := []string{", ", " & ", " feat. ", " ft. ", " featuring "}
+	for _, d := range delimiters {
+		if idx := strings.Index(strings.ToLower(artistString), d); idx != -1 {
+			return strings.TrimSpace(artistString[:idx])
+		}
+	}
+	return artistString
+}
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
@@ -44,33 +57,35 @@ type SpotifyMetadataRequest struct {
 }
 
 type DownloadRequest struct {
-	TrackID              string `json:"track_id,omitempty"`
-	SessionToken         string `json:"session_token"`
-	TrackName            string `json:"track_name,omitempty"`
-	ArtistName           string `json:"artist_name,omitempty"`
-	AlbumName            string `json:"album_name,omitempty"`
-	AlbumArtist          string `json:"album_artist,omitempty"`
-	ReleaseDate          string `json:"release_date,omitempty"`
-	CoverURL             string `json:"cover_url,omitempty"`
-	AlbumTrackNumber     int    `json:"album_track_number,omitempty"`
-	DiscNumber           int    `json:"disc_number,omitempty"`
-	TotalTracks          int    `json:"total_tracks,omitempty"`
-	SpotifyTotalDiscs    int    `json:"spotify_total_discs,omitempty"`
-	Copyright            string `json:"copyright,omitempty"`
-	Publisher            string `json:"publisher,omitempty"`
-	OutputDir            string `json:"output_dir,omitempty"`
-	AudioFormat          string `json:"audio_format,omitempty"`
-	FilenameFormat       string `json:"filename_format,omitempty"`
-	TrackNumber          bool   `json:"track_number,omitempty"`
-	Position             int    `json:"position,omitempty"`
-	UseAlbumTrackNumber  bool   `json:"use_album_track_number,omitempty"`
-	SpotifyID            string `json:"spotify_id,omitempty"`
-	ISRC                 string `json:"isrc,omitempty"`
+	TrackID             string `json:"track_id,omitempty"`
+	SessionToken        string `json:"session_token"`
+	TrackName           string `json:"track_name,omitempty"`
+	ArtistName          string `json:"artist_name,omitempty"`
+	AlbumName           string `json:"album_name,omitempty"`
+	AlbumArtist         string `json:"album_artist,omitempty"`
+	ReleaseDate         string `json:"release_date,omitempty"`
+	CoverURL            string `json:"cover_url,omitempty"`
+	AlbumTrackNumber    int    `json:"album_track_number,omitempty"`
+	DiscNumber          int    `json:"disc_number,omitempty"`
+	TotalTracks         int    `json:"total_tracks,omitempty"`
+	SpotifyTotalDiscs   int    `json:"spotify_total_discs,omitempty"`
+	Copyright           string `json:"copyright,omitempty"`
+	Publisher           string `json:"publisher,omitempty"`
+	OutputDir           string `json:"output_dir,omitempty"`
+	AudioFormat         string `json:"audio_format,omitempty"`
+	FilenameFormat      string `json:"filename_format,omitempty"`
+	TrackNumber         bool   `json:"track_number,omitempty"`
+	Position            int    `json:"position,omitempty"`
+	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"`
+	SpotifyID           string `json:"spotify_id,omitempty"`
+	Duration            int    `json:"duration,omitempty"`
+
 	EmbedLyrics          bool   `json:"embed_lyrics,omitempty"`
 	EmbedMaxQualityCover bool   `json:"embed_max_quality_cover,omitempty"`
 	ItemID               string `json:"item_id,omitempty"`
 	PlaylistName         string `json:"playlist_name,omitempty"`
 	PlaylistOwner        string `json:"playlist_owner,omitempty"`
+	UseFirstArtistOnly   bool   `json:"use_first_artist_only,omitempty"`
 }
 
 type DownloadResponse struct {
@@ -219,15 +234,12 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 		itemID = fmt.Sprintf("%s-%d", trackIDForItemID, time.Now().UnixNano())
 
-		trackIDForISRC := req.TrackID
-		if trackIDForISRC == "" {
-			trackIDForISRC = req.SpotifyID
+		spotifyIDForQueue := req.TrackID
+		if spotifyIDForQueue == "" {
+			spotifyIDForQueue = req.SpotifyID
 		}
-		isrc := req.ISRC
-		if isrc == "" {
-			isrc = trackIDForISRC
-		}
-		backend.AddToQueue(itemID, req.TrackName, req.ArtistName, req.AlbumName, isrc)
+
+		backend.AddToQueue(itemID, req.TrackName, req.ArtistName, req.AlbumName, spotifyIDForQueue)
 	}
 
 	backend.SetDownloading(true)
@@ -304,6 +316,23 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		trackID = req.SpotifyID
 	}
 
+	lyricsChan := make(chan string, 1)
+	if req.EmbedLyrics && trackID != "" {
+		go func() {
+			fmt.Println("Fetching lyrics in background...")
+			client := backend.NewLyricsClient()
+			resp, _, err := client.FetchLyricsAllSources(trackID, req.TrackName, req.ArtistName, req.Duration)
+			if err == nil && resp != nil && len(resp.Lines) > 0 {
+				lrc := client.ConvertToLRC(resp, req.TrackName, req.ArtistName)
+				lyricsChan <- lrc
+			} else {
+				lyricsChan <- ""
+			}
+		}()
+	} else {
+		close(lyricsChan)
+	}
+
 	downloader := backend.NewSpotiDownloader(req.SessionToken)
 
 	actualTrackNumber := req.AlbumTrackNumber
@@ -311,7 +340,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		actualTrackNumber = 1
 	}
 
-	filename, err := downloader.DownloadByISRC(
+	filename, err := downloader.DownloadTrack(
 		trackID,
 		req.OutputDir,
 		req.AudioFormat,
@@ -334,6 +363,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.Publisher,
 		req.PlaylistName,
 		req.PlaylistOwner,
+		req.UseFirstArtistOnly,
 	)
 
 	if err != nil {
@@ -351,53 +381,29 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		filename = strings.TrimPrefix(filename, "EXISTS:")
 	}
 
-	if !alreadyExists && req.SpotifyID != "" && req.EmbedLyrics && (strings.HasSuffix(filename, ".flac") || strings.HasSuffix(filename, ".mp3")) {
-		go func(filePath, spotifyID, trackName, artistName string) {
-			fmt.Printf("\n========== LYRICS FETCH START ==========\n")
-			fmt.Printf("Spotify ID: %s\n", spotifyID)
-			fmt.Printf("Track: %s\n", trackName)
-			fmt.Printf("Artist: %s\n", artistName)
-			fmt.Println("Searching all sources...")
-
-			lyricsClient := backend.NewLyricsClient()
-
-			lyricsResp, source, err := lyricsClient.FetchLyricsAllSources(spotifyID, trackName, artistName, 0)
-			if err != nil {
-				fmt.Printf("All sources failed: %v\n", err)
-				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
-				return
-			}
-
-			if lyricsResp == nil || len(lyricsResp.Lines) == 0 {
-				fmt.Println("No lyrics content found")
-				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
-				return
-			}
-
-			fmt.Printf("Lyrics found from: %s\n", source)
-			fmt.Printf("Sync type: %s\n", lyricsResp.SyncType)
-			fmt.Printf("Total lines: %d\n", len(lyricsResp.Lines))
-
-			lyrics := lyricsClient.ConvertToLRC(lyricsResp, trackName, artistName)
-			if lyrics == "" {
-				fmt.Println("No lyrics content to embed")
-				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
-				return
-			}
-
+	if !alreadyExists && trackID != "" && req.EmbedLyrics && (strings.HasSuffix(filename, ".flac") || strings.HasSuffix(filename, ".mp3") || strings.HasSuffix(filename, ".m4a")) {
+		fmt.Printf("\nWaiting for lyrics fetch to complete...\n")
+		lyrics := <-lyricsChan
+		if lyrics != "" {
 			fmt.Printf("\n--- Full LRC Content ---\n")
 			fmt.Println(lyrics)
 			fmt.Printf("--- End LRC Content ---\n\n")
 
-			fmt.Printf("Embedding into: %s\n", filePath)
-			if err := backend.EmbedLyricsOnly(filePath, lyrics); err != nil {
+			fmt.Printf("Embedding into: %s\n", filename)
+			if err := backend.EmbedLyricsOnly(filename, lyrics); err != nil {
 				fmt.Printf("Failed to embed lyrics: %v\n", err)
-				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
 			} else {
 				fmt.Printf("Lyrics embedded successfully!\n")
-				fmt.Printf("========== LYRICS FETCH END (SUCCESS) ==========\n\n")
 			}
-		}(filename, req.SpotifyID, req.TrackName, req.ArtistName)
+		} else {
+			fmt.Println("No lyrics found to embed.")
+		}
+	} else {
+
+		select {
+		case <-lyricsChan:
+		default:
+		}
 	}
 
 	message := "Download completed successfully"
@@ -606,10 +612,10 @@ func (a *App) ExportFailedDownloads() (string, error) {
 			failedItems = append(failedItems, line)
 			failedItems = append(failedItems, fmt.Sprintf("   Error: %s", item.ErrorMessage))
 
-			if item.ISRC != "" {
-				failedItems = append(failedItems, fmt.Sprintf("   ID: %s", item.ISRC))
-				if !strings.HasPrefix(item.ISRC, "http") {
-					failedItems = append(failedItems, fmt.Sprintf("   URL: https://open.spotify.com/track/%s", item.ISRC))
+			if item.SpotifyID != "" {
+				failedItems = append(failedItems, fmt.Sprintf("   ID: %s", item.SpotifyID))
+				if !strings.HasPrefix(item.SpotifyID, "http") {
+					failedItems = append(failedItems, fmt.Sprintf("   URL: https://open.spotify.com/track/%s", item.SpotifyID))
 				}
 			}
 			failedItems = append(failedItems, "")

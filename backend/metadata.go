@@ -31,6 +31,7 @@ type Metadata struct {
 	Publisher   string
 	Lyrics      string
 	Description string
+	ISRC        string
 }
 
 func EmbedMetadata(filePath string, metadata Metadata, coverPath string) error {
@@ -101,6 +102,10 @@ func embedFlacMetadata(filePath string, metadata Metadata, coverPath string) err
 
 	if metadata.Lyrics != "" {
 		_ = cmt.Add("LYRICS", metadata.Lyrics)
+	}
+
+	if metadata.ISRC != "" {
+		_ = cmt.Add("ISRC", metadata.ISRC)
 	}
 
 	cmtBlock := cmt.Marshal()
@@ -191,6 +196,10 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 			}
 			tag.AddAttachedPicture(pic)
 		}
+	}
+
+	if metadata.ISRC != "" {
+		tag.AddTextFrame("TSRC", tag.DefaultEncoding(), metadata.ISRC)
 	}
 
 	if err := tag.Save(); err != nil {
@@ -644,27 +653,22 @@ func validateLyricsDuration(lyrics string, filepath string) (string, error) {
 
 		if strings.HasPrefix(trimmedLine, "[") {
 
-			if strings.Index(trimmedLine, ":") > 0 {
-
-				validLines = append(validLines, line)
-				continue
-			}
-
 			closeBracket := strings.Index(trimmedLine, "]")
 			if closeBracket > 0 {
 				timestampStr := trimmedLine[1:closeBracket]
 
 				ms := parseLRCTimestamp(timestampStr)
-				if ms >= 0 && ms <= durationMs {
-
-					validLines = append(validLines, line)
+				if ms >= 0 {
+					if ms <= durationMs {
+						validLines = append(validLines, line)
+					} else {
+						fmt.Printf("[ValidateLyrics] Filtered out line with timestamp %s (exceeds duration %d ms): %s\n", timestampStr, durationMs, trimmedLine)
+					}
 				} else {
 
-					fmt.Printf("[ValidateLyrics] Filtered out line with timestamp %s (exceeds duration %d ms): %s\n", timestampStr, durationMs, trimmedLine)
+					validLines = append(validLines, line)
 				}
-			} else {
-
-				validLines = append(validLines, line)
+				continue
 			}
 		} else {
 
@@ -863,6 +867,11 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 		tag.AddTextFrame("TPUB", id3v2.EncodingUTF8, metadata.Publisher)
 	}
 
+	if metadata.ISRC != "" {
+		tag.DeleteFrames("TSRC")
+		tag.AddTextFrame("TSRC", id3v2.EncodingUTF8, metadata.ISRC)
+	}
+
 	if coverPath != "" && fileExists(coverPath) {
 		artwork, err := os.ReadFile(coverPath)
 		if err == nil {
@@ -938,6 +947,9 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	}
 	if metadata.Publisher != "" {
 		args = append(args, "-metadata", "publisher="+metadata.Publisher)
+	}
+	if metadata.ISRC != "" {
+		args = append(args, "-metadata", "isrc="+metadata.ISRC)
 	}
 
 	tmpOutputFile := strings.TrimSuffix(filePath, pathfilepath.Ext(filePath)) + ".tmp" + pathfilepath.Ext(filePath)

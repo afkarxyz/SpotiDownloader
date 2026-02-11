@@ -10,6 +10,7 @@ import { SearchSpotify, SearchSpotifyByType } from "../../wailsjs/go/main/App";
 import { backend } from "../../wailsjs/go/models";
 import { cn } from "@/lib/utils";
 import { useTypingEffect } from "@/hooks/useTypingEffect";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 const FETCH_PLACEHOLDERS = [
     "https://open.spotify.com/track/...",
     "https://open.spotify.com/album/...",
@@ -55,6 +56,8 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
         artists: false,
         playlists: false,
     });
+    const [showInvalidUrlDialog, setShowInvalidUrlDialog] = useState(false);
+    const [invalidUrl, setInvalidUrl] = useState("");
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const placeholders = searchMode ? SEARCH_PLACEHOLDERS : FETCH_PLACEHOLDERS;
     const placeholderText = useTypingEffect(placeholders);
@@ -186,6 +189,35 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
             setIsLoadingMore(false);
         }
     };
+    const isSpotifyUrl = (text: string) => {
+        const trimmed = text.trim();
+        if (!trimmed)
+            return true;
+        const isUrl = /^(https?:\/\/|www\.)/i.test(trimmed) || /^spotify:/i.test(trimmed);
+        if (!isUrl)
+            return true;
+        return trimmed.includes("spotify.com") ||
+            trimmed.includes("spotify.link") ||
+            trimmed.startsWith("spotify:");
+    };
+    const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        if (searchMode)
+            return;
+        const pastedText = e.clipboardData.getData("text");
+        if (pastedText && !isSpotifyUrl(pastedText)) {
+            e.preventDefault();
+            setInvalidUrl(pastedText);
+            setShowInvalidUrlDialog(true);
+        }
+    };
+    const handleFetchWithValidation = () => {
+        if (!isSpotifyUrl(url)) {
+            setInvalidUrl(url);
+            setShowInvalidUrlDialog(true);
+            return;
+        }
+        onFetch();
+    };
     const handleResultClick = (externalUrl: string) => {
         onSearchModeChange(false);
         onFetchUrl(externalUrl);
@@ -233,7 +265,7 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
 
                 <div className="relative flex-1">
                     {!searchMode ? (<>
-                            <InputWithContext id="spotify-url" placeholder={placeholderText} value={url} onChange={(e) => onUrlChange(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onFetch()} className="pr-8"/>
+                            <InputWithContext id="spotify-url" placeholder={placeholderText} value={url} onChange={(e) => onUrlChange(e.target.value)} onPaste={handlePaste} onKeyDown={(e) => e.key === "Enter" && handleFetchWithValidation()} className="pr-8"/>
                             {url && (<button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" onClick={() => onUrlChange("")}>
                                     <XCircle className="h-4 w-4"/>
                                 </button>)}
@@ -249,7 +281,7 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
                         </>)}
                 </div>
 
-                {!searchMode && (<Button onClick={onFetch} disabled={loading}>
+                {!searchMode && (<Button onClick={handleFetchWithValidation} disabled={loading}>
                         {loading ? (<>
                                 <Spinner />
                                 Fetching...
@@ -369,5 +401,36 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
                                 </div>)}
                         </>)}
                 </div>)}
+
+            <Dialog open={showInvalidUrlDialog} onOpenChange={setShowInvalidUrlDialog}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Invalid URL</DialogTitle>
+                        <DialogDescription>
+                            Only Spotify links are allowed in Fetch mode.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {invalidUrl && (<div className="p-3 bg-muted rounded-md border text-xs font-mono break-all opacity-70">
+                            {invalidUrl}
+                        </div>)}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => {
+            setShowInvalidUrlDialog(false);
+            setInvalidUrl("");
+        }}>
+                            Cancel
+                        </Button>
+                        <Button onClick={() => {
+            onSearchModeChange(true);
+            setShowInvalidUrlDialog(false);
+            setInvalidUrl("");
+        }}>
+                            Switch to Search
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>);
 }

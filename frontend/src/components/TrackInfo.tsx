@@ -91,9 +91,9 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
               </div>)}
             </div>
           </div>
-          {track.isrc && (<div className="flex gap-2">
-            <Button onClick={() => onDownload(track)} disabled={isDownloading || downloadingTrack === track.isrc}>
-              {downloadingTrack === track.isrc ? (<Spinner />) : (<>
+          {track.spotify_id && (<div className="flex gap-2">
+            <Button onClick={() => onDownload(track)} disabled={isDownloading || downloadingTrack === track.spotify_id}>
+              {downloadingTrack === track.spotify_id ? (<Spinner />) : (<>
                 <Download className="h-4 w-4"/>
                 Download
               </>)}

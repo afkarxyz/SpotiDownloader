@@ -52,7 +52,7 @@ interface PlaylistInfoProps {
     itemsPerPage: number;
     onSearchChange: (value: string) => void;
     onSortChange: (value: string) => void;
-    onToggleTrack: (isrc: string) => void;
+    onToggleTrack: (id: string) => void;
     onToggleSelectAll: (tracks: TrackMetadata[]) => void;
     onDownloadTrack: (track: TrackMetadata, folderName?: string, isArtistDiscography?: boolean, isAlbum?: boolean, position?: number) => void;
     onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
