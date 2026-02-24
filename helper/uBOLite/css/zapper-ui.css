@@ -1,0 +1,29 @@
+:root#ubol-zapper {
+    --quit-button-size: max(4em, min(6em, calc(100vw / 8), calc(100vh / 8)));
+    --ubol-overlay-fill: rgba(255,255,63,0.10);
+    --ubol-overlay-border: #FF0;
+}
+
+#ubol-zapper aside {
+    gap: 2px;
+    right: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+#ubol-zapper aside > div {
+    background-color: var(--surface-1);
+    border: 1px solid rgba(0,0,0,0.5);
+    box-sizing: border-box;
+    fill: none;
+    stroke: var(--ink-1);
+    stroke-width: 2px;
+    width: var(--quit-button-size);
+    height: var(--quit-button-size);
+}
+#ubol-zapper aside > div:hover {
+    background-color: var(--surface-2)
+}
+:root:not(.mobile) #pick {
+    display: none;
+}

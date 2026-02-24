@@ -1,0 +1,422 @@
+{
+  "extName": {
+    "message": "uBlock Origin Lite",
+    "description": "extension name."
+  },
+  "extShortDesc": {
+    "message": "Penyekat kandungan tanpa kebenaran. Menyekat iklan, penjejak, pelombong dan banyak lagi sebaik sahaja pemasangan.",
+    "description": "this will be in the Chrome web store: must be 132 characters or less"
+  },
+  "perRulesetStats": {
+    "message": "Peraturan {{ruleCount}}, ditukar daripada penapis rangkaian {{filterCount}}.",
+    "description": "Appears aside each filter list in the _3rd-party filters_ pane"
+  },
+  "dashboardName": {
+    "message": "uBO Lite — Papan pemuka",
+    "description": "English: uBO Lite — Dashboard"
+  },
+  "settingsPageName": {
+    "message": "Tetapan",
+    "description": "appears as tab name in dashboard"
+  },
+  "customFiltersPageName": {
+    "message": "Custom filters",
+    "description": "appears as tab name in dashboard"
+  },
+  "developPageName": {
+    "message": "Develop",
+    "description": "appears as tab name in dashboard. Inspired from 'Develop' menu in Safari, see https://developer.apple.com/documentation/safari-developer-tools/develop-menu"
+  },
+  "aboutPageName": {
+    "message": "Mengenai",
+    "description": "appears as tab name in dashboard"
+  },
+  "aboutPrivacyPolicy": {
+    "message": "Dasar privasi",
+    "description": "Link to privacy policy on GitHub (English)"
+  },
+  "popupFilteringModeLabel": {
+    "message": "mod penapisan",
+    "description": "Label in the popup panel for the current filtering mode"
+  },
+  "popupLocalToolsLabel": {
+    "message": "On this website",
+    "description": "Label in the popup panel for the local tools section"
+  },
+  "popupTipReport": {
+    "message": "Report an issue",
+    "description": "Tooltip used for the 'chat' icon in the panel"
+  },
+  "popupTipDashboard": {
+    "message": "Buka papan pemuka",
+    "description": "English: Click to open the dashboard"
+  },
+  "popupMoreButton": {
+    "message": "Lagi",
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton": {
+    "message": "Kurangkan",
+    "description": "Label to be used to hide popup panel sections"
+  },
+  "3pGroupDefault": {
+    "message": "Lalai",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupAds": {
+    "message": "Iklan",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupPrivacy": {
+    "message": "Privasi",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupMalware": {
+    "message": "Malware protection, security",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupAnnoyances": {
+    "message": "Kegusaran",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupMisc": {
+    "message": "Pelbagai",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupRegions": {
+    "message": "Wilayah, bahasa",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "customFiltersImportExportLabel": {
+    "message": "Import / Export",
+    "description": "Text label heading the import/export area of custom filters"
+  },
+  "customFiltersImportTextareaPlaceholder": {
+    "message": "Paste here specific cosmetic filters to add",
+    "description": "Placeholder text which describes the purpose of the textarea widget"
+  },
+  "aboutChangelog": {
+    "message": "Log perubahan",
+    "description": ""
+  },
+  "aboutCode": {
+    "message": "Kod sumber (GPLv3)",
+    "description": "English: Source code (GPLv3)"
+  },
+  "aboutContributors": {
+    "message": "Penyumbang",
+    "description": "English: Contributors"
+  },
+  "aboutSourceCode": {
+    "message": "Kod sumber",
+    "description": "Link text to source code repo"
+  },
+  "aboutTranslations": {
+    "message": "Terjemahan",
+    "description": "Link text to translations repo"
+  },
+  "aboutFilterLists": {
+    "message": "Senarai penapis",
+    "description": "Link text to uBO's own filter lists repo"
+  },
+  "aboutDependencies": {
+    "message": "Pergantungan luaran (serasi dengan GPLv3):",
+    "description": "Shown in the About pane"
+  },
+  "supportS6H": {
+    "message": "Report a filter issue",
+    "description": "Header of 'Report a filter issue' section in Support pane"
+  },
+  "supportS3P1": {
+    "message": "Report filter issues with specific websites to the <span data-url=\"https://github.com/uBlockOrigin/uAssets/issues?q=is%3Aissue\"><code>uBlockOrigin/uAssets</code> issue tracker</span>. <u>Requires a GitHub account.</u>",
+    "description": "First paragraph of 'Filter issues' section in Support pane"
+  },
+  "supportS5H": {
+    "message": "Troubleshooting information",
+    "description": "Label of 'Troubleshooting information' section in 'Report a filter issue' page"
+  },
+  "supportS6P1S1": {
+    "message": "To avoid burdening volunteers with duplicate reports, please verify that the issue has not already been reported. <b>Note:</b> clicking the button will cause the page's origin to be sent to GitHub.",
+    "description": "A paragraph in the filter issue reporter section"
+  },
+  "supportFindSpecificButton": {
+    "message": "Find similar reports on GitHub",
+    "description": "A clickable link in the filter issue reporter section"
+  },
+  "supportS6URL": {
+    "message": "Address of the web page:",
+    "description": "Label for the URL of the page"
+  },
+  "supportS6Select1": {
+    "message": "The web page…",
+    "description": "Label for widget to select type of issue"
+  },
+  "supportS6Select1Option0": {
+    "message": "-- Pick an entry --",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option1": {
+    "message": "Shows ads or ad leftovers",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option2": {
+    "message": "Has overlays or other nuisances",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option3": {
+    "message": "Detects uBO Lite",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option4": {
+    "message": "Has privacy-related issues",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option5": {
+    "message": "Malfunctions when uBO Lite is enabled",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option6": {
+    "message": "Opens unwanted tabs or windows",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option7": {
+    "message": "Leads to badware, phishing",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Checkbox1": {
+    "message": "Label the web page as “NSFW” (<a href=\"https://wikipedia.org/wiki/Not_safe_for_work\">“Not Safe For Work”</a>)",
+    "description": "A checkbox to use for NSFW sites"
+  },
+  "supportReportSpecificButton": {
+    "message": "Create new report on GitHub",
+    "description": "Text for button which opens an external web page in Support pane"
+  },
+  "defaultFilteringModeSectionLabel": {
+    "message": "Mod penapisan lalai",
+    "description": "The header text for the default filtering mode section"
+  },
+  "defaultFilteringModeDescription": {
+    "message": "Mod penapisan lalai akan ditindih oleh mod penapisan setiap tapak web. Anda boleh melaraskan mod penapisan pada mana-mana tapak web tertentu mengikut mana-mana mod yang paling berkesan pada tapak web tersebut. Setiap mod mempunyai kelebihan dan kekurangannya.",
+    "description": "This describes the default filtering mode setting"
+  },
+  "filteringMode0Name": {
+    "message": " tiada penapisan",
+    "description": "Name of blocking mode 0"
+  },
+  "filteringMode1Name": {
+    "message": "asas",
+    "description": "Name of blocking mode 1"
+  },
+  "filteringMode2Name": {
+    "message": "optimum",
+    "description": "Name of blocking mode 2"
+  },
+  "filteringMode3Name": {
+    "message": "selesai",
+    "description": "Name of blocking mode 3"
+  },
+  "basicFilteringModeDescription": {
+    "message": "Penapisan rangkaian asas daripada senarai penapis yang dipilih.\n\nTidak memerlukan kebenaran untuk membaca dan mengubah suai data pada tapak web.",
+    "description": "This describes the 'basic' filtering mode"
+  },
+  "optimalFilteringModeDescription": {
+    "message": "Penapisan rangkaian lanjutan ditambah penapisan lanjutan khusus daripada senarai penapis yang dipilih.\n\nMemerlukan kebenaran untuk membaca dan mengubah suai data pada semua tapak web.",
+    "description": "This describes the 'optimal' filtering mode"
+  },
+  "completeFilteringModeDescription": {
+    "message": "Penapisan rangkaian lanjutan serta penapisan lanjutan khusus dan generik daripada senarai penapis yang dipilih.\n\nMemerlukan kebenaran untuk membaca dan mengubah suai data pada semua tapak web.\n\nPenapisan lanjutan generik boleh menyebabkan penggunaan sumber halaman web yang lebih tinggi.",
+    "description": "This describes the 'complete' filtering mode"
+  },
+  "noFilteringModeDescription": {
+    "message": "Senarai nama hos yang tiada penapisan akan berlaku",
+    "description": "A short description for the editable field which lists trusted sites"
+  },
+  "noFilteringModePlaceholder": {
+    "message": "[hostnames only]\nexample.com\ngames.example\n...",
+    "description": "Default text for in edit field"
+  },
+  "behaviorSectionLabel": {
+    "message": "Tingkah laku",
+    "description": "The header text for the 'Behavior' section"
+  },
+  "autoReloadLabel": {
+    "message": "Muat semula halaman secara automatik apabila menukar mod penapisan",
+    "description": "Label for a checkbox in the options page"
+  },
+  "showBlockedCountLabel": {
+    "message": "Tunjukkan bilangan permintaan yang disekat pada ikon bar alat",
+    "description": "Label for a checkbox in the options page"
+  },
+  "enableStrictBlockLabel": {
+    "message": "Enable strict blocking",
+    "description": "Label for a checkbox in the options page"
+  },
+  "enableStrictBlockLegend": {
+    "message": "Navigation to potentially undesirable sites will be blocked, and you will be offered the option to proceed.",
+    "description": "Short description for a checkbox in the options page"
+  },
+  "developerModeLabel": {
+    "message": "Developer mode",
+    "description": "Label for a checkbox in the options page"
+  },
+  "developerModeLegend": {
+    "message": "Enables access to features suitable for technical users.",
+    "description": "Short description for a checkbox in the options page"
+  },
+  "settingsBackupRestoreLabel": {
+    "message": "Backup",
+    "description": "The header text for the back up/restore section"
+  },
+  "settingsBackupRestoreSummary": {
+    "message": "Back up your custom settings to a file, or restore your custom settings from a file.",
+    "description": "A summary description of the back up/restore section."
+  },
+  "settingsBackupRestoreLegend": {
+    "message": "Restoring will overwrite all your current custom settings.",
+    "description": "Important information about the back up/restore section."
+  },
+  "findListsPlaceholder": {
+    "message": "Find lists",
+    "description": "Placeholder for the input field used to find lists"
+  },
+  "strictblockTitle": {
+    "message": "Page blocked",
+    "description": "Web page title for the strict-blocked page"
+  },
+  "strictblockSentence1": {
+    "message": "uBO Lite has prevented the following page from loading:",
+    "description": "Sentence used in the strict-blocked page"
+  },
+  "strictblockReasonSentence1": {
+    "message": "The page was blocked because of a matching filter in {{listname}}.",
+    "description": "Text informing about what is causing the page to be blocked"
+  },
+  "strictblockRedirectSentence1": {
+    "message": "The blocked page wants to redirect to another site. If you choose to proceed, you will navigate directly to: {{url}}",
+    "description": "Text warning about an incoming redirect"
+  },
+  "strictblockNoParamsPrompt": {
+    "message": "without parameters",
+    "description": "Label to be used for the parameter-less URL"
+  },
+  "strictblockBack": {
+    "message": "Go back",
+    "description": "A button to go back to the previous web page"
+  },
+  "strictblockClose": {
+    "message": "Close this window",
+    "description": "A button to close the current tab"
+  },
+  "strictblockDontWarn": {
+    "message": "Don't warn me again about this site",
+    "description": "Label for checkbox in document-blocked page"
+  },
+  "strictblockProceed": {
+    "message": "Proceed",
+    "description": "A button to navigate to the blocked page"
+  },
+  "zapperTipEnter": {
+    "message": "Remove an element",
+    "description": "Tooltip for the button used to enter zapper mode"
+  },
+  "zapperTipQuit": {
+    "message": "Exit element zapper mode",
+    "description": "Tooltip for the button used to exit zapper mode"
+  },
+  "pickerTipEnter": {
+    "message": "Create a custom filter",
+    "description": "Label for the menu entry to create cosmetic filters"
+  },
+  "unpickerTipEnter": {
+    "message": "Remove a custom filter",
+    "description": "Label for the menu entry to delete cosmetic filters"
+  },
+  "developDropdownLabel": {
+    "message": "View:",
+    "description": "A label of a dropdown list"
+  },
+  "developOptionFilteringModeDetails": {
+    "message": "Filtering mode details",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionCustomDnrRules": {
+    "message": "Custom DNR rules",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionDnrRulesOf": {
+    "message": "DNR rules of …",
+    "description": "A section header in a dropdown list"
+  },
+  "developOptionDynamicRuleset": {
+    "message": "Dynamic ruleset",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionSessionRuleset": {
+    "message": "Session ruleset",
+    "description": "An option in a dropdown list"
+  },
+  "saveButton": {
+    "message": "Save",
+    "description": "Text for buttons used to save changes"
+  },
+  "revertButton": {
+    "message": "Revert",
+    "description": "Text for buttons used to revert changes"
+  },
+  "addButton": {
+    "message": "Add",
+    "description": "Text for buttons used to add content"
+  },
+  "importAndAppendButton": {
+    "message": "Import and append…",
+    "description": "Text for buttons used to import and append content"
+  },
+  "exportButton": {
+    "message": "Export…",
+    "description": "Text for buttons used to export content"
+  },
+  "backupButton": {
+    "message": "Back up…",
+    "description": "Text for buttons used to back up content"
+  },
+  "restoreButton": {
+    "message": "Restore…",
+    "description": "Text for buttons used to restore content"
+  },
+  "resetToDefaultButton": {
+    "message": "Reset to default settings…",
+    "description": "Text for buttons used to reset configurations to default"
+  },
+  "resetToDefaultConfirm": {
+    "message": "All your custom settings will be removed. Do you really want to reset to default settings?",
+    "description": "Message asking user to confirm reset to default settings"
+  },
+  "dnrRulesWarning": {
+    "message": "Do not add content from untrusted sources",
+    "description": "Short description of the DNR rules editor pane"
+  },
+  "dnrRulesCountInfo": {
+    "message": "Number of registered rules: {count}",
+    "description": "Short sentence to report the number of currently registered DNR rules"
+  },
+  "pickerSliderLabel": {
+    "message": "Move the slider to select the best match",
+    "description": "Label to describe the purpose of the slider"
+  },
+  "pickerPick": {
+    "message": "Pick",
+    "description": "Text for the button to re-enter element-picking mode"
+  },
+  "pickerPreview": {
+    "message": "Preview",
+    "description": "Text for the button to activate preview mode"
+  },
+  "pickerCreate": {
+    "message": "Create",
+    "description": "Text for the button to create the filter"
+  },
+  "unpickerUsage": {
+    "message": "Select a filter below to highlight matching elements in the web page. Click the trash can to remove a filter.",
+    "description": "Summary description on how to use the tool to remove custom filters"
+  }
+}

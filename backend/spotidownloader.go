@@ -218,6 +218,7 @@ func (s *SpotiDownloader) DownloadTrack(
 	playlistName string,
 	playlistOwner string,
 	useFirstArtistOnly bool,
+	useSingleGenre bool,
 ) (string, error) {
 
 	outputDir = NormalizePath(outputDir)
@@ -259,14 +260,31 @@ func (s *SpotiDownloader) DownloadTrack(
 		return "EXISTS:" + outputPath, nil
 	}
 
-	isrcChan := make(chan string, 1)
+	type mbResult struct {
+		ISRC     string
+		Metadata Metadata
+	}
+
+	metaChan := make(chan mbResult, 1)
 	go func() {
 		client := NewSongLinkClient()
+		res := mbResult{}
 		if val, err := client.GetISRC(trackID); err == nil {
-			isrcChan <- val
+			res.ISRC = val
+			if val != "" {
+				fmt.Println("Fetching MusicBrainz metadata...")
+
+				if fetchedMeta, err := FetchMusicBrainzMetadata(val, trackName, artistName, albumName, useSingleGenre); err == nil {
+					res.Metadata = fetchedMeta
+					fmt.Println("✓ MusicBrainz metadata fetched")
+				} else {
+					fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+				}
+			}
 		} else {
-			isrcChan <- ""
+
 		}
+		metaChan <- res
 	}()
 
 	if err := s.DownloadFile(downloadURL, outputPath); err != nil {
@@ -282,8 +300,10 @@ func (s *SpotiDownloader) DownloadTrack(
 		}
 	}
 
-	var isrc string
-	isrc = <-isrcChan
+	result := <-metaChan
+	isrc := result.ISRC
+	mbMeta := result.Metadata
+
 	if isrc != "" {
 		fmt.Printf("Found ISRC: %s\n", isrc)
 	}
@@ -303,6 +323,7 @@ func (s *SpotiDownloader) DownloadTrack(
 		Publisher:   publisher,
 		Description: "https://github.com/afkarxyz/SpotiDownloader",
 		ISRC:        isrc,
+		Genre:       mbMeta.Genre,
 	}
 
 	if err := EmbedMetadata(outputPath, metadata, coverPath); err != nil {

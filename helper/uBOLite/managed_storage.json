@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-03/schema#",
+  "type": "object",
+  "properties": {
+    "defaultFiltering": {
+      "title": "The default filtering mode",
+      "description": "Can be one of \"none\", \"basic\", \"optimal\", \"complete\".",
+      "type": "string"
+    },
+    "disabledFeatures": {
+      "title": "User interface features to disable",
+      "description": "A list of tokens, each of which correspond to a user interface feature to disable.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "disableFirstRunPage": {
+      "title": "Disable first run page",
+      "type": "boolean"
+    },
+    "noFiltering": {
+      "title": "List of domains for which no filtering should occur",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "rulesets": {
+      "title": "Rulesets to add/remove",
+      "description": "Prefix a ruleset id with '+' to add, or '-' to remove. Use '-*' to disable all non-default lists.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "showBlockedCount": {
+      "title": "Enable/disable toolbar icon count badge",
+      "type": "boolean"
+    },
+    "strictBlockMode": {
+      "title": "Enable/disable strict blocking",
+      "type": "boolean"
+    }
+  }
+}

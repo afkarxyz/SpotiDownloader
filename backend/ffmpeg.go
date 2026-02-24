@@ -3,7 +3,6 @@ package backend
 import (
 	"archive/tar"
 	"archive/zip"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,14 +17,6 @@ import (
 
 	"github.com/ulikunitz/xz"
 )
-
-func decodeBase64(encoded string) (string, error) {
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return "", err
-	}
-	return string(decoded), nil
-}
 
 func ValidateExecutable(path string) error {
 	cleanedPath := filepath.Clean(path)
@@ -67,10 +58,8 @@ func ValidateExecutable(path string) error {
 }
 
 const (
-	ffmpegWindowsURL = "aHR0cHM6Ly9naXRodWIuY29tL0J0Yk4vRkZtcGVnLUJ1aWxkcy9yZWxlYXNlcy9kb3dubG9hZC9sYXRlc3QvZmZtcGVnLW1hc3Rlci1sYXRlc3Qtd2luNjQtZ3BsLnppcA=="
-	ffmpegLinuxURL   = "aHR0cHM6Ly9naXRodWIuY29tL0J0Yk4vRkZtcGVnLUJ1aWxkcy9yZWxlYXNlcy9kb3dubG9hZC9sYXRlc3QvZmZtcGVnLW1hc3Rlci1sYXRlc3QtbGludXg2NC1ncGwudGFyLnh6"
-	ffmpegMacOSURL   = "aHR0cHM6Ly9ldmVybWVldC5jeC9mZm1wZWcvZ2V0cmVsZWFzZS96aXA="
-	ffprobeMacOSURL  = "aHR0cHM6Ly9ldmVybWVldC5jeC9mZm1wZWcvZ2V0cmVsZWFzZS9mZnByb2JlL3ppcA=="
+	ffmpegWindowsURL = "https://github.com/afkarxyz/ffmpeg-binaries/releases/download/v8.0/ffmpeg-windows-amd64.zip"
+	ffmpegLinuxURL   = "https://github.com/afkarxyz/ffmpeg-binaries/releases/download/v8.0/ffmpeg-linux-amd64.tar.xz"
 )
 
 func GetFFmpegDir() (string, error) {
@@ -178,50 +167,48 @@ func DownloadFFmpeg(progressCallback func(int)) error {
 		ffmpegInstalled, _ := IsFFmpegInstalled()
 		ffprobeInstalled, _ := IsFFprobeInstalled()
 
-		if !ffmpegInstalled && !ffprobeInstalled {
+		isARM := runtime.GOARCH == "arm64"
 
-			ffmpegURL, _ := decodeBase64(ffmpegMacOSURL)
-			fmt.Printf("[FFmpeg] Downloading ffmpeg from: %s\n", ffmpegURL)
-			if err := downloadAndExtract(ffmpegURL, ffmpegDir, progressCallback, 0, 50); err != nil {
+		var macFFmpegURLs []string
+		var macFFprobeURLs []string
+
+		if isARM {
+
+			macFFmpegURLs = []string{"https://github.com/afkarxyz/ffmpeg-binaries/releases/download/v8.0/ffmpeg-macos-arm64.zip"}
+			macFFprobeURLs = []string{"https://github.com/afkarxyz/ffmpeg-binaries/releases/download/v8.0/ffprobe-macos-arm64.zip"}
+		} else {
+
+			macFFmpegURLs = []string{"https://github.com/afkarxyz/ffmpeg-binaries/releases/download/v8.0/ffmpeg-macos-intel.zip"}
+			macFFprobeURLs = []string{"https://github.com/afkarxyz/ffmpeg-binaries/releases/download/v8.0/ffprobe-macos-intel.zip"}
+		}
+
+		if !ffmpegInstalled && !ffprobeInstalled {
+			if err := downloadWithFallback(macFFmpegURLs, ffmpegDir, progressCallback, 0, 50); err != nil {
 				return err
 			}
-
-			ffprobeURL, _ := decodeBase64(ffprobeMacOSURL)
-			fmt.Printf("[FFmpeg] Downloading ffprobe from: %s\n", ffprobeURL)
-			if err := downloadAndExtract(ffprobeURL, ffmpegDir, progressCallback, 50, 100); err != nil {
-				return fmt.Errorf("failed to download ffprobe: %w", err)
+			if err := downloadWithFallback(macFFprobeURLs, ffmpegDir, progressCallback, 50, 100); err != nil {
+				return err
 			}
 		} else if !ffmpegInstalled {
-
-			ffmpegURL, _ := decodeBase64(ffmpegMacOSURL)
-			fmt.Printf("[FFmpeg] Downloading ffmpeg from: %s\n", ffmpegURL)
-			if err := downloadAndExtract(ffmpegURL, ffmpegDir, progressCallback, 0, 100); err != nil {
+			if err := downloadWithFallback(macFFmpegURLs, ffmpegDir, progressCallback, 0, 100); err != nil {
 				return err
 			}
 		} else if !ffprobeInstalled {
-
-			ffprobeURL, _ := decodeBase64(ffprobeMacOSURL)
-			fmt.Printf("[FFmpeg] Downloading ffprobe from: %s\n", ffprobeURL)
-			if err := downloadAndExtract(ffprobeURL, ffmpegDir, progressCallback, 0, 100); err != nil {
-				return fmt.Errorf("failed to download ffprobe: %w", err)
+			if err := downloadWithFallback(macFFprobeURLs, ffmpegDir, progressCallback, 0, 100); err != nil {
+				return err
 			}
 		}
 		return nil
 	}
 
-	var encodedURL string
+	var url string
 	switch runtime.GOOS {
 	case "windows":
-		encodedURL = ffmpegWindowsURL
+		url = ffmpegWindowsURL
 	case "linux":
-		encodedURL = ffmpegLinuxURL
+		url = ffmpegLinuxURL
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
-	}
-
-	url, err := decodeBase64(encodedURL)
-	if err != nil {
-		return fmt.Errorf("failed to decode ffmpeg URL: %w", err)
 	}
 
 	fmt.Printf("[FFmpeg] Downloading from: %s\n", url)
@@ -233,6 +220,20 @@ func DownloadFFmpeg(progressCallback func(int)) error {
 	return nil
 }
 
+func downloadWithFallback(urls []string, destDir string, progressCallback func(int), start, end int) error {
+	var lastErr error
+	for _, url := range urls {
+		fmt.Printf("[FFmpeg] Trying to download from: %s\n", url)
+		err := downloadAndExtract(url, destDir, progressCallback, start, end)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		fmt.Printf("[FFmpeg] Attempt failed: %v\n", err)
+	}
+	return fmt.Errorf("all download attempts failed: %w", lastErr)
+}
+
 func downloadAndExtract(url, destDir string, progressCallback func(int), progressStart, progressEnd int) error {
 
 	tmpFile, err := os.CreateTemp("", "ffmpeg-*")
@@ -242,7 +243,14 @@ func downloadAndExtract(url, destDir string, progressCallback func(int), progres
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
-	resp, err := http.Get(url)
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}

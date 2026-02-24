@@ -1,6 +1,6 @@
-module spotidownloader
+module github.com/afkarxyz/SpotiDownloader
 
-go 1.25.5
+go 1.26
 
 require (
 	github.com/bogem/id3v2/v2 v2.1.4
@@ -12,6 +12,7 @@ require (
 	github.com/ulikunitz/xz v0.5.15
 	github.com/wailsapp/wails/v2 v2.11.0
 	go.etcd.io/bbolt v1.4.3
+	golang.org/x/text v0.31.0
 )
 
 require (
@@ -44,5 +45,4 @@ require (
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
 )

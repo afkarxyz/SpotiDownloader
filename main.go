@@ -2,7 +2,10 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"log"
+
+	"github.com/afkarxyz/SpotiDownloader/backend"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -13,7 +16,20 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed wails.json
+var wailsJSON []byte
+
 func main() {
+
+	type wailsInfo struct {
+		Info struct {
+			ProductVersion string `json:"productVersion"`
+		} `json:"info"`
+	}
+	var config wailsInfo
+	if err := json.Unmarshal(wailsJSON, &config); err == nil && config.Info.ProductVersion != "" {
+		backend.AppVersion = config.Info.ProductVersion
+	}
 
 	app := NewApp()
 

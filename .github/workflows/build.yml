@@ -3,14 +3,14 @@ name: Build Multi-Platform
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 env:
-  GO_VERSION: '1.25.5'
-  NODE_VERSION: '24'
-  PYTHON_VERSION: '3.12'
-  APP_NAME: 'SpotiDownloader'
+  GO_VERSION: "1.26"
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+  APP_NAME: "SpotiDownloader"
 
 jobs:
   build-windows:
@@ -36,16 +36,16 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build get_token with Nuitka
+      - name: Build get_token with PyInstaller
         working-directory: helper
         run: |
-          pip install DrissionPage nuitka ordered-set zstandard
-          python -m nuitka --onefile --assume-yes-for-downloads --windows-console-mode=disable --output-filename=get_token.exe get_token.py
+          pip install DrissionPage pyinstaller ordered-set zstandard nodriver
+          pyinstaller --noconfirm --onefile --console --clean --add-data "uBOLite;uBOLite" get_token.py
 
       - name: Copy get_token for Go embed
         run: |
           New-Item -ItemType Directory -Force -Path "backend\bin"
-          Copy-Item -Path "helper\get_token.exe" -Destination "backend\bin\get_token.exe" -Force
+          Copy-Item -Path "helper\dist\get_token.exe" -Destination "backend\bin\get_token.exe" -Force
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -128,16 +128,16 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build get_token with Nuitka
+      - name: Build get_token with PyInstaller
         working-directory: helper
         run: |
-          pip install DrissionPage nuitka ordered-set zstandard
-          python -m nuitka --onefile --output-filename=get_token get_token.py
+          pip install DrissionPage pyinstaller ordered-set zstandard nodriver
+          pyinstaller --noconfirm --onefile --console --clean --add-data "uBOLite:uBOLite" get_token.py
 
       - name: Copy get_token for Go embed
         run: |
           mkdir -p backend/bin
-          cp helper/get_token backend/bin/get_token
+          cp helper/dist/get_token backend/bin/get_token
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -225,16 +225,16 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build get_token with Nuitka
+      - name: Build get_token with PyInstaller
         working-directory: helper
         run: |
-          pip install DrissionPage nuitka ordered-set zstandard
-          python -m nuitka --onefile --output-filename=get_token get_token.py
+          pip install DrissionPage pyinstaller ordered-set zstandard nodriver
+          pyinstaller --noconfirm --onefile --console --clean --add-data "uBOLite:uBOLite" get_token.py
 
       - name: Copy get_token for Go embed
         run: |
           mkdir -p backend/bin
-          cp helper/get_token backend/bin/get_token
+          cp helper/dist/get_token backend/bin/get_token
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -327,16 +327,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y patchelf ccache
 
-      - name: Build get_token with Nuitka
+      - name: Build get_token with PyInstaller
         working-directory: helper
         run: |
-          pip install DrissionPage nuitka ordered-set zstandard
-          python -m nuitka --onefile --output-filename=get_token get_token.py
+          pip install DrissionPage pyinstaller ordered-set zstandard nodriver
+          pyinstaller --noconfirm --onefile --console --clean --add-data "uBOLite:uBOLite" get_token.py
 
       - name: Copy get_token for Go embed
         run: |
           mkdir -p backend/bin
-          cp helper/get_token backend/bin/get_token
+          cp helper/dist/get_token backend/bin/get_token
 
       - name: Setup Go
         uses: actions/setup-go@v5

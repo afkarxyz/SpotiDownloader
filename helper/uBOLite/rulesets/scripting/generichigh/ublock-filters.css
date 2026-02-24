@@ -1,0 +1,105 @@
+/*******************************************************************************
+
+    uBlock Origin Lite - a comprehensive, MV3-compliant content blocker
+    Copyright (C) 2014-present Raymond Hill
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see {http://www.gnu.org/licenses/}.
+
+    Home: https://github.com/gorhill/uBlock
+*/
+
+/* ublock-filters */
+
+*:not(body) > a[href^="https://07c225f3.online/"],
+*:not(body) > a[href^="https://content-loader.com/"],
+*:not(body) > a[href^="https://html-load.com/"],
+[class^="div-gpt-ad"]:not([style^="width: 1px; height: 1px; position: absolute; left: -10000px; top: -"]),
+[data-ad-manager-id]:not([style$="left: -10000px !important; top: -1000px !important;"]):not(.adsbygoogle),
+[data-ad-module]:not([style$="left: -10000px !important; top: -1000px !important;"]):not(.adsbygoogle),
+[data-ad-width]:not([style$="left: -10000px !important; top: -1000px !important;"]):not(.adsbygoogle),
+[data-lnguri*="vipbox"],
+[data-lnguri^="https://s3.amazonaws.com"],
+[data-uri^="https://s3.amazonaws.com"],
+[href*="/afu.php"],
+[href*="passtechusa.com"],
+[href*="uselnk.com/"],
+[href="//xxxrevpushclcdu.com/app.webp"],
+[href="https://clickaine.com"],
+[href="https://t.me/Russia_Vs_Ukraine_War3"],
+[href^="//cadsecs.com/"],
+[href^="//look.utndln.com/offer"],
+[href^="//mellowads.com/"],
+[href^="//producebreed.com/"],
+[href^="//taghaugh.com/"],
+[href^="http://referrer.website/"],
+[href^="https://adult.xyz/"],
+[href^="https://exi8ef83z9.com/"],
+[href^="https://fireads.online/"],
+[href^="https://go.rdrjmp.com/"],
+[href^="https://go.smljmp.com/"],
+[href^="https://join.enjoyx.com/track/"],
+[href^="https://klsdee.com/"],
+[href^="https://pl.allsports4free.club/"],
+[href^="https://pl.allsports4u.club/"],
+[href^="https://popcash.net/"],
+[href^="https://t.mobtyb.com/"],
+[href^="https://track.wg-aff.com/click"],
+[href^="https://wap4dollar.com/ad/nonadult/serve.php"],
+[href^="https://www.onclickperformance.com/"],
+[href^="https://www.safestcontentgate.com/"],
+[id^="div-gpt-ad"]:not([style^="width: 1px; height: 1px; position: absolute; left: -10000px; top: -"]):not([style="pointer-events: none; height: 1px; width: 0px; opacity: 0; visibility: hidden; position: fixed; bottom: 0px;"]),
+[src^="//dombnrs.com/"],
+a[dontfo=""][style$="position: absolute; z-index: 2147483647;"],
+a[href*=".click/?z="][href*="&n"],
+a[href*="/go.php?a_aid="],
+a[href^="http://www.poweredbyliquidfire.mobi/"],
+a[href^="https://go.awdeliverynet.com/"],
+a[href^="https://syndication.exdynsrv.com/splash.php"],
+a[href^="https://track.cam4tracking.com/"],
+a[id][href="https://chpadblock.com/"][rel^="noopener noreferrer"],
+a[id][href="https://hamrocsit.com"][rel^="noopener noreferrer"],
+a[id][href="https://toolkitspro.com"][rel^="noopener noreferrer"],
+a[onclick="openAuc();"],
+amp-img[height="   120"],
+amp-img[width="   300"],
+amp-img[width="   336"],
+body > div[style$="z-index: 2147483647; top: 0px; left: 0px; position: fixed; display: block;"],
+div[class$="player-promo-col"],
+div[id][style^="position: fixed; inset: 0px; z-index: 2147483647; background: black"][style*="opacity: 0.01"],
+div[id^="div-gpt-"]:not([style^="width: 1px; height: 1px; position: absolute; left: -10000px; top: -"]):not([style="pointer-events: none; height: 1px; width: 0px; opacity: 0; visibility: hidden; position: fixed; bottom: 0px;"]),
+div[id^="img_"][data-google-query-id],
+div[id^="img_"][style$="2147483647; justify-content: center;"],
+div[id^="img_"][style$="display: block;"],
+div[id^="img_"][style$="height: 90px;"],
+div[id^="img_"][style$="max-height:100px;background-color:rgba(128, 128, 128, 0.4);"],
+div[id^="img_"][style^="margin:0;padding:0;display:block;position:fixed;left:0;"],
+div[id^="img_"][style^="width: 100%;height: 90px;position: fixed;bottom: 0px;left: 0px;z-index:"],
+div[style="position: fixed; display: block; width: 100%; height: 100%; inset: 0px; background-color: rgba(0, 0, 0, 0); z-index: 300000;"],
+div[style="position: fixed; inset: 0px; z-index: 2147483647; pointer-events: auto;"],
+div[style="top: 0px; left: 0px; width: 1287px; height: 500px; position: fixed; z-index: 2147483647;"],
+div[style^="height:    250px; width:    300px;"],
+div[style^="position: fixed; inset: 0px; z-index: 2147483647; background: black; opacity: 0.01"],
+div[style^="position:fixed;inset:0px;z-index:2147483647;background:black;opacity:0.01"],
+div[style^="width:    160px; height:    600px; margin: 0px auto; min-width: 160px; min-height: 600px;"],
+div[style^="width:    300px; height:    250px;"],
+div[style^="z-index: 999999; background-image: url(\"data:image/gif;base64,"][style$="position: absolute;"],
+html[class^="img_"][amp4ads=""][i-amphtml-layout=""][i-amphtml-no-boilerplate=""][amp-version="2502032353000"],
+html[class^="img_"][amp4ads=""][i-amphtml-layout=""][i-amphtml-no-boilerplate=""][amp-version="2507172035000"],
+html[class^="img_"][amp4ads=""][i-amphtml-layout=""][i-amphtml-no-boilerplate=""][amp-version="2509031727000"],
+img[height="   250"][width="   300"],
+img[height="   90"][width="   728"],
+img[width="728"][height="90"],
+ins[style$="height:    90px; width:    728px;"] {
+    display: none !important;
+}

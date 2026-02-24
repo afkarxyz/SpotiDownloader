@@ -177,6 +177,7 @@ export function useDownload() {
             embed_lyrics: settings.embedLyrics,
             embed_max_quality_cover: settings.embedMaxQualityCover,
             item_id: itemID,
+            use_single_genre: settings.useSingleGenre,
         });
         if (!response.success && retryCount < 2) {
             const errorMsg = response.error?.toLowerCase() || "";
@@ -388,6 +389,7 @@ export function useDownload() {
                     embed_lyrics: settings.embedLyrics,
                     embed_max_quality_cover: settings.embedMaxQualityCover,
                     use_first_artist_only: settings.useFirstArtistOnly,
+                    use_single_genre: settings.useSingleGenre,
                 });
                 if (response.success) {
                     if (response.already_exists) {
@@ -609,6 +611,7 @@ export function useDownload() {
                     embed_lyrics: settings.embedLyrics,
                     embed_max_quality_cover: settings.embedMaxQualityCover,
                     use_first_artist_only: settings.useFirstArtistOnly,
+                    use_single_genre: settings.useSingleGenre,
                 });
                 if (response.success) {
                     if (response.already_exists) {

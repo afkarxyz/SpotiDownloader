@@ -1,0 +1,30 @@
+[
+{
+ "action": {
+  "redirect": {
+   "regexSubstitution": "/strictblock.html#\\0"
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "regexFilter": "^https?://.*",
+  "requestDomains": [
+   "adeumssp.com",
+   "ads.d21.media",
+   "cfs.uzone.id",
+   "cfs2.uzone.id",
+   "csf.uzone.id",
+   "investopedia.today",
+   "lolhello.com",
+   "macory.com",
+   "qprskl.com",
+   "u-ad.info"
+  ],
+  "resourceTypes": [
+   "main_frame"
+  ]
+ },
+ "id": 1,
+ "priority": 29
+}
+]

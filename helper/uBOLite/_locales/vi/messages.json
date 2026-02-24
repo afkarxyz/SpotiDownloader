@@ -1,0 +1,422 @@
+{
+  "extName": {
+    "message": "uBlock Origin Lite",
+    "description": "extension name."
+  },
+  "extShortDesc": {
+    "message": "Trình chặn nội dung không cần quyền. Chặn quảng cáo, trình theo dõi, công cụ khai thác tiền số và hơn thế nữa ngay sau khi cài đặt.",
+    "description": "this will be in the Chrome web store: must be 132 characters or less"
+  },
+  "perRulesetStats": {
+    "message": "{{ruleCount}} quy tắc, được chuyển đổi từ {{filterCount}} bộ lọc mạng",
+    "description": "Appears aside each filter list in the _3rd-party filters_ pane"
+  },
+  "dashboardName": {
+    "message": "uBO Lite — Bảng điều khiển",
+    "description": "English: uBO Lite — Dashboard"
+  },
+  "settingsPageName": {
+    "message": "Cài đặt",
+    "description": "appears as tab name in dashboard"
+  },
+  "customFiltersPageName": {
+    "message": "Bộ lọc tự tạo",
+    "description": "appears as tab name in dashboard"
+  },
+  "developPageName": {
+    "message": "Phát triển",
+    "description": "appears as tab name in dashboard. Inspired from 'Develop' menu in Safari, see https://developer.apple.com/documentation/safari-developer-tools/develop-menu"
+  },
+  "aboutPageName": {
+    "message": "Giới thiệu",
+    "description": "appears as tab name in dashboard"
+  },
+  "aboutPrivacyPolicy": {
+    "message": "Chính sách bảo mật",
+    "description": "Link to privacy policy on GitHub (English)"
+  },
+  "popupFilteringModeLabel": {
+    "message": "chế độ lọc",
+    "description": "Label in the popup panel for the current filtering mode"
+  },
+  "popupLocalToolsLabel": {
+    "message": "Trên trang web này",
+    "description": "Label in the popup panel for the local tools section"
+  },
+  "popupTipReport": {
+    "message": "Báo cáo lỗi trên trang này",
+    "description": "Tooltip used for the 'chat' icon in the panel"
+  },
+  "popupTipDashboard": {
+    "message": "Mở bảng điều khiển",
+    "description": "English: Click to open the dashboard"
+  },
+  "popupMoreButton": {
+    "message": "Mở rộng",
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton": {
+    "message": "Thu gọn",
+    "description": "Label to be used to hide popup panel sections"
+  },
+  "3pGroupDefault": {
+    "message": "Mặc định",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupAds": {
+    "message": "Quảng cáo",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupPrivacy": {
+    "message": "Bảo mật",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupMalware": {
+    "message": "Bảo vệ phần mềm độc hại, bảo mật",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupAnnoyances": {
+    "message": "Phiền toái",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupMisc": {
+    "message": "Khác",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupRegions": {
+    "message": "Khu vực, ngôn ngữ",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "customFiltersImportExportLabel": {
+    "message": "Nhập / Xuất",
+    "description": "Text label heading the import/export area of custom filters"
+  },
+  "customFiltersImportTextareaPlaceholder": {
+    "message": "Dán vào đây các bộ lọc cụ thể",
+    "description": "Placeholder text which describes the purpose of the textarea widget"
+  },
+  "aboutChangelog": {
+    "message": "Nhật ký thay đổi",
+    "description": ""
+  },
+  "aboutCode": {
+    "message": "Mã nguồn (GPLv3)",
+    "description": "English: Source code (GPLv3)"
+  },
+  "aboutContributors": {
+    "message": "Người đóng góp",
+    "description": "English: Contributors"
+  },
+  "aboutSourceCode": {
+    "message": "Mã nguồn",
+    "description": "Link text to source code repo"
+  },
+  "aboutTranslations": {
+    "message": "Bản dịch",
+    "description": "Link text to translations repo"
+  },
+  "aboutFilterLists": {
+    "message": "Danh sách bộ lọc",
+    "description": "Link text to uBO's own filter lists repo"
+  },
+  "aboutDependencies": {
+    "message": "Các phụ thuộc bên ngoài (tương thích GPLv3):",
+    "description": "Shown in the About pane"
+  },
+  "supportS6H": {
+    "message": "Báo cáo lỗi bộ lọc cụ thể",
+    "description": "Header of 'Report a filter issue' section in Support pane"
+  },
+  "supportS3P1": {
+    "message": "Báo cáo các vấn đề về bộ lọc với các trang web cụ thể cho trình theo dõi vấn đề <span data-url=\"https://github.com/uBlockOrigin/uAssets/issues?q=is%3Aissue\"><code>uBlockOrigin/uAssets</code> xử lý</span>. <u>Cần có tài khoản GitHub.</u>",
+    "description": "First paragraph of 'Filter issues' section in Support pane"
+  },
+  "supportS5H": {
+    "message": "Thông tin chẩn đoán lỗi",
+    "description": "Label of 'Troubleshooting information' section in 'Report a filter issue' page"
+  },
+  "supportS6P1S1": {
+    "message": "Để tránh tạo thêm gánh nặng cho các tình nguyện viên, hãy chắc chắn rằng chưa từng có vấn đề tương tự được báo cáo.",
+    "description": "A paragraph in the filter issue reporter section"
+  },
+  "supportFindSpecificButton": {
+    "message": "Tìm các báo cáo tương tự",
+    "description": "A clickable link in the filter issue reporter section"
+  },
+  "supportS6URL": {
+    "message": "Địa chỉ của trang web:",
+    "description": "Label for the URL of the page"
+  },
+  "supportS6Select1": {
+    "message": "Trang web…",
+    "description": "Label for widget to select type of issue"
+  },
+  "supportS6Select1Option0": {
+    "message": "-- Chọn một mục --",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option1": {
+    "message": "Hiện quảng cáo hoặc vùng chứa quảng cáo",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option2": {
+    "message": "Có lớp phủ hoặc những phiền toái khác",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option3": {
+    "message": "Phát hiện uBO Lite",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option4": {
+    "message": "Có các cấn đề về quyền riêng tư",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option5": {
+    "message": "Trục trặc khi bật uBO Lite",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option6": {
+    "message": "Xuất hiện các tab và cửa sổ ngoài mong muốn",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option7": {
+    "message": "Dẫn đến phần mềm độc hại, lừa đảo",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Checkbox1": {
+    "message": "Đánh dấu trang web là “NSFW” (<a href=\"https://wikipedia.org/wiki/Not_safe_for_work\">“Không an toàn cho công việc”</a>)",
+    "description": "A checkbox to use for NSFW sites"
+  },
+  "supportReportSpecificButton": {
+    "message": "Tạo báo cáo mới",
+    "description": "Text for button which opens an external web page in Support pane"
+  },
+  "defaultFilteringModeSectionLabel": {
+    "message": "Chế độ bộ lọc mặc định",
+    "description": "The header text for the default filtering mode section"
+  },
+  "defaultFilteringModeDescription": {
+    "message": "Chế độ lọc mặc định sẽ ghi đè các chế độ bộ lọc trên mỗi trang web. Bạn có thể điều chỉnh chế độ lọc trên bất kỳ trang web nào và theo bất kỳ chế độ nào hoạt động tốt nhất trên trang web đó. Mỗi chế độ đều có ưu điểm và nhược điểm riêng.",
+    "description": "This describes the default filtering mode setting"
+  },
+  "filteringMode0Name": {
+    "message": "Không có bộ lọc",
+    "description": "Name of blocking mode 0"
+  },
+  "filteringMode1Name": {
+    "message": "Cơ bản",
+    "description": "Name of blocking mode 1"
+  },
+  "filteringMode2Name": {
+    "message": "tối ưu",
+    "description": "Name of blocking mode 2"
+  },
+  "filteringMode3Name": {
+    "message": "Hoàn toàn",
+    "description": "Name of blocking mode 3"
+  },
+  "basicFilteringModeDescription": {
+    "message": "Chế độ lọc mạng cơ bản từ các danh sách bộ lọc đã chọn.\n\nKhông yêu cầu quyền về đọc và thay đổi dữ liệu trên các trang web.\n",
+    "description": "This describes the 'basic' filtering mode"
+  },
+  "optimalFilteringModeDescription": {
+    "message": "Lọc mạng với mức nâng cao cộng với lọc mở rộng cụ thể từ danh sách bộ lọc đã chọn.\n\nYêu cầu cấp quyền để đọc và thay đổi dữ liệu trên tất cả các trang web.",
+    "description": "This describes the 'optimal' filtering mode"
+  },
+  "completeFilteringModeDescription": {
+    "message": "Lọc mạng với chế độ nâng cao cộng với lọc mở rộng cụ thể và chung chung từ danh sách bộ lọc đã chọn.\n\nYêu cầu cấp quyền để đọc và thay đổi dữ liệu trên tất cả các trang web.\n\nVới chế độ lọc chung có thể gây ra tốn tài nguyên trang web cao hơn.",
+    "description": "This describes the 'complete' filtering mode"
+  },
+  "noFilteringModeDescription": {
+    "message": "Danh sách tên máy chủ sẽ không được lọc",
+    "description": "A short description for the editable field which lists trusted sites"
+  },
+  "noFilteringModePlaceholder": {
+    "message": "[hostnames only]\nexample.com\ngames.example",
+    "description": "Default text for in edit field"
+  },
+  "behaviorSectionLabel": {
+    "message": "Hành vi",
+    "description": "The header text for the 'Behavior' section"
+  },
+  "autoReloadLabel": {
+    "message": "Tự động tải lại trang khi thay đổi chế độ bộ lọc",
+    "description": "Label for a checkbox in the options page"
+  },
+  "showBlockedCountLabel": {
+    "message": "Hiện số lượng yêu cầu bị chặn trên biểu tượng thanh công cụ",
+    "description": "Label for a checkbox in the options page"
+  },
+  "enableStrictBlockLabel": {
+    "message": "Bật chặn nghiêm ngặt",
+    "description": "Label for a checkbox in the options page"
+  },
+  "enableStrictBlockLegend": {
+    "message": "Việc điều hướng đến các trang web có khả năng không mong muốn sẽ bị chặn và bạn sẽ được cung cấp tùy chọn để tiếp tục.",
+    "description": "Short description for a checkbox in the options page"
+  },
+  "developerModeLabel": {
+    "message": "Chế độ nhà phát triển",
+    "description": "Label for a checkbox in the options page"
+  },
+  "developerModeLegend": {
+    "message": "Cho phép truy cập các tính năng dành cho người dùng nâng cao",
+    "description": "Short description for a checkbox in the options page"
+  },
+  "settingsBackupRestoreLabel": {
+    "message": "Sao lưu",
+    "description": "The header text for the back up/restore section"
+  },
+  "settingsBackupRestoreSummary": {
+    "message": "Sao lưu cài đặt tùy chỉnh của bạn vào một tệp hoặc khôi phục cài đặt tùy chỉnh từ một tệp.",
+    "description": "A summary description of the back up/restore section."
+  },
+  "settingsBackupRestoreLegend": {
+    "message": "Khôi phục sẽ ghi đè lên những tùy chọn hiện tại của bạn.",
+    "description": "Important information about the back up/restore section."
+  },
+  "findListsPlaceholder": {
+    "message": "Tìm danh sách",
+    "description": "Placeholder for the input field used to find lists"
+  },
+  "strictblockTitle": {
+    "message": "Trang bị chặn",
+    "description": "Web page title for the strict-blocked page"
+  },
+  "strictblockSentence1": {
+    "message": "uBO Lite đã ngăn tải trang sau:",
+    "description": "Sentence used in the strict-blocked page"
+  },
+  "strictblockReasonSentence1": {
+    "message": "Trang này đã bị chặn vì bộ lọc phù hợp trong {{listname}}.",
+    "description": "Text informing about what is causing the page to be blocked"
+  },
+  "strictblockRedirectSentence1": {
+    "message": "Trang đã chặn muốn chuyển hướng sang trang khác. Nếu đồng ý, bạn sẽ được chuyển hướng sang {{url}}",
+    "description": "Text warning about an incoming redirect"
+  },
+  "strictblockNoParamsPrompt": {
+    "message": "không có thông số",
+    "description": "Label to be used for the parameter-less URL"
+  },
+  "strictblockBack": {
+    "message": "Quay lại",
+    "description": "A button to go back to the previous web page"
+  },
+  "strictblockClose": {
+    "message": "Đóng cửa sổ này",
+    "description": "A button to close the current tab"
+  },
+  "strictblockDontWarn": {
+    "message": "Đừng cảnh báo lại cho tôi về trang web này",
+    "description": "Label for checkbox in document-blocked page"
+  },
+  "strictblockProceed": {
+    "message": "Tiến hành",
+    "description": "A button to navigate to the blocked page"
+  },
+  "zapperTipEnter": {
+    "message": "Chuyển sang chế độ chặn phần tử tạm thời",
+    "description": "Tooltip for the button used to enter zapper mode"
+  },
+  "zapperTipQuit": {
+    "message": "Thoát khỏi chế độ chặn phần tử tạm thời",
+    "description": "Tooltip for the button used to exit zapper mode"
+  },
+  "pickerTipEnter": {
+    "message": "Tạo một bộ lọc tùy chỉnh",
+    "description": "Label for the menu entry to create cosmetic filters"
+  },
+  "unpickerTipEnter": {
+    "message": "Xóa một bộ lọc tuỳ chỉnh",
+    "description": "Label for the menu entry to delete cosmetic filters"
+  },
+  "developDropdownLabel": {
+    "message": "Xem:",
+    "description": "A label of a dropdown list"
+  },
+  "developOptionFilteringModeDetails": {
+    "message": "Chi tiết chế độ chặn",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionCustomDnrRules": {
+    "message": "Quy tắc DRN tùy chỉnh",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionDnrRulesOf": {
+    "message": "Quy tắc DRN cho ...",
+    "description": "A section header in a dropdown list"
+  },
+  "developOptionDynamicRuleset": {
+    "message": "Danh sách quy tắc động",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionSessionRuleset": {
+    "message": "Danh sách quy tắc phiên",
+    "description": "An option in a dropdown list"
+  },
+  "saveButton": {
+    "message": "Lưu",
+    "description": "Text for buttons used to save changes"
+  },
+  "revertButton": {
+    "message": "Đặt lại",
+    "description": "Text for buttons used to revert changes"
+  },
+  "addButton": {
+    "message": "Thêm",
+    "description": "Text for buttons used to add content"
+  },
+  "importAndAppendButton": {
+    "message": "Nhập và thêm vào",
+    "description": "Text for buttons used to import and append content"
+  },
+  "exportButton": {
+    "message": "Xuất…",
+    "description": "Text for buttons used to export content"
+  },
+  "backupButton": {
+    "message": "Sao lưu…",
+    "description": "Text for buttons used to back up content"
+  },
+  "restoreButton": {
+    "message": "Khôi phục…",
+    "description": "Text for buttons used to restore content"
+  },
+  "resetToDefaultButton": {
+    "message": "Đặt lại về cài đặt mặc định…",
+    "description": "Text for buttons used to reset configurations to default"
+  },
+  "resetToDefaultConfirm": {
+    "message": "Tất cả cài đặt tùy chỉnh của bạn sẽ bị xóa. Bạn có thực sự muốn đặt lại về cài đặt mặc định không?",
+    "description": "Message asking user to confirm reset to default settings"
+  },
+  "dnrRulesWarning": {
+    "message": "Không thêm các bộ lọc từ các nguồn không đáng tin cậy",
+    "description": "Short description of the DNR rules editor pane"
+  },
+  "dnrRulesCountInfo": {
+    "message": "Số quy tắc đã đăng ký: {count}",
+    "description": "Short sentence to report the number of currently registered DNR rules"
+  },
+  "pickerSliderLabel": {
+    "message": "Di chuyển thanh trượt để chọn kết quả phù hợp nhất",
+    "description": "Label to describe the purpose of the slider"
+  },
+  "pickerPick": {
+    "message": "Chọn",
+    "description": "Text for the button to re-enter element-picking mode"
+  },
+  "pickerPreview": {
+    "message": "Xem trước",
+    "description": "Text for the button to activate preview mode"
+  },
+  "pickerCreate": {
+    "message": "Tạo",
+    "description": "Text for the button to create the filter"
+  },
+  "unpickerUsage": {
+    "message": "Chọn một bộ lọc bên dưới để đánh dấu các phần tử phù hợp trong trang web. Nhấp vào thùng rác để xóa bộ lọc.",
+    "description": "Summary description on how to use the tool to remove custom filters"
+  }
+}

@@ -30,6 +30,7 @@ export interface Settings {
     createPlaylistFolder: boolean;
     createM3u8File: boolean;
     useFirstArtistOnly: boolean;
+    useSingleGenre: boolean;
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -108,7 +109,8 @@ export const DEFAULT_SETTINGS: Settings = {
     spotFetchAPIUrl: "https://spotify.afkarxyz.fun/api",
     createPlaylistFolder: true,
     createM3u8File: false,
-    useFirstArtistOnly: false
+    useFirstArtistOnly: false,
+    useSingleGenre: false
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
@@ -262,6 +264,9 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('useFirstArtistOnly' in parsed)) {
                 parsed.useFirstArtistOnly = false;
+            }
+            if (!('useSingleGenre' in parsed)) {
+                parsed.useSingleGenre = false;
             }
             parsed.operatingSystem = detectOS();
             cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };

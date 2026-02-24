@@ -1,0 +1,50 @@
+/*******************************************************************************
+
+    uBlock Origin Lite - a comprehensive, MV3-compliant content blocker
+    Copyright (C) 2014-present Raymond Hill
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see {http://www.gnu.org/licenses/}.
+
+    Home: https://github.com/gorhill/uBlock
+*/
+
+/* fra-0 */
+
+[class*="-ad-placeholder-"],
+[data-ad-position],
+[data-ad-text],
+[id^="adswidget"],
+[id^="dfp_ban_"],
+[id^="dfp_banner"],
+a[href*=".ajrkm3.com/"],
+a[href*=".antfa.link/"],
+a[href*=".antj.link/"],
+a[href*=".atimaze.com/"],
+a[href*=".digital2cloud.com/?"],
+a[href*=".irtyd.com/"],
+a[href*=".slext2.com/"],
+a[href*="/aff_c?offer_id="] > img,
+a[href*="/afu.php?"],
+a[href*="/www/delivery/"],
+a[href*="?bz=160*600"] > img[src*=".alicdn.com/"],
+a[href*="?bz=300*250"] > img[src*=".alicdn.com/"],
+a[href*="?bz=725*90"] > img[src*=".alicdn.com/"],
+a[href^="https://cosmicfundboost.com/trck/"],
+a[href^="https://pornworks.com/fr/undress/image?utm_source="],
+div[data-ad],
+div[data-iab-tag],
+iframe[style="border: 0; width: 728px; height: 110px;"],
+iframe[style="border: 0; width: 970px; height: 110px;"] {
+    display: none !important;
+}

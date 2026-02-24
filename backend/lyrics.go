@@ -38,6 +38,17 @@ type LyricsResponse struct {
 	Lines    []LyricsLine `json:"lines"`
 }
 
+type SpotifyLyricsLine struct {
+	TimeTag string `json:"timeTag"`
+	Words   string `json:"words"`
+}
+
+type SpotifyLyricsAPIResponse struct {
+	Error    bool                `json:"error"`
+	SyncType string              `json:"syncType"`
+	Lines    []SpotifyLyricsLine `json:"lines"`
+}
+
 type LyricsDownloadRequest struct {
 	SpotifyID           string `json:"spotify_id"`
 	TrackName           string `json:"track_name"`
@@ -212,6 +223,61 @@ func (c *LyricsClient) FetchLyricsFromLRCLibSearch(trackName, artistName string)
 	return c.convertLRCLibToLyricsResponse(best), nil
 }
 
+func (c *LyricsClient) FetchLyricsFromSpotifyAPI(spotifyID string) (*LyricsResponse, error) {
+	if spotifyID == "" {
+		return nil, fmt.Errorf("spotify ID is empty")
+	}
+
+	apiURL := fmt.Sprintf("https://spotify-lyrics-api-pi.vercel.app/?trackid=%s&format=lrc", spotifyID)
+
+	resp, err := c.httpClient.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from Spotify Lyrics API: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("Spotify Lyrics API returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Spotify Lyrics API response: %v", err)
+	}
+
+	var apiResp SpotifyLyricsAPIResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, fmt.Errorf("failed to parse Spotify Lyrics API response: %v", err)
+	}
+
+	if apiResp.Error {
+		return nil, fmt.Errorf("Spotify Lyrics API returned error")
+	}
+
+	result := &LyricsResponse{
+		Error:    false,
+		SyncType: apiResp.SyncType,
+		Lines:    []LyricsLine{},
+	}
+
+	for _, line := range apiResp.Lines {
+		if line.TimeTag == "" && line.Words == "" {
+			continue
+		}
+		ms := lrcTimestampToMs(line.TimeTag)
+		result.Lines = append(result.Lines, LyricsLine{
+			StartTimeMs: fmt.Sprintf("%d", ms),
+			Words:       line.Words,
+		})
+	}
+
+	if len(result.Lines) == 0 {
+		return nil, fmt.Errorf("Spotify Lyrics API returned empty lines")
+	}
+
+	return result, nil
+}
+
 func simplifyTrackName(name string) string {
 
 	if idx := strings.Index(name, "("); idx > 0 {
@@ -226,7 +292,13 @@ func simplifyTrackName(name string) string {
 
 func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName string, duration int) (*LyricsResponse, string, error) {
 
-	resp, err := c.FetchLyricsWithMetadata(trackName, artistName, duration)
+	resp, err := c.FetchLyricsFromSpotifyAPI(spotifyID)
+	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
+		return resp, "Spotify", nil
+	}
+	fmt.Printf("   Spotify Lyrics API: %v\n", err)
+
+	resp, err = c.FetchLyricsWithMetadata(trackName, artistName, duration)
 	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
 		return resp, "LRCLIB", nil
 	}

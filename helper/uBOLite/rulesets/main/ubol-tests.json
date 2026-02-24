@@ -1,0 +1,134 @@
+[
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "urlFilter": "/bnf3."
+ },
+ "id": 1,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "requestDomains": [
+   "localhost",
+   "ublockorigin.github.io"
+  ],
+  "resourceTypes": [
+   "image"
+  ],
+  "urlFilter": "/bnf2."
+ },
+ "id": 2,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "requestDomains": [
+   "localhost",
+   "ublockorigin.github.io"
+  ],
+  "resourceTypes": [
+   "script"
+  ],
+  "urlFilter": "/bnf1."
+ },
+ "id": 3,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "requestDomains": [
+   "localhost",
+   "ublockorigin.github.io"
+  ],
+  "resourceTypes": [
+   "script"
+  ],
+  "urlFilter": "/bnf5.js^"
+ },
+ "id": 4,
+ "priority": 10
+},
+{
+ "action": {
+  "redirect": {
+   "extensionPath": "/web_accessible_resources/32x32.png"
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "initiatorDomains": [
+   "localhost",
+   "ublockorigin.github.io"
+  ],
+  "resourceTypes": [
+   "image"
+  ],
+  "urlFilter": "/anf1."
+ },
+ "id": 5,
+ "priority": 11
+},
+{
+ "action": {
+  "responseHeaders": [
+   {
+    "header": "content-security-policy",
+    "operation": "append",
+    "value": "script-src 'none'"
+   }
+  ],
+  "type": "modifyHeaders"
+ },
+ "condition": {
+  "requestDomains": [
+   "localhost",
+   "ublockorigin.github.io"
+  ],
+  "resourceTypes": [
+   "sub_frame"
+  ],
+  "urlFilter": "/anf2.html"
+ },
+ "id": 6
+},
+{
+ "action": {
+  "redirect": {
+   "transform": {
+    "queryTransform": {
+     "removeParams": [
+      "b"
+     ]
+    }
+   }
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "requestDomains": [
+   "localhost",
+   "ublockorigin.github.io"
+  ],
+  "resourceTypes": [
+   "image",
+   "main_frame",
+   "sub_frame",
+   "xmlhttprequest"
+  ],
+  "urlFilter": "/anf3.html"
+ },
+ "id": 7
+}
+]

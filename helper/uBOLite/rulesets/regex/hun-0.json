@@ -1,0 +1,21 @@
+[
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "initiatorDomains": [
+   "hardverapro.hu",
+   "logout.hu",
+   "mobilarena.hu",
+   "prohardver.hu"
+  ],
+  "regexFilter": "dl\\/cnt\\/20[^0]\\d-\\d{2}\\/\\d{4}\\/",
+  "resourceTypes": [
+   "image"
+  ]
+ },
+ "id": 1,
+ "priority": 10
+}
+]

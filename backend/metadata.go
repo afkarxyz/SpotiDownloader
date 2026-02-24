@@ -32,6 +32,7 @@ type Metadata struct {
 	Lyrics      string
 	Description string
 	ISRC        string
+	Genre       string
 }
 
 func EmbedMetadata(filePath string, metadata Metadata, coverPath string) error {
@@ -106,6 +107,10 @@ func embedFlacMetadata(filePath string, metadata Metadata, coverPath string) err
 
 	if metadata.ISRC != "" {
 		_ = cmt.Add("ISRC", metadata.ISRC)
+	}
+
+	if metadata.Genre != "" {
+		_ = cmt.Add("GENRE", metadata.Genre)
 	}
 
 	cmtBlock := cmt.Marshal()
@@ -200,6 +205,10 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 
 	if metadata.ISRC != "" {
 		tag.AddTextFrame("TSRC", tag.DefaultEncoding(), metadata.ISRC)
+	}
+
+	if metadata.Genre != "" {
+		tag.AddTextFrame("TCON", tag.DefaultEncoding(), metadata.Genre)
 	}
 
 	if err := tag.Save(); err != nil {

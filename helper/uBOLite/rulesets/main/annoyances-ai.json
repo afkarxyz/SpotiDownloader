@@ -1,0 +1,47 @@
+[
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "urlFilter": "||mfgpt.milanofinanza.it/widget/widget.js"
+ },
+ "id": 1,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "domainType": "thirdParty",
+  "requestDomains": [
+   "askmiso.com",
+   "cdn.gist.ai",
+   "widget.kapa.ai"
+  ]
+ },
+ "id": 2,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "urlFilter": "||asus-brand-assistant.asus.com/brand-assistant.js"
+ },
+ "id": 3,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "urlFilter": "||embed.chatnode.ai^"
+ },
+ "id": 4,
+ "priority": 10
+}
+]

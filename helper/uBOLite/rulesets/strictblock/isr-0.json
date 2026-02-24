@@ -1,0 +1,52 @@
+[
+{
+ "action": {
+  "redirect": {
+   "regexSubstitution": "/strictblock.html#\\0"
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "regexFilter": "^https?://.*",
+  "requestDomains": [
+   "213.8.137.51",
+   "a.walla.co.il",
+   "ads.one.co.il",
+   "adserv.mako.co.il",
+   "atardrushim.com",
+   "avoda-mehabait.co.il",
+   "banners.news1.co.il",
+   "exposeboxwallashops.blob.core.windows.net",
+   "hasdarot.club",
+   "hasdarot.com",
+   "hasdarot.info",
+   "hasdarot.life",
+   "hasdarot.live",
+   "hasdarot.net",
+   "hasdarot.tv",
+   "hasdarot.vip",
+   "hasdarot.xyz",
+   "isdarot.com",
+   "israeljobstoday.com",
+   "losittooday.info",
+   "pinukim.net",
+   "play.milly-style.co.il",
+   "plushome.co.il",
+   "sdarot-il.org",
+   "sdarot-tv.org",
+   "sdarot.cc",
+   "sdc.mako.co.il",
+   "seret.live",
+   "storyshop.co.il",
+   "totalmedia2.ynet.co.il",
+   "tvfeel.cc",
+   "wrtm.walla.co.il"
+  ],
+  "resourceTypes": [
+   "main_frame"
+  ]
+ },
+ "id": 1,
+ "priority": 29
+}
+]

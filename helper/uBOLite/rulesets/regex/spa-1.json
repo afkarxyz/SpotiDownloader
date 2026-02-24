@@ -1,0 +1,79 @@
+[
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "initiatorDomains": [
+   "loskatchorros.com.br"
+  ],
+  "regexFilter": "loskatchorros\\.com\\.br\\/forum\\/uploads\\/set_resources_\\d+\\/[a-z0-9]+_[a-zA-Z0-9]+\\.js"
+ },
+ "id": 1,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "initiatorDomains": [
+   "zubby.com"
+  ],
+  "regexFilter": "zubby.com\\/[a-z-]+-\\d+\\/\\?_=",
+  "resourceTypes": [
+   "script"
+  ]
+ },
+ "id": 3,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "initiatorDomains": [
+   "ddmix.net"
+  ],
+  "regexFilter": "^https:\\/\\/(ddmix.net)\\/[a-z0-9_]*\\.js",
+  "resourceTypes": [
+   "script"
+  ]
+ },
+ "id": 4,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "initiatorDomains": [
+   "ddmix.net"
+  ],
+  "regexFilter": "^https:\\/\\/(ddmix.net)\\/js\\/[a-z0-9_]*\\.js",
+  "resourceTypes": [
+   "script"
+  ]
+ },
+ "id": 5,
+ "priority": 10
+},
+{
+ "action": {
+  "type": "block"
+ },
+ "condition": {
+  "initiatorDomains": [
+   "hunterscomics.com"
+  ],
+  "regexFilter": "^https:\\/\\/hunterscomics\\.com\\/wp-content\\/themes(\\/[a-f]{6}){2}\\.js\\?ver=",
+  "resourceTypes": [
+   "script"
+  ]
+ },
+ "id": 6,
+ "priority": 10
+}
+]

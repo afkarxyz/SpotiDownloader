@@ -1,0 +1,104 @@
+[
+{
+ "action": {
+  "redirect": {
+   "regexSubstitution": "/strictblock.html#\\0"
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "regexFilter": "^https?://.*",
+  "requestDomains": [
+   "analytics-smhise.smhi.se",
+   "analytics.alandpost.com",
+   "analytics.citreamedia.com",
+   "analytics.gen.shield.monitoringservice.co",
+   "analytics.teknikveckan.se",
+   "analytics.undeco.se",
+   "annons.dagen.se",
+   "api-sa.rikatillsammans.se",
+   "app-statistics.puzzel.com",
+   "aservice.tools",
+   "assets.zubitracker.io",
+   "borsvarlden-banners.azurewebsites.net",
+   "brandy.bonniernewslifestyle.se",
+   "bvads.bovision.se",
+   "cdn.stroeerdigitalgroup.de",
+   "cmp.radioplay.se",
+   "collect.breakit.se",
+   "consent.podplay.com",
+   "creativeconsortiuminspired.com",
+   "didomi.nwtmedia.se",
+   "engine.groweo.com",
+   "es.loppi.se",
+   "gtm.findroommate.dk",
+   "hasher.schibsted.com",
+   "images-ads.aland.com",
+   "imp.laget.se",
+   "ingest.analytics.nation.dev",
+   "insights.hemnet.se",
+   "insights.tv4.a2d.tv",
+   "js.evtr.nordiskemedier.dk",
+   "lanapengar.expressen.se",
+   "logger.tv.nu",
+   "m1.analytics.sitevision-cloud.se",
+   "mediaserver.gvcaffiliates.com.cdn.cloudflare.net",
+   "newstats.blogg.se",
+   "owa.agriprim.se",
+   "pcf.tdscd.com",
+   "pixel.playbuzz.com",
+   "plowking.mecenat.com",
+   "pm.azerioncircle.com",
+   "prylguiden.expressen.se",
+   "r1.ddlnk.net",
+   "se-affiliate-gallery.aws.aller.com",
+   "smartstats.kla.tv",
+   "spcmp.woxikon.se",
+   "spelguiden.samnytt.se",
+   "stats.allabolag.se",
+   "stats.blogg.se",
+   "stats.docu.info",
+   "stats.helsingborg.se",
+   "stats.jibber.social",
+   "stats.poddtoppen.se",
+   "stm.eniro.se",
+   "stp.gaffa.se",
+   "t.atmng.io",
+   "t.fastcmp.com",
+   "telemetry.bambuser.io",
+   "tracing.yelp.com",
+   "track.intersport.se",
+   "track.yetric.net",
+   "tracking.fasab6f.se",
+   "tvm-tv4-freewheel.akamaized.net",
+   "ues.vk.se",
+   "um.merinfo.se",
+   "umami.nordiskehandel.cloud",
+   "views.sociablekit.com",
+   "wb-analytics.onecruiter.com",
+   "webstat.abf.se"
+  ],
+  "resourceTypes": [
+   "main_frame"
+  ]
+ },
+ "id": 1,
+ "priority": 29
+},
+{
+ "action": {
+  "redirect": {
+   "regexSubstitution": "/strictblock.html#\\0"
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "regexFilter": "^[a-z-]+://(?:[^/?#]+\\.)?aftonbladet\\.se\\..*?\\..*",
+  "resourceTypes": [
+   "main_frame"
+  ]
+ },
+ "id": 2,
+ "priority": 29
+}
+]

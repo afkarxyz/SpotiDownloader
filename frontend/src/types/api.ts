@@ -133,6 +133,7 @@ export interface DownloadRequest {
     embed_max_quality_cover?: boolean;
     item_id?: string;
     use_first_artist_only?: boolean;
+    use_single_genre?: boolean;
 }
 export interface DownloadResponse {
     success: boolean;

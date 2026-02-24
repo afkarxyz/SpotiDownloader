@@ -8,10 +8,11 @@ import (
 	"os"
 
 	"path/filepath"
-	"spotidownloader/backend"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/afkarxyz/SpotiDownloader/backend"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -86,6 +87,7 @@ type DownloadRequest struct {
 	PlaylistName         string `json:"playlist_name,omitempty"`
 	PlaylistOwner        string `json:"playlist_owner,omitempty"`
 	UseFirstArtistOnly   bool   `json:"use_first_artist_only,omitempty"`
+	UseSingleGenre       bool   `json:"use_single_genre,omitempty"`
 }
 
 type DownloadResponse struct {
@@ -364,6 +366,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.PlaylistName,
 		req.PlaylistOwner,
 		req.UseFirstArtistOnly,
+		req.UseSingleGenre,
 	)
 
 	if err != nil {

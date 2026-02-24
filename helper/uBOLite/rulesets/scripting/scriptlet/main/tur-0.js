@@ -1,0 +1,2137 @@
+/*******************************************************************************
+
+    uBlock Origin Lite - a comprehensive, MV3-compliant content blocker
+    Copyright (C) 2014-present Raymond Hill
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see {http://www.gnu.org/licenses/}.
+
+    Home: https://github.com/gorhill/uBlock
+
+*/
+
+// ruleset: tur-0
+
+// Important!
+// Isolate from global scope
+
+// Start of local scope
+(function uBOL_scriptlets() {
+
+/******************************************************************************/
+
+class RangeParser {
+    constructor(s) {
+        this.not = s.charAt(0) === '!';
+        if ( this.not ) { s = s.slice(1); }
+        if ( s === '' ) { return; }
+        const pos = s.indexOf('-');
+        if ( pos !== 0 ) {
+            this.min = this.max = parseInt(s, 10) || 0;
+        }
+        if ( pos !== -1 ) {
+            this.max = parseInt(s.slice(pos + 1), 10) || Number.MAX_SAFE_INTEGER;
+        }
+    }
+    unbound() {
+        return this.min === undefined && this.max === undefined;
+    }
+    test(v) {
+        const n = Math.min(Math.max(Number(v) || 0, 0), Number.MAX_SAFE_INTEGER);
+        if ( this.min === this.max ) {
+            return (this.min === undefined || n === this.min) !== this.not;
+        }
+        if ( this.min === undefined ) {
+            return (n <= this.max) !== this.not;
+        }
+        if ( this.max === undefined ) {
+            return (n >= this.min) !== this.not;
+        }
+        return (n >= this.min && n <= this.max) !== this.not;
+    }
+}
+
+function abortCurrentScript(...args) {
+    runAtHtmlElementFn(( ) => {
+        abortCurrentScriptFn(...args);
+    });
+}
+
+function abortCurrentScriptFn(
+    target = '',
+    needle = '',
+    context = ''
+) {
+    if ( typeof target !== 'string' ) { return; }
+    if ( target === '' ) { return; }
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('abort-current-script', target, needle, context);
+    const reNeedle = safe.patternToRegex(needle);
+    const reContext = safe.patternToRegex(context);
+    const extraArgs = safe.getExtraArgs(Array.from(arguments), 3);
+    const thisScript = document.currentScript;
+    const chain = safe.String_split.call(target, '.');
+    let owner = window;
+    let prop;
+    for (;;) {
+        prop = chain.shift();
+        if ( chain.length === 0 ) { break; }
+        if ( prop in owner === false ) { break; }
+        owner = owner[prop];
+        if ( owner instanceof Object === false ) { return; }
+    }
+    let value;
+    let desc = Object.getOwnPropertyDescriptor(owner, prop);
+    if (
+        desc instanceof Object === false ||
+        desc.get instanceof Function === false
+    ) {
+        value = owner[prop];
+        desc = undefined;
+    }
+    const debug = shouldDebug(extraArgs);
+    const exceptionToken = getExceptionTokenFn();
+    const scriptTexts = new WeakMap();
+    const textContentGetter = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent').get;
+    const getScriptText = elem => {
+        let text = textContentGetter.call(elem);
+        if ( text.trim() !== '' ) { return text; }
+        if ( scriptTexts.has(elem) ) { return scriptTexts.get(elem); }
+        const [ , mime, content ] =
+            /^data:([^,]*),(.+)$/.exec(elem.src.trim()) ||
+            [ '', '', '' ];
+        try {
+            switch ( true ) {
+            case mime.endsWith(';base64'):
+                text = self.atob(content);
+                break;
+            default:
+                text = self.decodeURIComponent(content);
+                break;
+            }
+        } catch {
+        }
+        scriptTexts.set(elem, text);
+        return text;
+    };
+    const validate = ( ) => {
+        const e = document.currentScript;
+        if ( e instanceof HTMLScriptElement === false ) { return; }
+        if ( e === thisScript ) { return; }
+        if ( context !== '' && reContext.test(e.src) === false ) {
+            // eslint-disable-next-line no-debugger
+            if ( debug === 'nomatch' || debug === 'all' ) { debugger; }
+            return;
+        }
+        if ( safe.logLevel > 1 && context !== '' ) {
+            safe.uboLog(logPrefix, `Matched src\n${e.src}`);
+        }
+        const scriptText = getScriptText(e);
+        if ( reNeedle.test(scriptText) === false ) {
+            // eslint-disable-next-line no-debugger
+            if ( debug === 'nomatch' || debug === 'all' ) { debugger; }
+            return;
+        }
+        if ( safe.logLevel > 1 ) {
+            safe.uboLog(logPrefix, `Matched text\n${scriptText}`);
+        }
+        // eslint-disable-next-line no-debugger
+        if ( debug === 'match' || debug === 'all' ) { debugger; }
+        safe.uboLog(logPrefix, 'Aborted');
+        throw new ReferenceError(exceptionToken);
+    };
+    // eslint-disable-next-line no-debugger
+    if ( debug === 'install' ) { debugger; }
+    try {
+        Object.defineProperty(owner, prop, {
+            get: function() {
+                validate();
+                return desc instanceof Object
+                    ? desc.get.call(owner)
+                    : value;
+            },
+            set: function(a) {
+                validate();
+                if ( desc instanceof Object ) {
+                    desc.set.call(owner, a);
+                } else {
+                    value = a;
+                }
+            }
+        });
+    } catch(ex) {
+        safe.uboErr(logPrefix, `Error: ${ex}`);
+    }
+}
+
+function abortOnPropertyRead(
+    chain = ''
+) {
+    if ( typeof chain !== 'string' ) { return; }
+    if ( chain === '' ) { return; }
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('abort-on-property-read', chain);
+    const exceptionToken = getExceptionTokenFn();
+    const abort = function() {
+        safe.uboLog(logPrefix, 'Aborted');
+        throw new ReferenceError(exceptionToken);
+    };
+    const makeProxy = function(owner, chain) {
+        const pos = chain.indexOf('.');
+        if ( pos === -1 ) {
+            const desc = Object.getOwnPropertyDescriptor(owner, chain);
+            if ( !desc || desc.get !== abort ) {
+                Object.defineProperty(owner, chain, {
+                    get: abort,
+                    set: function(){}
+                });
+            }
+            return;
+        }
+        const prop = chain.slice(0, pos);
+        let v = owner[prop];
+        chain = chain.slice(pos + 1);
+        if ( v ) {
+            makeProxy(v, chain);
+            return;
+        }
+        const desc = Object.getOwnPropertyDescriptor(owner, prop);
+        if ( desc && desc.set !== undefined ) { return; }
+        Object.defineProperty(owner, prop, {
+            get: function() { return v; },
+            set: function(a) {
+                v = a;
+                if ( a instanceof Object ) {
+                    makeProxy(a, chain);
+                }
+            }
+        });
+    };
+    const owner = window;
+    makeProxy(owner, chain);
+}
+
+function abortOnPropertyWrite(
+    prop = ''
+) {
+    if ( typeof prop !== 'string' ) { return; }
+    if ( prop === '' ) { return; }
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('abort-on-property-write', prop);
+    const exceptionToken = getExceptionTokenFn();
+    let owner = window;
+    for (;;) {
+        const pos = prop.indexOf('.');
+        if ( pos === -1 ) { break; }
+        owner = owner[prop.slice(0, pos)];
+        if ( owner instanceof Object === false ) { return; }
+        prop = prop.slice(pos + 1);
+    }
+    delete owner[prop];
+    Object.defineProperty(owner, prop, {
+        set: function() {
+            safe.uboLog(logPrefix, 'Aborted');
+            throw new ReferenceError(exceptionToken);
+        }
+    });
+}
+
+function abortOnStackTrace(
+    chain = '',
+    needle = ''
+) {
+    if ( typeof chain !== 'string' ) { return; }
+    const safe = safeSelf();
+    const needleDetails = safe.initPattern(needle, { canNegate: true });
+    const extraArgs = safe.getExtraArgs(Array.from(arguments), 2);
+    if ( needle === '' ) { extraArgs.log = 'all'; }
+    const makeProxy = function(owner, chain) {
+        const pos = chain.indexOf('.');
+        if ( pos === -1 ) {
+            let v = owner[chain];
+            Object.defineProperty(owner, chain, {
+                get: function() {
+                    const log = safe.logLevel > 1 ? 'all' : 'match';
+                    if ( matchesStackTraceFn(needleDetails, log) ) {
+                        throw new ReferenceError(getExceptionTokenFn());
+                    }
+                    return v;
+                },
+                set: function(a) {
+                    const log = safe.logLevel > 1 ? 'all' : 'match';
+                    if ( matchesStackTraceFn(needleDetails, log) ) {
+                        throw new ReferenceError(getExceptionTokenFn());
+                    }
+                    v = a;
+                },
+            });
+            return;
+        }
+        const prop = chain.slice(0, pos);
+        let v = owner[prop];
+        chain = chain.slice(pos + 1);
+        if ( v ) {
+            makeProxy(v, chain);
+            return;
+        }
+        const desc = Object.getOwnPropertyDescriptor(owner, prop);
+        if ( desc && desc.set !== undefined ) { return; }
+        Object.defineProperty(owner, prop, {
+            get: function() { return v; },
+            set: function(a) {
+                v = a;
+                if ( a instanceof Object ) {
+                    makeProxy(a, chain);
+                }
+            }
+        });
+    };
+    const owner = window;
+    makeProxy(owner, chain);
+}
+
+function adjustSetInterval(
+    needleArg = '',
+    delayArg = '',
+    boostArg = ''
+) {
+    if ( typeof needleArg !== 'string' ) { return; }
+    const safe = safeSelf();
+    const reNeedle = safe.patternToRegex(needleArg);
+    let delay = delayArg !== '*' ? parseInt(delayArg, 10) : -1;
+    if ( isNaN(delay) || isFinite(delay) === false ) { delay = 1000; }
+    let boost = parseFloat(boostArg);
+    boost = isNaN(boost) === false && isFinite(boost)
+        ? Math.min(Math.max(boost, 0.001), 50)
+        : 0.05;
+    self.setInterval = new Proxy(self.setInterval, {
+        apply: function(target, thisArg, args) {
+            const [ a, b ] = args;
+            if (
+                (delay === -1 || b === delay) &&
+                reNeedle.test(a.toString())
+            ) {
+                args[1] = b * boost;
+            }
+            return target.apply(thisArg, args);
+        }
+    });
+}
+
+function adjustSetTimeout(
+    needleArg = '',
+    delayArg = '',
+    boostArg = ''
+) {
+    if ( typeof needleArg !== 'string' ) { return; }
+    const safe = safeSelf();
+    const reNeedle = safe.patternToRegex(needleArg);
+    let delay = delayArg !== '*' ? parseInt(delayArg, 10) : -1;
+    if ( isNaN(delay) || isFinite(delay) === false ) { delay = 1000; }
+    let boost = parseFloat(boostArg);
+    boost = isNaN(boost) === false && isFinite(boost)
+        ? Math.min(Math.max(boost, 0.001), 50)
+        : 0.05;
+    self.setTimeout = new Proxy(self.setTimeout, {
+        apply: function(target, thisArg, args) {
+            const [ a, b ] = args;
+            if (
+                (delay === -1 || b === delay) &&
+                reNeedle.test(a.toString())
+            ) {
+                args[1] = b * boost;
+            }
+            return target.apply(thisArg, args);
+        }
+    });
+}
+
+function collateFetchArgumentsFn(resource, options) {
+    const safe = safeSelf();
+    const props = [
+        'body', 'cache', 'credentials', 'duplex', 'headers',
+        'integrity', 'keepalive', 'method', 'mode', 'priority',
+        'redirect', 'referrer', 'referrerPolicy', 'url'
+    ];
+    const out = {};
+    if ( collateFetchArgumentsFn.collateKnownProps === undefined ) {
+        collateFetchArgumentsFn.collateKnownProps = (src, out) => {
+            for ( const prop of props ) {
+                if ( src[prop] === undefined ) { continue; }
+                out[prop] = src[prop];
+            }
+        };
+    }
+    if (
+        typeof resource !== 'object' ||
+        safe.Object_toString.call(resource) !== '[object Request]'
+    ) {
+        out.url = `${resource}`;
+    } else {
+        let clone;
+        try {
+            clone = safe.Request_clone.call(resource);
+        } catch {
+        }
+        collateFetchArgumentsFn.collateKnownProps(clone || resource, out);
+    }
+    if ( typeof options === 'object' && options !== null ) {
+        collateFetchArgumentsFn.collateKnownProps(options, out);
+    }
+    return out;
+}
+
+function generateContentFn(trusted, directive) {
+    const safe = safeSelf();
+    const randomize = len => {
+        const chunks = [];
+        let textSize = 0;
+        do {
+            const s = safe.Math_random().toString(36).slice(2);
+            chunks.push(s);
+            textSize += s.length;
+        }
+        while ( textSize < len );
+        return chunks.join(' ').slice(0, len);
+    };
+    if ( directive === 'true' ) {
+        return randomize(10);
+    }
+    if ( directive === 'emptyObj' ) {
+        return '{}';
+    }
+    if ( directive === 'emptyArr' ) {
+        return '[]';
+    }
+    if ( directive === 'emptyStr' ) {
+        return '';
+    }
+    if ( directive.startsWith('length:') ) {
+        const match = /^length:(\d+)(?:-(\d+))?$/.exec(directive);
+        if ( match === null ) { return ''; }
+        const min = parseInt(match[1], 10);
+        const extent = safe.Math_max(parseInt(match[2], 10) || 0, min) - min;
+        const len = safe.Math_min(min + extent * safe.Math_random(), 500000);
+        return randomize(len | 0);
+    }
+    if ( directive.startsWith('war:') ) {
+        if ( scriptletGlobals.warOrigin === undefined ) { return ''; }
+        return new Promise(resolve => {
+            const warOrigin = scriptletGlobals.warOrigin;
+            const warName = directive.slice(4);
+            const fullpath = [ warOrigin, '/', warName ];
+            const warSecret = scriptletGlobals.warSecret;
+            if ( warSecret !== undefined ) {
+                fullpath.push('?secret=', warSecret);
+            }
+            const warXHR = new safe.XMLHttpRequest();
+            warXHR.responseType = 'text';
+            warXHR.onloadend = ev => {
+                resolve(ev.target.responseText || '');
+            };
+            warXHR.open('GET', fullpath.join(''));
+            warXHR.send();
+        }).catch(( ) => '');
+    }
+    if ( directive.startsWith('join:') ) {
+        const parts = directive.slice(7)
+                .split(directive.slice(5, 7))
+                .map(a => generateContentFn(trusted, a));
+        return parts.some(a => a instanceof Promise)
+            ? Promise.all(parts).then(parts => parts.join(''))
+            : parts.join('');
+    }
+    if ( trusted ) {
+        return directive;
+    }
+    return '';
+}
+
+function getExceptionTokenFn() {
+    const token = getRandomTokenFn();
+    const oe = self.onerror;
+    self.onerror = function(msg, ...args) {
+        if ( typeof msg === 'string' && msg.includes(token) ) { return true; }
+        if ( oe instanceof Function ) {
+            return oe.call(this, msg, ...args);
+        }
+    }.bind();
+    return token;
+}
+
+function getRandomTokenFn() {
+    const safe = safeSelf();
+    return safe.String_fromCharCode(Date.now() % 26 + 97) +
+        safe.Math_floor(safe.Math_random() * 982451653 + 982451653).toString(36);
+}
+
+function jsonPrune(
+    rawPrunePaths = '',
+    rawNeedlePaths = '',
+    stackNeedle = ''
+) {
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('json-prune', rawPrunePaths, rawNeedlePaths, stackNeedle);
+    const stackNeedleDetails = safe.initPattern(stackNeedle, { canNegate: true });
+    const extraArgs = safe.getExtraArgs(Array.from(arguments), 3);
+    proxyApplyFn('JSON.parse', function(context) {
+        const objBefore = context.reflect();
+        if ( rawPrunePaths === '' ) {
+            safe.uboLog(logPrefix, safe.JSON_stringify(objBefore, null, 2));
+        }
+        const objAfter = objectPruneFn(
+            objBefore,
+            rawPrunePaths,
+            rawNeedlePaths,
+            stackNeedleDetails,
+            extraArgs
+        );
+        if ( objAfter === undefined ) { return objBefore; }
+        safe.uboLog(logPrefix, 'Pruned');
+        if ( safe.logLevel > 1 ) {
+            safe.uboLog(logPrefix, `After pruning:\n${safe.JSON_stringify(objAfter, null, 2)}`);
+        }
+        return objAfter;
+    });
+}
+
+function m3uPrune(
+    m3uPattern = '',
+    urlPattern = ''
+) {
+    if ( typeof m3uPattern !== 'string' ) { return; }
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('m3u-prune', m3uPattern, urlPattern);
+    const toLog = [];
+    const regexFromArg = arg => {
+        if ( arg === '' ) { return /^/; }
+        const match = /^\/(.+)\/([gms]*)$/.exec(arg);
+        if ( match !== null ) {
+            let flags = match[2] || '';
+            if ( flags.includes('m') ) { flags += 's'; }
+            return new RegExp(match[1], flags);
+        }
+        return new RegExp(
+            arg.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*+/g, '.*?')
+        );
+    };
+    const reM3u = regexFromArg(m3uPattern);
+    const reUrl = regexFromArg(urlPattern);
+    const pruneSpliceoutBlock = (lines, i) => {
+        if ( lines[i].startsWith('#EXT-X-CUE:TYPE="SpliceOut"') === false ) {
+            return false;
+        }
+        toLog.push(`\t${lines[i]}`);
+        lines[i] = undefined; i += 1;
+        if ( lines[i].startsWith('#EXT-X-ASSET:CAID') ) {
+            toLog.push(`\t${lines[i]}`);
+            lines[i] = undefined; i += 1;
+        }
+        if ( lines[i].startsWith('#EXT-X-SCTE35:') ) {
+            toLog.push(`\t${lines[i]}`);
+            lines[i] = undefined; i += 1;
+        }
+        if ( lines[i].startsWith('#EXT-X-CUE-IN') ) {
+            toLog.push(`\t${lines[i]}`);
+            lines[i] = undefined; i += 1;
+        }
+        if ( lines[i].startsWith('#EXT-X-SCTE35:') ) {
+            toLog.push(`\t${lines[i]}`);
+            lines[i] = undefined; i += 1;
+        }
+        return true;
+    };
+    const pruneInfBlock = (lines, i) => {
+        if ( lines[i].startsWith('#EXTINF') === false ) { return false; }
+        if ( reM3u.test(lines[i+1]) === false ) { return false; }
+        toLog.push('Discarding', `\t${lines[i]}, \t${lines[i+1]}`);
+        lines[i] = lines[i+1] = undefined; i += 2;
+        if ( lines[i].startsWith('#EXT-X-DISCONTINUITY') ) {
+            toLog.push(`\t${lines[i]}`);
+            lines[i] = undefined; i += 1;
+        }
+        return true;
+    };
+    const pruner = text => {
+        if ( (/^\s*#EXTM3U/.test(text)) === false ) { return text; }
+        if ( m3uPattern === '' ) {
+            safe.uboLog(` Content:\n${text}`);
+            return text;
+        }
+        if ( reM3u.multiline ) {
+            reM3u.lastIndex = 0;
+            for (;;) {
+                const match = reM3u.exec(text);
+                if ( match === null ) { break; }
+                let discard = match[0];
+                let before = text.slice(0, match.index);
+                if (
+                    /^[\n\r]+/.test(discard) === false &&
+                    /[\n\r]+$/.test(before) === false
+                ) {
+                    const startOfLine = /[^\n\r]+$/.exec(before);
+                    if ( startOfLine !== null ) {
+                        before = before.slice(0, startOfLine.index);
+                        discard = startOfLine[0] + discard;
+                    }
+                }
+                let after = text.slice(match.index + match[0].length);
+                if (
+                    /[\n\r]+$/.test(discard) === false &&
+                    /^[\n\r]+/.test(after) === false
+                ) {
+                    const endOfLine = /^[^\n\r]+/.exec(after);
+                    if ( endOfLine !== null ) {
+                        after = after.slice(endOfLine.index);
+                        discard += discard + endOfLine[0];
+                    }
+                }
+                text = before.trim() + '\n' + after.trim();
+                reM3u.lastIndex = before.length + 1;
+                toLog.push('Discarding', ...safe.String_split.call(discard, /\n+/).map(s => `\t${s}`));
+                if ( reM3u.global === false ) { break; }
+            }
+            return text;
+        }
+        const lines = safe.String_split.call(text, /\n\r|\n|\r/);
+        for ( let i = 0; i < lines.length; i++ ) {
+            if ( lines[i] === undefined ) { continue; }
+            if ( pruneSpliceoutBlock(lines, i) ) { continue; }
+            if ( pruneInfBlock(lines, i) ) { continue; }
+        }
+        return lines.filter(l => l !== undefined).join('\n');
+    };
+    const urlFromArg = arg => {
+        if ( typeof arg === 'string' ) { return arg; }
+        if ( arg instanceof Request ) { return arg.url; }
+        return String(arg);
+    };
+    proxyApplyFn('fetch', async function fetch(context) {
+        const args = context.callArgs;
+        const fetchPromise = context.reflect();
+        if ( reUrl.test(urlFromArg(args[0])) === false ) { return fetchPromise; }
+        const responseBefore = await fetchPromise;
+        const responseClone = responseBefore.clone();
+        const textBefore = await responseClone.text();
+        const textAfter = pruner(textBefore);
+        if ( textAfter === textBefore ) { return responseBefore; }
+        const responseAfter = new Response(textAfter, {
+            status: responseBefore.status,
+            statusText: responseBefore.statusText,
+            headers: responseBefore.headers,
+        });
+        Object.defineProperties(responseAfter, {
+            url: { value: responseBefore.url },
+            type: { value: responseBefore.type },
+        });
+        if ( toLog.length !== 0 ) {
+            toLog.unshift(logPrefix);
+            safe.uboLog(toLog.join('\n'));
+        }
+        return responseAfter;
+    })
+    self.XMLHttpRequest.prototype.open = new Proxy(self.XMLHttpRequest.prototype.open, {
+        apply: async (target, thisArg, args) => {
+            if ( reUrl.test(urlFromArg(args[1])) === false ) {
+                return Reflect.apply(target, thisArg, args);
+            }
+            thisArg.addEventListener('readystatechange', function() {
+                if ( thisArg.readyState !== 4 ) { return; }
+                const type = thisArg.responseType;
+                if ( type !== '' && type !== 'text' ) { return; }
+                const textin = thisArg.responseText;
+                const textout = pruner(textin);
+                if ( textout === textin ) { return; }
+                Object.defineProperty(thisArg, 'response', { value: textout });
+                Object.defineProperty(thisArg, 'responseText', { value: textout });
+                if ( toLog.length !== 0 ) {
+                    toLog.unshift(logPrefix);
+                    safe.uboLog(toLog.join('\n'));
+                }
+            });
+            return Reflect.apply(target, thisArg, args);
+        }
+    });
+}
+
+function matchObjectPropertiesFn(propNeedles, ...objs) {
+    const safe = safeSelf();
+    const matched = [];
+    for ( const obj of objs ) {
+        if ( obj instanceof Object === false ) { continue; }
+        for ( const [ prop, details ] of propNeedles ) {
+            let value = obj[prop];
+            if ( value === undefined ) { continue; }
+            if ( typeof value !== 'string' ) {
+                try { value = safe.JSON_stringify(value); }
+                catch { }
+                if ( typeof value !== 'string' ) { continue; }
+            }
+            if ( safe.testPattern(details, value) === false ) { return; }
+            matched.push(`${prop}: ${value}`);
+        }
+    }
+    return matched;
+}
+
+function matchesStackTraceFn(
+    needleDetails,
+    logLevel = ''
+) {
+    const safe = safeSelf();
+    const exceptionToken = getExceptionTokenFn();
+    const error = new safe.Error(exceptionToken);
+    const docURL = new URL(self.location.href);
+    docURL.hash = '';
+    // Normalize stack trace
+    const reLine = /(.*?@)?(\S+)(:\d+):\d+\)?$/;
+    const lines = [];
+    for ( let line of safe.String_split.call(error.stack, /[\n\r]+/) ) {
+        if ( line.includes(exceptionToken) ) { continue; }
+        line = line.trim();
+        const match = safe.RegExp_exec.call(reLine, line);
+        if ( match === null ) { continue; }
+        let url = match[2];
+        if ( url.startsWith('(') ) { url = url.slice(1); }
+        if ( url === docURL.href ) {
+            url = 'inlineScript';
+        } else if ( url.startsWith('<anonymous>') ) {
+            url = 'injectedScript';
+        }
+        let fn = match[1] !== undefined
+            ? match[1].slice(0, -1)
+            : line.slice(0, match.index).trim();
+        if ( fn.startsWith('at') ) { fn = fn.slice(2).trim(); }
+        let rowcol = match[3];
+        lines.push(' ' + `${fn} ${url}${rowcol}:1`.trim());
+    }
+    lines[0] = `stackDepth:${lines.length-1}`;
+    const stack = lines.join('\t');
+    const r = needleDetails.matchAll !== true &&
+        safe.testPattern(needleDetails, stack);
+    if (
+        logLevel === 'all' ||
+        logLevel === 'match' && r ||
+        logLevel === 'nomatch' && !r
+    ) {
+        safe.uboLog(stack.replace(/\t/g, '\n'));
+    }
+    return r;
+}
+
+function noEvalIf(
+    needle = ''
+) {
+    if ( typeof needle !== 'string' ) { return; }
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('noeval-if', needle);
+    const reNeedle = safe.patternToRegex(needle);
+    proxyApplyFn('eval', function(context) {
+        const { callArgs } = context;
+        const a = String(callArgs[0]);
+        if ( needle !== '' && reNeedle.test(a) ) {
+            safe.uboLog(logPrefix, 'Prevented:\n', a);
+            return;
+        }
+        if ( needle === '' || safe.logLevel > 1 ) {
+            safe.uboLog(logPrefix, 'Not prevented:\n', a);
+        }
+        return context.reflect();
+    });
+}
+
+function noWindowOpenIf(
+    pattern = '',
+    delay = '',
+    decoy = ''
+) {
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('no-window-open-if', pattern, delay, decoy);
+    const targetMatchResult = pattern.startsWith('!') === false;
+    if ( targetMatchResult === false ) {
+        pattern = pattern.slice(1);
+    }
+    const rePattern = safe.patternToRegex(pattern);
+    const autoRemoveAfter = (parseFloat(delay) || 0) * 1000;
+    const setTimeout = self.setTimeout;
+    const createDecoy = function(tag, urlProp, url) {
+        const decoyElem = document.createElement(tag);
+        decoyElem[urlProp] = url;
+        decoyElem.style.setProperty('height','1px', 'important');
+        decoyElem.style.setProperty('position','fixed', 'important');
+        decoyElem.style.setProperty('top','-1px', 'important');
+        decoyElem.style.setProperty('width','1px', 'important');
+        document.body.appendChild(decoyElem);
+        setTimeout(( ) => { decoyElem.remove(); }, autoRemoveAfter);
+        return decoyElem;
+    };
+    const noopFunc = function(){};
+    proxyApplyFn('open', function open(context) {
+        if ( pattern === 'debug' && safe.logLevel !== 0 ) {
+            debugger; // eslint-disable-line no-debugger
+            return context.reflect();
+        }
+        const { callArgs } = context;
+        const haystack = callArgs.join(' ');
+        if ( rePattern.test(haystack) !== targetMatchResult ) {
+            if ( safe.logLevel > 1 ) {
+                safe.uboLog(logPrefix, `Allowed (${callArgs.join(', ')})`);
+            }
+            return context.reflect();
+        }
+        safe.uboLog(logPrefix, `Prevented (${callArgs.join(', ')})`);
+        if ( delay === '' ) { return null; }
+        if ( decoy === 'blank' ) {
+            callArgs[0] = 'about:blank';
+            const r = context.reflect();
+            setTimeout(( ) => { r.close(); }, autoRemoveAfter);
+            return r;
+        }
+        const decoyElem = decoy === 'obj'
+            ? createDecoy('object', 'data', ...callArgs)
+            : createDecoy('iframe', 'src', ...callArgs);
+        let popup = decoyElem.contentWindow;
+        if ( typeof popup === 'object' && popup !== null ) {
+            Object.defineProperty(popup, 'closed', { value: false });
+        } else {
+            popup = new Proxy(self, {
+                get: function(target, prop, ...args) {
+                    if ( prop === 'closed' ) { return false; }
+                    const r = Reflect.get(target, prop, ...args);
+                    if ( typeof r === 'function' ) { return noopFunc; }
+                    return r;
+                },
+                set: function(...args) {
+                    return Reflect.set(...args);
+                },
+            });
+        }
+        if ( safe.logLevel !== 0 ) {
+            popup = new Proxy(popup, {
+                get: function(target, prop, ...args) {
+                    const r = Reflect.get(target, prop, ...args);
+                    safe.uboLog(logPrefix, `popup / get ${prop} === ${r}`);
+                    if ( typeof r === 'function' ) {
+                        return (...args) => { return r.call(target, ...args); };
+                    }
+                    return r;
+                },
+                set: function(target, prop, value, ...args) {
+                    safe.uboLog(logPrefix, `popup / set ${prop} = ${value}`);
+                    return Reflect.set(target, prop, value, ...args);
+                },
+            });
+        }
+        return popup;
+    });
+}
+
+function objectFindOwnerFn(
+    root,
+    path,
+    prune = false
+) {
+    const safe = safeSelf();
+    let owner = root;
+    let chain = path;
+    for (;;) {
+        if ( typeof owner !== 'object' || owner === null  ) { return false; }
+        const pos = chain.indexOf('.');
+        if ( pos === -1 ) {
+            if ( prune === false ) {
+                return safe.Object_hasOwn(owner, chain);
+            }
+            let modified = false;
+            if ( chain === '*' ) {
+                for ( const key in owner ) {
+                    if ( safe.Object_hasOwn(owner, key) === false ) { continue; }
+                    delete owner[key];
+                    modified = true;
+                }
+            } else if ( safe.Object_hasOwn(owner, chain) ) {
+                delete owner[chain];
+                modified = true;
+            }
+            return modified;
+        }
+        const prop = chain.slice(0, pos);
+        const next = chain.slice(pos + 1);
+        let found = false;
+        if ( prop === '[-]' && Array.isArray(owner) ) {
+            let i = owner.length;
+            while ( i-- ) {
+                if ( objectFindOwnerFn(owner[i], next) === false ) { continue; }
+                owner.splice(i, 1);
+                found = true;
+            }
+            return found;
+        }
+        if ( prop === '{-}' && owner instanceof Object ) {
+            for ( const key of Object.keys(owner) ) {
+                if ( objectFindOwnerFn(owner[key], next) === false ) { continue; }
+                delete owner[key];
+                found = true;
+            }
+            return found;
+        }
+        if (
+            prop === '[]' && Array.isArray(owner) ||
+            prop === '{}' && owner instanceof Object ||
+            prop === '*' && owner instanceof Object
+        ) {
+            for ( const key of Object.keys(owner) ) {
+                if (objectFindOwnerFn(owner[key], next, prune) === false ) { continue; }
+                found = true;
+            }
+            return found;
+        }
+        if ( safe.Object_hasOwn(owner, prop) === false ) { return false; }
+        owner = owner[prop];
+        chain = chain.slice(pos + 1);
+    }
+}
+
+function objectPruneFn(
+    obj,
+    rawPrunePaths,
+    rawNeedlePaths,
+    stackNeedleDetails = { matchAll: true },
+    extraArgs = {}
+) {
+    if ( typeof rawPrunePaths !== 'string' ) { return; }
+    const safe = safeSelf();
+    const prunePaths = rawPrunePaths !== ''
+        ? safe.String_split.call(rawPrunePaths, / +/)
+        : [];
+    const needlePaths = prunePaths.length !== 0 && rawNeedlePaths !== ''
+        ? safe.String_split.call(rawNeedlePaths, / +/)
+        : [];
+    if ( stackNeedleDetails.matchAll !== true ) {
+        if ( matchesStackTraceFn(stackNeedleDetails, extraArgs.logstack) === false ) {
+            return;
+        }
+    }
+    if ( objectPruneFn.mustProcess === undefined ) {
+        objectPruneFn.mustProcess = (root, needlePaths) => {
+            for ( const needlePath of needlePaths ) {
+                if ( objectFindOwnerFn(root, needlePath) === false ) {
+                    return false;
+                }
+            }
+            return true;
+        };
+    }
+    if ( prunePaths.length === 0 ) { return; }
+    let outcome = 'nomatch';
+    if ( objectPruneFn.mustProcess(obj, needlePaths) ) {
+        for ( const path of prunePaths ) {
+            if ( objectFindOwnerFn(obj, path, true) ) {
+                outcome = 'match';
+            }
+        }
+    }
+    if ( outcome === 'match' ) { return obj; }
+}
+
+function parsePropertiesToMatchFn(propsToMatch, implicit = '') {
+    const safe = safeSelf();
+    const needles = new Map();
+    if ( propsToMatch === undefined || propsToMatch === '' ) { return needles; }
+    const options = { canNegate: true };
+    for ( const needle of safe.String_split.call(propsToMatch, /\s+/) ) {
+        let [ prop, pattern ] = safe.String_split.call(needle, ':');
+        if ( prop === '' ) { continue; }
+        if ( pattern !== undefined && /[^$\w -]/.test(prop) ) {
+            prop = `${prop}:${pattern}`;
+            pattern = undefined;
+        }
+        if ( pattern !== undefined ) {
+            needles.set(prop, safe.initPattern(pattern, options));
+        } else if ( implicit !== '' ) {
+            needles.set(implicit, safe.initPattern(prop, options));
+        }
+    }
+    return needles;
+}
+
+function preventAddEventListener(
+    type = '',
+    pattern = ''
+) {
+    const safe = safeSelf();
+    const extraArgs = safe.getExtraArgs(Array.from(arguments), 2);
+    const logPrefix = safe.makeLogPrefix('prevent-addEventListener', type, pattern);
+    const reType = safe.patternToRegex(type, undefined, true);
+    const rePattern = safe.patternToRegex(pattern);
+    const targetSelector = extraArgs.elements || undefined;
+    const elementMatches = elem => {
+        if ( targetSelector === 'window' ) { return elem === window; }
+        if ( targetSelector === 'document' ) { return elem === document; }
+        if ( elem && elem.matches && elem.matches(targetSelector) ) { return true; }
+        const elems = Array.from(document.querySelectorAll(targetSelector));
+        return elems.includes(elem);
+    };
+    const elementDetails = elem => {
+        if ( elem instanceof Window ) { return 'window'; }
+        if ( elem instanceof Document ) { return 'document'; }
+        if ( elem instanceof Element === false ) { return '?'; }
+        const parts = [];
+        // https://github.com/uBlockOrigin/uAssets/discussions/17907#discussioncomment-9871079
+        const id = String(elem.id);
+        if ( id !== '' ) { parts.push(`#${CSS.escape(id)}`); }
+        for ( let i = 0; i < elem.classList.length; i++ ) {
+            parts.push(`.${CSS.escape(elem.classList.item(i))}`);
+        }
+        for ( let i = 0; i < elem.attributes.length; i++ ) {
+            const attr = elem.attributes.item(i);
+            if ( attr.name === 'id' ) { continue; }
+            if ( attr.name === 'class' ) { continue; }
+            parts.push(`[${CSS.escape(attr.name)}="${attr.value}"]`);
+        }
+        return parts.join('');
+    };
+    const shouldPrevent = (thisArg, type, handler) => {
+        const matchesType = safe.RegExp_test.call(reType, type);
+        const matchesHandler = safe.RegExp_test.call(rePattern, handler);
+        const matchesEither = matchesType || matchesHandler;
+        const matchesBoth = matchesType && matchesHandler;
+        if ( safe.logLevel > 1 && matchesEither ) {
+            debugger; // eslint-disable-line no-debugger
+        }
+        if ( matchesBoth && targetSelector !== undefined ) {
+            if ( elementMatches(thisArg) === false ) { return false; }
+        }
+        return matchesBoth;
+    };
+    const proxyFn = function(context) {
+        const { callArgs, thisArg } = context;
+        let t, h;
+        try {
+            t = String(callArgs[0]);
+            if ( typeof callArgs[1] === 'function' ) {
+                h = String(safe.Function_toString(callArgs[1]));
+            } else if ( typeof callArgs[1] === 'object' && callArgs[1] !== null ) {
+                if ( typeof callArgs[1].handleEvent === 'function' ) {
+                    h = String(safe.Function_toString(callArgs[1].handleEvent));
+                }
+            } else {
+                h = String(callArgs[1]);
+            }
+        } catch {
+        }
+        if ( type === '' && pattern === '' ) {
+            safe.uboLog(logPrefix, `Called: ${t}\n${h}\n${elementDetails(thisArg)}`);
+        } else if ( shouldPrevent(thisArg, t, h) ) {
+            return safe.uboLog(logPrefix, `Prevented: ${t}\n${h}\n${elementDetails(thisArg)}`);
+        }
+        return context.reflect();
+    };
+    runAt(( ) => {
+        proxyApplyFn('EventTarget.prototype.addEventListener', proxyFn);
+        if ( extraArgs.protect ) {
+            const { addEventListener } = EventTarget.prototype;
+            Object.defineProperty(EventTarget.prototype, 'addEventListener', {
+                set() { },
+                get() { return addEventListener; }
+            });
+        }
+        proxyApplyFn('document.addEventListener', proxyFn);
+        if ( extraArgs.protect ) {
+            const { addEventListener } = document;
+            Object.defineProperty(document, 'addEventListener', {
+                set() { },
+                get() { return addEventListener; }
+            });
+        }
+    }, extraArgs.runAt);
+}
+
+function preventFetch(...args) {
+    preventFetchFn(false, ...args);
+}
+
+function preventFetchFn(
+    trusted = false,
+    propsToMatch = '',
+    responseBody = '',
+    responseType = ''
+) {
+    const safe = safeSelf();
+    const setTimeout = self.setTimeout;
+    const scriptletName = `${trusted ? 'trusted-' : ''}prevent-fetch`;
+    const logPrefix = safe.makeLogPrefix(
+        scriptletName,
+        propsToMatch,
+        responseBody,
+        responseType
+    );
+    const extraArgs = safe.getExtraArgs(Array.from(arguments), 4);
+    const propNeedles = parsePropertiesToMatchFn(propsToMatch, 'url');
+    const validResponseProps = {
+        ok: [ false, true ],
+        status: [ 403 ],
+        statusText: [ '', 'Not Found' ],
+        type: [ 'basic', 'cors', 'default', 'error', 'opaque' ],
+    };
+    const responseProps = {
+        statusText: { value: 'OK' },
+    };
+    const responseHeaders = {};
+    if ( /^\{.*\}$/.test(responseType) ) {
+        try {
+            Object.entries(JSON.parse(responseType)).forEach(([ p, v ]) => {
+                if ( p === 'headers' && trusted ) {
+                    Object.assign(responseHeaders, v);
+                    return;
+                }
+                if ( validResponseProps[p] === undefined ) { return; }
+                if ( validResponseProps[p].includes(v) === false ) { return; }
+                responseProps[p] = { value: v };
+            });
+        }
+        catch { }
+    } else if ( responseType !== '' ) {
+        if ( validResponseProps.type.includes(responseType) ) {
+            responseProps.type = { value: responseType };
+        }
+    }
+    proxyApplyFn('fetch', function fetch(context) {
+        const { callArgs } = context;
+        const details = collateFetchArgumentsFn(...callArgs);
+        if ( safe.logLevel > 1 || propsToMatch === '' && responseBody === '' ) {
+            const out = Array.from(Object.entries(details)).map(a => `${a[0]}:${a[1]}`);
+            safe.uboLog(logPrefix, `Called: ${out.join('\n')}`);
+        }
+        if ( propsToMatch === '' && responseBody === '' ) {
+            return context.reflect();
+        }
+        const matched = matchObjectPropertiesFn(propNeedles, details);
+        if ( matched === undefined || matched.length === 0 ) {
+            return context.reflect();
+        }
+        return Promise.resolve(generateContentFn(trusted, responseBody)).then(text => {
+            safe.uboLog(logPrefix, `Prevented with response "${text}"`);
+            const headers = Object.assign({}, responseHeaders);
+            if ( headers['content-length'] === undefined ) {
+                headers['content-length'] = text.length;
+            }
+            const response = new Response(text, { headers });
+            const props = Object.assign(
+                { url: { value: details.url } },
+                responseProps
+            );
+            safe.Object_defineProperties(response, props);
+            if ( extraArgs.throttle ) {
+                return new Promise(resolve => {
+                    setTimeout(( ) => { resolve(response); }, extraArgs.throttle);
+                });
+            }
+            return response;
+        });
+    });
+}
+
+function preventSetInterval(
+    needleRaw = '',
+    delayRaw = ''
+) {
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('prevent-setInterval', needleRaw, delayRaw);
+    const needleNot = needleRaw.charAt(0) === '!';
+    const reNeedle = safe.patternToRegex(needleNot ? needleRaw.slice(1) : needleRaw);
+    const range = new RangeParser(delayRaw);
+    proxyApplyFn('setInterval', function(context) {
+        const { callArgs } = context;
+        const a = callArgs[0] instanceof Function
+            ? safe.String(safe.Function_toString(callArgs[0]))
+            : safe.String(callArgs[0]);
+        const b = callArgs[1];
+        if ( needleRaw === '' && range.unbound() ) {
+            safe.uboLog(logPrefix, `Called:\n${a}\n${b}`);
+            return context.reflect();
+        }
+        if ( reNeedle.test(a) !== needleNot && range.test(b) ) {
+            callArgs[0] = function(){};
+            safe.uboLog(logPrefix, `Prevented:\n${a}\n${b}`);
+        }
+        return context.reflect();
+    });
+}
+
+function preventSetTimeout(
+    needleRaw = '',
+    delayRaw = ''
+) {
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('prevent-setTimeout', needleRaw, delayRaw);
+    const needleNot = needleRaw.charAt(0) === '!';
+    const reNeedle = safe.patternToRegex(needleNot ? needleRaw.slice(1) : needleRaw);
+    const range = new RangeParser(delayRaw);
+    proxyApplyFn('setTimeout', function(context) {
+        const { callArgs } = context;
+        const a = callArgs[0] instanceof Function
+            ? safe.String(safe.Function_toString(callArgs[0]))
+            : safe.String(callArgs[0]);
+        const b = callArgs[1];
+        if ( needleRaw === '' && range.unbound() ) {
+            safe.uboLog(logPrefix, `Called:\n${a}\n${b}`);
+            return context.reflect();
+        }
+        if ( reNeedle.test(a) !== needleNot && range.test(b) ) {
+            callArgs[0] = function(){};
+            safe.uboLog(logPrefix, `Prevented:\n${a}\n${b}`);
+        }
+        return context.reflect();
+    });
+}
+
+function preventXhr(...args) {
+    return preventXhrFn(false, ...args);
+}
+
+function preventXhrFn(
+    trusted = false,
+    propsToMatch = '',
+    directive = ''
+) {
+    if ( typeof propsToMatch !== 'string' ) { return; }
+    const safe = safeSelf();
+    const scriptletName = trusted ? 'trusted-prevent-xhr' : 'prevent-xhr';
+    const logPrefix = safe.makeLogPrefix(scriptletName, propsToMatch, directive);
+    const xhrInstances = new WeakMap();
+    const propNeedles = parsePropertiesToMatchFn(propsToMatch, 'url');
+    const warOrigin = scriptletGlobals.warOrigin;
+    const safeDispatchEvent = (xhr, type) => {
+        try {
+            xhr.dispatchEvent(new Event(type));
+        } catch {
+        }
+    };
+    proxyApplyFn('XMLHttpRequest.prototype.open', function(context) {
+        const { thisArg, callArgs } = context;
+        xhrInstances.delete(thisArg);
+        const [ method, url, ...args ] = callArgs;
+        if ( warOrigin !== undefined && url.startsWith(warOrigin) ) {
+            return context.reflect();
+        }
+        const haystack = { method, url };
+        if ( propsToMatch === '' && directive === '' ) {
+            safe.uboLog(logPrefix, `Called: ${safe.JSON_stringify(haystack, null, 2)}`);
+            return context.reflect();
+        }
+        if ( matchObjectPropertiesFn(propNeedles, haystack) ) {
+            const xhrDetails = Object.assign(haystack, {
+                xhr: thisArg,
+                defer: args.length === 0 || !!args[0],
+                directive,
+                headers: {
+                    'date': '',
+                    'content-type': '',
+                    'content-length': '',
+                },
+                url: haystack.url,
+                props: {
+                    response: { value: '' },
+                    responseText: { value: '' },
+                    responseXML: { value: null },
+                },
+            });
+            xhrInstances.set(thisArg, xhrDetails);
+        }
+        return context.reflect();
+    });
+    proxyApplyFn('XMLHttpRequest.prototype.send', function(context) {
+        const { thisArg } = context;
+        const xhrDetails = xhrInstances.get(thisArg);
+        if ( xhrDetails === undefined ) {
+            return context.reflect();
+        }
+        xhrDetails.headers['date'] = (new Date()).toUTCString();
+        let xhrText = '';
+        switch ( thisArg.responseType ) {
+        case 'arraybuffer':
+            xhrDetails.props.response.value = new ArrayBuffer(0);
+            xhrDetails.headers['content-type'] = 'application/octet-stream';
+            break;
+        case 'blob':
+            xhrDetails.props.response.value = new Blob([]);
+            xhrDetails.headers['content-type'] = 'application/octet-stream';
+            break;
+        case 'document': {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString('', 'text/html');
+            xhrDetails.props.response.value = doc;
+            xhrDetails.props.responseXML.value = doc;
+            xhrDetails.headers['content-type'] = 'text/html';
+            break;
+        }
+        case 'json':
+            xhrDetails.props.response.value = {};
+            xhrDetails.props.responseText.value = '{}';
+            xhrDetails.headers['content-type'] = 'application/json';
+            break;
+        default: {
+            if ( directive === '' ) { break; }
+            xhrText = generateContentFn(trusted, xhrDetails.directive);
+            if ( xhrText instanceof Promise ) {
+                xhrText = xhrText.then(text => {
+                    xhrDetails.props.response.value = text;
+                    xhrDetails.props.responseText.value = text;
+                });
+            } else {
+                xhrDetails.props.response.value = xhrText;
+                xhrDetails.props.responseText.value = xhrText;
+            }
+            xhrDetails.headers['content-type'] = 'text/plain';
+            break;
+        }
+        }
+        if ( xhrDetails.defer === false ) {
+            xhrDetails.headers['content-length'] = `${xhrDetails.props.response.value}`.length;
+            Object.defineProperties(xhrDetails.xhr, {
+                readyState: { value: 4 },
+                responseURL: { value: xhrDetails.url },
+                status: { value: 200 },
+                statusText: { value: 'OK' },
+            });
+            Object.defineProperties(xhrDetails.xhr, xhrDetails.props);
+            return;
+        }
+        Promise.resolve(xhrText).then(( ) => xhrDetails).then(details => {
+            Object.defineProperties(details.xhr, {
+                readyState: { value: 1, configurable: true },
+                responseURL: { value: xhrDetails.url },
+            });
+            safeDispatchEvent(details.xhr, 'readystatechange');
+            return details;
+        }).then(details => {
+            xhrDetails.headers['content-length'] = `${details.props.response.value}`.length;
+            Object.defineProperties(details.xhr, {
+                readyState: { value: 2, configurable: true },
+                status: { value: 200 },
+                statusText: { value: 'OK' },
+            });
+            safeDispatchEvent(details.xhr, 'readystatechange');
+            return details;
+        }).then(details => {
+            Object.defineProperties(details.xhr, {
+                readyState: { value: 3, configurable: true },
+            });
+            Object.defineProperties(details.xhr, details.props);
+            safeDispatchEvent(details.xhr, 'readystatechange');
+            return details;
+        }).then(details => {
+            Object.defineProperties(details.xhr, {
+                readyState: { value: 4 },
+            });
+            safeDispatchEvent(details.xhr, 'readystatechange');
+            safeDispatchEvent(details.xhr, 'load');
+            safeDispatchEvent(details.xhr, 'loadend');
+            safe.uboLog(logPrefix, `Prevented with response:\n${details.xhr.response}`);
+        });
+    });
+    proxyApplyFn('XMLHttpRequest.prototype.getResponseHeader', function(context) {
+        const { thisArg } = context;
+        const xhrDetails = xhrInstances.get(thisArg);
+        if ( xhrDetails === undefined || thisArg.readyState < thisArg.HEADERS_RECEIVED ) {
+            return context.reflect();
+        }
+        const headerName = `${context.callArgs[0]}`;
+        const value = xhrDetails.headers[headerName.toLowerCase()];
+        if ( value !== undefined && value !== '' ) { return value; }
+        return null;
+    });
+    proxyApplyFn('XMLHttpRequest.prototype.getAllResponseHeaders', function(context) {
+        const { thisArg } = context;
+        const xhrDetails = xhrInstances.get(thisArg);
+        if ( xhrDetails === undefined || thisArg.readyState < thisArg.HEADERS_RECEIVED ) {
+            return context.reflect();
+        }
+        const out = [];
+        for ( const [ name, value ] of Object.entries(xhrDetails.headers) ) {
+            if ( !value ) { continue; }
+            out.push(`${name}: ${value}`);
+        }
+        if ( out.length !== 0 ) { out.push(''); }
+        return out.join('\r\n');
+    });
+}
+
+function proxyApplyFn(
+    target = '',
+    handler = ''
+) {
+    let context = globalThis;
+    let prop = target;
+    for (;;) {
+        const pos = prop.indexOf('.');
+        if ( pos === -1 ) { break; }
+        context = context[prop.slice(0, pos)];
+        if ( context instanceof Object === false ) { return; }
+        prop = prop.slice(pos+1);
+    }
+    const fn = context[prop];
+    if ( typeof fn !== 'function' ) { return; }
+    if ( proxyApplyFn.CtorContext === undefined ) {
+        proxyApplyFn.ctorContexts = [];
+        proxyApplyFn.CtorContext = class {
+            constructor(...args) {
+                this.init(...args);
+            }
+            init(callFn, callArgs) {
+                this.callFn = callFn;
+                this.callArgs = callArgs;
+                return this;
+            }
+            reflect() {
+                const r = Reflect.construct(this.callFn, this.callArgs);
+                this.callFn = this.callArgs = this.private = undefined;
+                proxyApplyFn.ctorContexts.push(this);
+                return r;
+            }
+            static factory(...args) {
+                return proxyApplyFn.ctorContexts.length !== 0
+                    ? proxyApplyFn.ctorContexts.pop().init(...args)
+                    : new proxyApplyFn.CtorContext(...args);
+            }
+        };
+        proxyApplyFn.applyContexts = [];
+        proxyApplyFn.ApplyContext = class {
+            constructor(...args) {
+                this.init(...args);
+            }
+            init(callFn, thisArg, callArgs) {
+                this.callFn = callFn;
+                this.thisArg = thisArg;
+                this.callArgs = callArgs;
+                return this;
+            }
+            reflect() {
+                const r = Reflect.apply(this.callFn, this.thisArg, this.callArgs);
+                this.callFn = this.thisArg = this.callArgs = this.private = undefined;
+                proxyApplyFn.applyContexts.push(this);
+                return r;
+            }
+            static factory(...args) {
+                return proxyApplyFn.applyContexts.length !== 0
+                    ? proxyApplyFn.applyContexts.pop().init(...args)
+                    : new proxyApplyFn.ApplyContext(...args);
+            }
+        };
+        proxyApplyFn.isCtor = new Map();
+        proxyApplyFn.proxies = new WeakMap();
+        proxyApplyFn.nativeToString = Function.prototype.toString;
+        const proxiedToString = new Proxy(Function.prototype.toString, {
+            apply(target, thisArg) {
+                let proxied = thisArg;
+                for(;;) {
+                    const fn = proxyApplyFn.proxies.get(proxied);
+                    if ( fn === undefined ) { break; }
+                    proxied = fn;
+                }
+                return proxyApplyFn.nativeToString.call(proxied);
+            }
+        });
+        proxyApplyFn.proxies.set(proxiedToString, proxyApplyFn.nativeToString);
+        Function.prototype.toString = proxiedToString;
+    }
+    if ( proxyApplyFn.isCtor.has(target) === false ) {
+        proxyApplyFn.isCtor.set(target, fn.prototype?.constructor === fn);
+    }
+    const proxyDetails = {
+        apply(target, thisArg, args) {
+            return handler(proxyApplyFn.ApplyContext.factory(target, thisArg, args));
+        }
+    };
+    if ( proxyApplyFn.isCtor.get(target) ) {
+        proxyDetails.construct = function(target, args) {
+            return handler(proxyApplyFn.CtorContext.factory(target, args));
+        };
+    }
+    const proxiedTarget = new Proxy(fn, proxyDetails);
+    proxyApplyFn.proxies.set(proxiedTarget, fn);
+    context[prop] = proxiedTarget;
+}
+
+function removeAttr(
+    rawToken = '',
+    rawSelector = '',
+    behavior = ''
+) {
+    if ( typeof rawToken !== 'string' ) { return; }
+    if ( rawToken === '' ) { return; }
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('remove-attr', rawToken, rawSelector, behavior);
+    const tokens = safe.String_split.call(rawToken, /\s*\|\s*/);
+    const selector = tokens
+        .map(a => `${rawSelector}[${CSS.escape(a)}]`)
+        .join(',');
+    if ( safe.logLevel > 1 ) {
+        safe.uboLog(logPrefix, `Target selector:\n\t${selector}`);
+    }
+    const asap = /\basap\b/.test(behavior);
+    let timerId;
+    const rmattrAsync = ( ) => {
+        if ( timerId !== undefined ) { return; }
+        timerId = safe.onIdle(( ) => {
+            timerId = undefined;
+            rmattr();
+        }, { timeout: 17 });
+    };
+    const rmattr = ( ) => {
+        if ( timerId !== undefined ) {
+            safe.offIdle(timerId);
+            timerId = undefined;
+        }
+        try {
+            const nodes = document.querySelectorAll(selector);
+            for ( const node of nodes ) {
+                for ( const attr of tokens ) {
+                    if ( node.hasAttribute(attr) === false ) { continue; }
+                    node.removeAttribute(attr);
+                    safe.uboLog(logPrefix, `Removed attribute '${attr}'`);
+                }
+            }
+        } catch {
+        }
+    };
+    const mutationHandler = mutations => {
+        if ( timerId !== undefined ) { return; }
+        let skip = true;
+        for ( let i = 0; i < mutations.length && skip; i++ ) {
+            const { type, addedNodes, removedNodes } = mutations[i];
+            if ( type === 'attributes' ) { skip = false; }
+            for ( let j = 0; j < addedNodes.length && skip; j++ ) {
+                if ( addedNodes[j].nodeType === 1 ) { skip = false; break; }
+            }
+            for ( let j = 0; j < removedNodes.length && skip; j++ ) {
+                if ( removedNodes[j].nodeType === 1 ) { skip = false; break; }
+            }
+        }
+        if ( skip ) { return; }
+        asap ? rmattr() : rmattrAsync();
+    };
+    const start = ( ) => {
+        rmattr();
+        if ( /\bstay\b/.test(behavior) === false ) { return; }
+        const observer = new MutationObserver(mutationHandler);
+        observer.observe(document, {
+            attributes: true,
+            attributeFilter: tokens,
+            childList: true,
+            subtree: true,
+        });
+    };
+    runAt(( ) => { start(); }, safe.String_split.call(behavior, /\s+/));
+}
+
+function runAt(fn, when) {
+    const intFromReadyState = state => {
+        const targets = {
+            'loading': 1, 'asap': 1,
+            'interactive': 2, 'end': 2, '2': 2,
+            'complete': 3, 'idle': 3, '3': 3,
+        };
+        const tokens = Array.isArray(state) ? state : [ state ];
+        for ( const token of tokens ) {
+            const prop = `${token}`;
+            if ( Object.hasOwn(targets, prop) === false ) { continue; }
+            return targets[prop];
+        }
+        return 0;
+    };
+    const runAt = intFromReadyState(when);
+    if ( intFromReadyState(document.readyState) >= runAt ) {
+        fn(); return;
+    }
+    const onStateChange = ( ) => {
+        if ( intFromReadyState(document.readyState) < runAt ) { return; }
+        fn();
+        safe.removeEventListener.apply(document, args);
+    };
+    const safe = safeSelf();
+    const args = [ 'readystatechange', onStateChange, { capture: true } ];
+    safe.addEventListener.apply(document, args);
+}
+
+function runAtHtmlElementFn(fn) {
+    if ( document.documentElement ) {
+        fn();
+        return;
+    }
+    const observer = new MutationObserver(( ) => {
+        observer.disconnect();
+        fn();
+    });
+    observer.observe(document, { childList: true });
+}
+
+function safeSelf() {
+    if ( scriptletGlobals.safeSelf ) {
+        return scriptletGlobals.safeSelf;
+    }
+    const self = globalThis;
+    const safe = {
+        'Array_from': Array.from,
+        'Error': self.Error,
+        'Function_toStringFn': self.Function.prototype.toString,
+        'Function_toString': thisArg => safe.Function_toStringFn.call(thisArg),
+        'Math_floor': Math.floor,
+        'Math_max': Math.max,
+        'Math_min': Math.min,
+        'Math_random': Math.random,
+        'Object': Object,
+        'Object_defineProperty': Object.defineProperty.bind(Object),
+        'Object_defineProperties': Object.defineProperties.bind(Object),
+        'Object_fromEntries': Object.fromEntries.bind(Object),
+        'Object_getOwnPropertyDescriptor': Object.getOwnPropertyDescriptor.bind(Object),
+        'Object_hasOwn': Object.hasOwn.bind(Object),
+        'Object_toString': Object.prototype.toString,
+        'RegExp': self.RegExp,
+        'RegExp_test': self.RegExp.prototype.test,
+        'RegExp_exec': self.RegExp.prototype.exec,
+        'Request_clone': self.Request.prototype.clone,
+        'String': self.String,
+        'String_fromCharCode': String.fromCharCode,
+        'String_split': String.prototype.split,
+        'XMLHttpRequest': self.XMLHttpRequest,
+        'addEventListener': self.EventTarget.prototype.addEventListener,
+        'removeEventListener': self.EventTarget.prototype.removeEventListener,
+        'fetch': self.fetch,
+        'JSON': self.JSON,
+        'JSON_parseFn': self.JSON.parse,
+        'JSON_stringifyFn': self.JSON.stringify,
+        'JSON_parse': (...args) => safe.JSON_parseFn.call(safe.JSON, ...args),
+        'JSON_stringify': (...args) => safe.JSON_stringifyFn.call(safe.JSON, ...args),
+        'log': console.log.bind(console),
+        // Properties
+        logLevel: 0,
+        // Methods
+        makeLogPrefix(...args) {
+            return this.sendToLogger && `[${args.join(' \u205D ')}]` || '';
+        },
+        uboLog(...args) {
+            if ( this.sendToLogger === undefined ) { return; }
+            if ( args === undefined || args[0] === '' ) { return; }
+            return this.sendToLogger('info', ...args);
+            
+        },
+        uboErr(...args) {
+            if ( this.sendToLogger === undefined ) { return; }
+            if ( args === undefined || args[0] === '' ) { return; }
+            return this.sendToLogger('error', ...args);
+        },
+        escapeRegexChars(s) {
+            return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        },
+        initPattern(pattern, options = {}) {
+            if ( pattern === '' ) {
+                return { matchAll: true, expect: true };
+            }
+            const expect = (options.canNegate !== true || pattern.startsWith('!') === false);
+            if ( expect === false ) {
+                pattern = pattern.slice(1);
+            }
+            const match = /^\/(.+)\/([gimsu]*)$/.exec(pattern);
+            if ( match !== null ) {
+                return {
+                    re: new this.RegExp(
+                        match[1],
+                        match[2] || options.flags
+                    ),
+                    expect,
+                };
+            }
+            if ( options.flags !== undefined ) {
+                return {
+                    re: new this.RegExp(this.escapeRegexChars(pattern),
+                        options.flags
+                    ),
+                    expect,
+                };
+            }
+            return { pattern, expect };
+        },
+        testPattern(details, haystack) {
+            if ( details.matchAll ) { return true; }
+            if ( details.re ) {
+                return this.RegExp_test.call(details.re, haystack) === details.expect;
+            }
+            return haystack.includes(details.pattern) === details.expect;
+        },
+        patternToRegex(pattern, flags = undefined, verbatim = false) {
+            if ( pattern === '' ) { return /^/; }
+            const match = /^\/(.+)\/([gimsu]*)$/.exec(pattern);
+            if ( match === null ) {
+                const reStr = this.escapeRegexChars(pattern);
+                return new RegExp(verbatim ? `^${reStr}$` : reStr, flags);
+            }
+            try {
+                return new RegExp(match[1], match[2] || undefined);
+            }
+            catch {
+            }
+            return /^/;
+        },
+        getExtraArgs(args, offset = 0) {
+            const entries = args.slice(offset).reduce((out, v, i, a) => {
+                if ( (i & 1) === 0 ) {
+                    const rawValue = a[i+1];
+                    const value = /^\d+$/.test(rawValue)
+                        ? parseInt(rawValue, 10)
+                        : rawValue;
+                    out.push([ a[i], value ]);
+                }
+                return out;
+            }, []);
+            return this.Object_fromEntries(entries);
+        },
+        onIdle(fn, options) {
+            if ( self.requestIdleCallback ) {
+                return self.requestIdleCallback(fn, options);
+            }
+            return self.requestAnimationFrame(fn);
+        },
+        offIdle(id) {
+            if ( self.requestIdleCallback ) {
+                return self.cancelIdleCallback(id);
+            }
+            return self.cancelAnimationFrame(id);
+        }
+    };
+    scriptletGlobals.safeSelf = safe;
+    if ( scriptletGlobals.bcSecret === undefined ) { return safe; }
+    // This is executed only when the logger is opened
+    safe.logLevel = scriptletGlobals.logLevel || 1;
+    let lastLogType = '';
+    let lastLogText = '';
+    let lastLogTime = 0;
+    safe.toLogText = (type, ...args) => {
+        if ( args.length === 0 ) { return; }
+        const text = `[${document.location.hostname || document.location.href}]${args.join(' ')}`;
+        if ( text === lastLogText && type === lastLogType ) {
+            if ( (Date.now() - lastLogTime) < 5000 ) { return; }
+        }
+        lastLogType = type;
+        lastLogText = text;
+        lastLogTime = Date.now();
+        return text;
+    };
+    try {
+        const bc = new self.BroadcastChannel(scriptletGlobals.bcSecret);
+        let bcBuffer = [];
+        safe.sendToLogger = (type, ...args) => {
+            const text = safe.toLogText(type, ...args);
+            if ( text === undefined ) { return; }
+            if ( bcBuffer === undefined ) {
+                return bc.postMessage({ what: 'messageToLogger', type, text });
+            }
+            bcBuffer.push({ type, text });
+        };
+        bc.onmessage = ev => {
+            const msg = ev.data;
+            switch ( msg ) {
+            case 'iamready!':
+                if ( bcBuffer === undefined ) { break; }
+                bcBuffer.forEach(({ type, text }) =>
+                    bc.postMessage({ what: 'messageToLogger', type, text })
+                );
+                bcBuffer = undefined;
+                break;
+            case 'setScriptletLogLevelToOne':
+                safe.logLevel = 1;
+                break;
+            case 'setScriptletLogLevelToTwo':
+                safe.logLevel = 2;
+                break;
+            }
+        };
+        bc.postMessage('areyouready?');
+    } catch {
+        safe.sendToLogger = (type, ...args) => {
+            const text = safe.toLogText(type, ...args);
+            if ( text === undefined ) { return; }
+            safe.log(`uBO ${text}`);
+        };
+    }
+    return safe;
+}
+
+function setConstant(
+    ...args
+) {
+    setConstantFn(false, ...args);
+}
+
+function setConstantFn(
+    trusted = false,
+    chain = '',
+    rawValue = ''
+) {
+    if ( chain === '' ) { return; }
+    const safe = safeSelf();
+    const logPrefix = safe.makeLogPrefix('set-constant', chain, rawValue);
+    const extraArgs = safe.getExtraArgs(Array.from(arguments), 3);
+    function setConstant(chain, rawValue) {
+        const trappedProp = (( ) => {
+            const pos = chain.lastIndexOf('.');
+            if ( pos === -1 ) { return chain; }
+            return chain.slice(pos+1);
+        })();
+        const cloakFunc = fn => {
+            safe.Object_defineProperty(fn, 'name', { value: trappedProp });
+            return new Proxy(fn, {
+                defineProperty(target, prop) {
+                    if ( prop !== 'toString' ) {
+                        return Reflect.defineProperty(...arguments);
+                    }
+                    return true;
+                },
+                deleteProperty(target, prop) {
+                    if ( prop !== 'toString' ) {
+                        return Reflect.deleteProperty(...arguments);
+                    }
+                    return true;
+                },
+                get(target, prop) {
+                    if ( prop === 'toString' ) {
+                        return function() {
+                            return `function ${trappedProp}() { [native code] }`;
+                        }.bind(null);
+                    }
+                    return Reflect.get(...arguments);
+                },
+            });
+        };
+        if ( trappedProp === '' ) { return; }
+        const thisScript = document.currentScript;
+        let normalValue = validateConstantFn(trusted, rawValue, extraArgs);
+        if ( rawValue === 'noopFunc' || rawValue === 'trueFunc' || rawValue === 'falseFunc' ) {
+            normalValue = cloakFunc(normalValue);
+        }
+        let aborted = false;
+        const mustAbort = function(v) {
+            if ( trusted ) { return false; }
+            if ( aborted ) { return true; }
+            aborted =
+                (v !== undefined && v !== null) &&
+                (normalValue !== undefined && normalValue !== null) &&
+                (typeof v !== typeof normalValue);
+            if ( aborted ) {
+                safe.uboLog(logPrefix, `Aborted because value set to ${v}`);
+            }
+            return aborted;
+        };
+        // https://github.com/uBlockOrigin/uBlock-issues/issues/156
+        //   Support multiple trappers for the same property.
+        const trapProp = function(owner, prop, configurable, handler) {
+            if ( handler.init(configurable ? owner[prop] : normalValue) === false ) { return; }
+            const odesc = safe.Object_getOwnPropertyDescriptor(owner, prop);
+            let prevGetter, prevSetter;
+            if ( odesc instanceof safe.Object ) {
+                owner[prop] = normalValue;
+                if ( odesc.get instanceof Function ) {
+                    prevGetter = odesc.get;
+                }
+                if ( odesc.set instanceof Function ) {
+                    prevSetter = odesc.set;
+                }
+            }
+            try {
+                safe.Object_defineProperty(owner, prop, {
+                    configurable,
+                    get() {
+                        if ( prevGetter !== undefined ) {
+                            prevGetter();
+                        }
+                        return handler.getter();
+                    },
+                    set(a) {
+                        if ( prevSetter !== undefined ) {
+                            prevSetter(a);
+                        }
+                        handler.setter(a);
+                    }
+                });
+                safe.uboLog(logPrefix, 'Trap installed');
+            } catch(ex) {
+                safe.uboErr(logPrefix, ex);
+            }
+        };
+        const trapChain = function(owner, chain) {
+            const pos = chain.indexOf('.');
+            if ( pos === -1 ) {
+                trapProp(owner, chain, false, {
+                    v: undefined,
+                    init: function(v) {
+                        if ( mustAbort(v) ) { return false; }
+                        this.v = v;
+                        return true;
+                    },
+                    getter: function() {
+                        if ( document.currentScript === thisScript ) {
+                            return this.v;
+                        }
+                        safe.uboLog(logPrefix, 'Property read');
+                        return normalValue;
+                    },
+                    setter: function(a) {
+                        if ( mustAbort(a) === false ) { return; }
+                        normalValue = a;
+                    }
+                });
+                return;
+            }
+            const prop = chain.slice(0, pos);
+            const v = owner[prop];
+            chain = chain.slice(pos + 1);
+            if ( v instanceof safe.Object || typeof v === 'object' && v !== null ) {
+                trapChain(v, chain);
+                return;
+            }
+            trapProp(owner, prop, true, {
+                v: undefined,
+                init: function(v) {
+                    this.v = v;
+                    return true;
+                },
+                getter: function() {
+                    return this.v;
+                },
+                setter: function(a) {
+                    this.v = a;
+                    if ( a instanceof safe.Object ) {
+                        trapChain(a, chain);
+                    }
+                }
+            });
+        };
+        trapChain(window, chain);
+    }
+    runAt(( ) => {
+        setConstant(chain, rawValue);
+    }, extraArgs.runAt);
+}
+
+function shouldDebug(details) {
+    if ( details instanceof Object === false ) { return false; }
+    return scriptletGlobals.canDebug && details.debug;
+}
+
+function validateConstantFn(trusted, raw, extraArgs = {}) {
+    const safe = safeSelf();
+    let value;
+    if ( raw === 'undefined' ) {
+        value = undefined;
+    } else if ( raw === 'false' ) {
+        value = false;
+    } else if ( raw === 'true' ) {
+        value = true;
+    } else if ( raw === 'null' ) {
+        value = null;
+    } else if ( raw === "''" || raw === '' ) {
+        value = '';
+    } else if ( raw === '[]' || raw === 'emptyArr' ) {
+        value = [];
+    } else if ( raw === '{}' || raw === 'emptyObj' ) {
+        value = {};
+    } else if ( raw === 'noopFunc' ) {
+        value = function(){};
+    } else if ( raw === 'trueFunc' ) {
+        value = function(){ return true; };
+    } else if ( raw === 'falseFunc' ) {
+        value = function(){ return false; };
+    } else if ( raw === 'throwFunc' ) {
+        value = function(){ throw ''; };
+    } else if ( /^-?\d+$/.test(raw) ) {
+        value = parseInt(raw);
+        if ( isNaN(raw) ) { return; }
+        if ( Math.abs(raw) > 0x7FFF ) { return; }
+    } else if ( trusted ) {
+        if ( raw.startsWith('json:') ) {
+            try { value = safe.JSON_parse(raw.slice(5)); } catch { return; }
+        } else if ( raw.startsWith('{') && raw.endsWith('}') ) {
+            try { value = safe.JSON_parse(raw).value; } catch { return; }
+        }
+    } else {
+        return;
+    }
+    if ( extraArgs.as !== undefined ) {
+        if ( extraArgs.as === 'function' ) {
+            return ( ) => value;
+        } else if ( extraArgs.as === 'callback' ) {
+            return ( ) => (( ) => value);
+        } else if ( extraArgs.as === 'resolved' ) {
+            return Promise.resolve(value);
+        } else if ( extraArgs.as === 'rejected' ) {
+            return Promise.reject(value);
+        }
+    }
+    return value;
+}
+
+/******************************************************************************/
+
+const scriptletGlobals = {}; // eslint-disable-line
+
+const $scriptletFunctions$ = /* 17 */
+[preventSetTimeout,setConstant,preventAddEventListener,preventSetInterval,preventFetch,preventXhr,abortOnPropertyRead,abortCurrentScript,abortOnStackTrace,abortOnPropertyWrite,noWindowOpenIf,removeAttr,adjustSetInterval,m3uPrune,jsonPrune,noEvalIf,adjustSetTimeout];
+
+const $scriptletArgs$ = /* 204 */ ["0===o.offsetLeft&&0===o.offsetTop","adblock.check","noopFunc","offsetHeight === 0",".offsetHeight === 0","load","/adblock/i","adBlock","adBlockDetected","App.detectAdBlock","adsbygoogle","adBlockerDetected","/agead2\\.googlesyndication\\.com|googleadservices\\.com/","canRunAds","true","pagead2.googlesyndication.com","adblockmesaj","adblockalert","AdBlock","offsetParent","EventTarget.prototype.addEventListener",".height();","ad_block_detected","eyeOfErstream.detectedBloke","falseFunc","/advert.js","$('body').empty().append","https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js","static.doubleclick.net/instream/ad_status.js","kanews-modal-adblock","5000","XV","tie.ad_blocker_disallow_images_placeholder","undefined","/assets/js/prebid","detectedAdBlock","eazy_ad_unblocker_msg_var","","www3.doubleclick.net","detector_active","adblock_active","false","document.addEventListener","/abisuq/","adBlockRunning","$","adblock","detectAdBlock","adb","!document.getElementById(btoa","maari","adBlockEnabled","/div#gpt-passback|playerNew\\.dispose\\(\\)/","doubleclick.net","kan_vars.adblock","arlinablock","adblockCheckUrl","adservice","{}","jQuery.adblock","koddostu_com_adblock_yok","null","document.querySelector","window.onload","ad_killer","adsBlocked","adregain_wall","rTargets","rInt","puShown","isShow","initPu","initAd","click","checkTarget","initPop","oV1","Object.prototype.isAdMonetizationDisabled","/img[\\s\\S]*?\\.gif/","document.write","_blank","app.ads","openRandomUrl","openPopup","popURL","wpsaData","style","#episode","after-ads","*","0.001",".hit.gemius.","data-money","div[data-money]","data-href","span[data-href^=\"https://ensonhaber.me/\"]","money--skip","0.02","pop_status","AdmostClient","/cdn\\.net\\/.*\\/ad\\//","/daioncdn\\.net\\/.*\\.m3u8/","sagAltReklamListesi","S_Popup","2","loadPlayerAds","trueFunc","reklamsayisi","0","reklam","productAds","spotxchange.com","volumeClearInterval","clicked","adSearchTitle","wt()","100","ads","popundr","placeholder","input[id=\"search-textbox\"]","showPop","yeniSekmeAdresi","initDizi",".addClass('getir')","HBiddings.vastUrl","flipHover","bit.ly","initOpen","#myModal","loadBrands","maxActive","rg","sessionStorage.getItem","Object.prototype.video_ads","Object.prototype.ads_enable","td_ad_background_click_link","wpsite_clickable_data","advert","/ads/","jsPopunder","start","1","popup","open","popUnder","window.open","DOMContentLoaded","openHiddenPopup","popupLastOpened","message","localStorage","jwSetup.advertising","disabled","button#skipBtn","lastOpened","/reklam/i","href","div[class^=\"swiper-\"] > a[href^=\"https://www.sinpasyts.com/\"]",".swiper-pagination > a[href=\"null\"]","isFirstLoad","checkAndOpenPopup","/hlktrpl.cfd\\/\\w+.xml/","Popunder","popupInterval","window.config.adv.enabled","doOpen","popURLs","edsiga.com","manset_adv_imp","var adx =","popupShown","jsAd","document.createElement","/\\.src=[\\s\\S]*?getElementsByTagName/","adsConfig","PopBanner","config.adv","getLink","data-front","#tv-spoox2","adx","a[href^=\"https://www.haber7.com/advertorial/\"].headline-slider-item",".slick-dots > li > a[href^=\"https://www.haber7.com/advertorial/\"]",".parentNode.insertBefore(","promoContainers","config.advertisement.enabled","config.adv.enabled","window.advertisement.states.activate","popns","videotutucu","adscfg.enabled","onPopUnderLoaded","player.vroll","loading","iframe[loading=\"lazy\"]","Object.prototype.adSkipped","document.referrer","getFrontVideo","sec--","timeleft","video_shown","reklam_","ifrld"];
+
+const $scriptletArglists$ = /* 178 */ "0,0;1,1,2;0,3;0,4;2,5,6;0,7;1,8,2;1,9,2;0,10;3,11;4,12;1,13,14;5,15;6,16;0,17;4,15;0,18;0,19;7,20,21;0,22;1,23,24;5,25;0,26;4,27;5,28;0,29,30;6,31;1,32,33;4,34;6,35;1,36,37;4,38;1,39,14;1,40,41;7,42,43;1,44,41;7,45,46;6,47;1,48,41;7,45,49;1,50,2;1,51,41;0,52;4,53;1,54,33;7,20,55;1,56,37;1,57,58;1,59,41;1,60,61;8,62,63;7,20,64;1,46,41;6,65;9,66;6,67;9,68;1,69,14;1,70,14;6,71;6,72;2,73,74;6,75;6,76;1,77,14;0,78;7,79,80;1,81,58;9,82;6,83;9,84;10;1,85,33;11,86,87;12,88,89,90;7,79,91;11,92,93;11,94,95;12,96,37,97;6,98;1,99,2;13,100,101;6,102;1,103,104;1,105,106;1,107,108;12,109,89,97;14,110;5,111;1,112,108;1,113,14;1,114,37;0,115,116;14,117;2,73,118;11,119,120;2,73,121;9,122;6,123;3,124;1,125,37;3,126;10,127;1,128,33;7,45,129;7,130;14,86,131;1,132,2;7,133,109;1,134,2;1,135,41;1,136,37;6,137;12,138,89,90;7,45,139;6,140;1,141,142;1,143,2;6,144;2,73,145;2,73,146;2,147,109;2,73,148;2,147,148;2,147,149;15,146;2,150,151;1,152,33;11,153,154;2,73,155;2,73,156;11,157,158;11,157,159;1,160,41;2,73,83;2,37,161;5,162;7,20,163;7,42,164;1,165,108;6,166;9,167;7,166,168;1,169,2;2,147,170;1,171,14;0,172;7,173,174;1,175,58;1,176,33;1,177,58;9,178;1,117,58;11,179,180;9,181;11,157,182;11,157,183;7,173,184;2,147,185;1,186,41;1,187,41;1,187,108;1,188,41;6,189;2,147,190;1,191,41;9,192;1,193,2;11,194,195;1,196,14;1,197,37;1,198,2;1,107,142;12,199,89,90;12,200,89,97;1,201,142;12,202,89,90;16,203,89,90";
+
+const $scriptletArglistRefs$ = /* 1045 */ "57,59,157;55,56;57,59,157;57,60;177;124;0;57;72;141;57;57;20;57;15;139;11,59;172,173;57,76;64;81;93;81,100;31;57;57;122,123;72;57,98;57;57;177;57;7;155,156;3;113;139;81;104;81;15;15,40,41,42,43;57,63;147;57,74;57,74;1;27;59;81,88;127;57;68;57;71,137;103;117;18;65,66;57;144;70;57;96;167;81;108;57;57;59;57;140;59;72;57,172,173,177;136;19;57;13,24;38;97;39;39;57;57,59,157;57;81;125;93;57;63;81;44;57;57;59;59;57;62;59;57;57;57,172,173,177;57,85,86,177;172,173,177;71;84;146;33;99;48;57;150;28,29;81;81;57;90;57;39;81;171;171;171;171;171;171;171;171;171;171;171;105;13;57;60;81;57;114;57;59;126;57;59;152;57;57;57,71,76,78;57;26;61;57;59;126;57;0;13;145;81;57;141;14;71,153,154;71,83;139;46,47,81;57;35;35;57;51;57;81;57;143;81;139;139;111,112;50;71,145;89;57,115;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;75;12,30,57,71,134;140;60;168,174;71;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;57;15;81;15;72;72;72;72;72;72;72;72;72;72;72;72;72;72;72;140;140;140;140;140;140;140;140;140;140;140;140;140;140;140;140;140;140;140;140;92,95;59,71,134;77,101;71,135,141;71;57;59;177;71;59;57,172,173,177;9,10;57;57;177;60;60,79,97;139;53;57;1;128;118;139;166;57;57;3;57;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;57,175;2,120;71;61;57;57;34;58;58;58;58;58;58;58;57;59;131,132;59;161;161;161;161;161;161;161;161;161;161;161;18,166;81;138;71,129;94;57;71;145;57;61;139;106;139;139;0;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;21,22;4,5,6;71;102,111;57,60;57;59;57;57,76;59;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;58,150;25;58;149;59;71,154;69;73;0;59;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;57;57;57;57,85,86,172,173,177;82;177;57;163;163;163;163;52;36;59;57;8;69;142;116;1;160;160;160;160;160;160;160;160;160;160;160;160;160;160;160;160;160;160;160;160;59,71;15;59;12;130;57;133;166;62;163;163;163;163;163;163;163;163;163;163;163;163;163;163;163;163;59;57;164;164;164;164;164;164;164;164;164;57;57;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;159;54;57;139;8;57;121;59;32;126;0;57,62;80;139;57;57;172,173,177;62,67;172,173,177;140;172,173;164;164;164;164;164;164;164;164;164;164;164;13;0;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;57,176;71;57;60;60;71;120,158;120,158;120,158;57;57;57;59;61;61;107;151;57;57,61;139;11;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;0;57;71;23;57;119;49;120,158;120,158;120,158;120,158;120,158;120,158;120,158;120,158;120,158;120,158;120,158;119;69;61;61;0;57;109,110;15;150;57;60;67;57;8;57;57;57;60;58;57;37;119;139;139;139;139;139;139;139;139;139;139;139;139;139;139;139;139;139;139;139;139;49;57;60;60;59;71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;57,71;16,17;62;60;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;57;148;91;60;57;48;34;130;162;162;162;162;162;162;162;162;162;162;162;162;162;162;162;162;162;162;162;162;84;87;57;57;57;57;57;45;59;57;159;57;57;57;57;57;57;57";
+
+const $scriptletHostnames$ = /* 1045 */ ["anizm.*","r10.net","anizle.*","diziyo.*","sinema.*","ag2m4.cfd","azbuz.org","dafflix.*","dizilla.*","dizimag.*","dizimov.*","dizipal.*","exxen.com","hdfilm.us","nedir.org","pages.dev","promy.pro","sinema.cx","sinepal.*","sporx.com","tabii.com","trstx.org","atv.com.tr","bikifi.com","dizicaps.*","dizimag.eu","dizipala.*","diziroll.*","diziyou.co","filmfc.com","filmhe.com","filmizle.*","filmjr.org","haber3.com","haber7.com","isgfrm.com","itemci.com","justintv.*","kanal7.com","kenttv.net","ntv.com.tr","ogznet.com","puhutv.com","shirl.club","sinefil.tv","tafdi3.com","tafdi4.com","teknop.net","tgyama.com","trfilm.net","tv8.com.tr","vidlax.xyz","volsex.com","yeppuu.com","zarize.com","animeler.me","contentx.me","diziall.com","dizifon.com","dizigom1.tv","dizikorea.*","dizipal.org","dizipia.com","dizirex.com","dizirix.net","diziyou.one","dmax.com.tr","duzcetv.com","efendim.xyz","filmcus.com","filmcuss.cc","filmgo1.com","filmizle.cx","filmjr2.org","filmmodu.co","hdfilmcix.*","hlktrpl.cfd","intekno.net","izlekolik.*","mangawt.com","miuitr.info","mixizle.com","osxinfo.net","otopark.com","pembetv18.*","puffytr.com","tranimaci.*","trtizle.com","turkanime.*","vipifsa.com","zerotik.com","altporno.xyz","aspor.com.tr","coinotag.com","cristal.guru","diziboxx.com","diziday1.com","dizimax2.com","dizimore.com","diziwatch.tv","dolufilm.org","erotikgo.com","filmcusx.com","filmizletv.*","fullhdfilm.*","fullhdizle.*","izleorg3.org","izlesene.com","joymaxtr.com","karnaval.com","nowtv.com.tr","oyungibi.com","playerzz.xyz","pllsfored.co","sozcu.com.tr","teve2.com.tr","tlctv.com.tr","turkaliz.com","turkanime.co","turkifsa.xyz","turkrock.com","tv8bucuk.com","tvboff10.com","tvboff11.com","tvboff12.com","tvboff13.com","tvboff14.com","tvboff15.com","tvboff16.com","tvboff17.com","tvboff18.com","tvboff19.com","tvboff20.com","ulker.com.tr","vidtekno.com","zzerotik.com","720pizleme.cc","ahaber.com.tr","arrowizle.com","bizimyaka.com","burdenfly.com","dipfilmizle.*","dizilla40.com","dizipaltv.net","diziyoutv.com","domplayer.org","ediziizle.com","efullizle.com","elzemfilm.org","erotikjam.com","exceldepo.com","filmizlemax.*","filmizletv1.*","filmmoduu.com","flatscher.net","fluffcore.com","genelpara.com","gsmturkey.net","guzelfilm.com","haberturk.com","hdfilmizle.in","hdnetflix.net","inceleriz.com","izlekolik.org","jetfilmizle.*","justin-tv.org","kanald.com.tr","korkuseli.com","mangaship.com","mangaship.net","maxfilmizle.*","mordefter.com","pornoanne.com","showtv.com.tr","sinemaizle.co","sondakika.com","startv.com.tr","t24giris2.cfd","taraftarium.*","technopat.net","tekniknot.com","tranimaci.com","tranimeci.com","tranimeizle.*","trgoals78.top","trgoals79.top","trgoals80.top","trgoals81.top","trgoals82.top","trgoals83.top","trgoals84.top","trgoals85.top","trgoals86.top","trgoals87.top","trgoals88.top","trgoals89.top","trgoals90.top","trgoals91.top","trgoals92.top","trgoals93.top","trgoals94.top","trgoals95.top","trgoals96.top","trgoals97.top","trgoals98.top","trgoals99.top","ulketv.com.tr","uzaymanga.com","vkfilmizlee.*","vkfilmizlet.*","yabancidizi.*","youtubemp3.us","zeustv204.com","zeustv205.com","zeustv206.com","zeustv207.com","zeustv208.com","zeustv209.com","zeustv210.com","zeustv211.com","zeustv212.com","zeustv213.com","zeustv214.com","zeustv215.com","zeustv216.com","zeustv217.com","zeustv218.com","zeustv219.com","zeustv220.com","zeustv221.com","zeustv222.com","zeustv223.com","zeustv224.com","zeustv225.com","zeustv226.com","zeustv227.com","zeustv228.com","zeustv229.com","zeustv230.com","zeustv231.com","zeustv232.com","zeustv233.com","zeustv234.com","zeustv235.com","zeustv236.com","zeustv237.com","zeustv238.com","zeustv239.com","zeustv240.com","zeustv241.com","zeustv242.com","zeustv243.com","zeustv244.com","zeustv245.com","zeustv246.com","zeustv247.com","zeustv248.com","zeustv249.com","zeustv250.com","zeustv251.com","zeustv252.com","zeustv253.com","zeustv254.com","asfilmizle.com","bafrahaber.com","beyaztv.com.tr","dentalilan.com","dizipal12.site","dizipal13.site","dizipal14.site","dizipal15.site","dizipal16.site","dizipal17.site","dizipal19.site","dizipal21.site","dizipal22.site","dizipal23.site","dizipal24.site","dizipal25.site","dizipal26.site","dizipal27.site","dizipal28.site","dizipalx54.com","dizipalx55.com","dizipalx56.com","dizipalx57.com","dizipalx58.com","dizipalx59.com","dizipalx60.com","dizipalx61.com","dizipalx62.com","dizipalx63.com","dizipalx64.com","dizipalx65.com","dizipalx66.com","dizipalx67.com","dizipalx68.com","dizipalx69.com","dizipalx70.com","dizipalx71.com","dizipalx72.com","dizipalx73.com","eksisozluk.com","eldermanga.com","ensonhaber.com","epikplayer.xyz","erosfilmizle.*","erotikfimm.com","erotikhoot.com","filmizleplus.*","filmkuzusu.vip","filmzevkim.com","fullfilmizle.*","gecmisi.com.tr","geziforumu.com","hdfilmizle.org","hdfilmsitesi.*","hdfreeizle.com","hdmixfilim.com","justintvde.com","kanalmaras.com","onlinedizi.sbs","ozgunbilgi.com","pandaspor.live","pornoizle9.icu","selcuksports.*","seyredeger.com","sinekolikk.com","sinemangoo.org","sinematurk.com","sinetiktok.com","trgoals100.top","trgoals101.top","trgoals102.top","trgoals103.top","trgoals104.top","trgoals105.top","trgoals106.top","trgoals107.top","trgoals108.top","trgoals109.top","trgoals110.top","trgoals111.top","trgoals112.top","trgoals113.top","trgoals114.top","trgoals115.top","trgoals116.top","trgoals117.top","trgoals118.top","trgoals119.top","trgoals120.top","trgoals121.top","trgoals122.top","trgoals123.top","trgoals124.top","trgoals125.top","trgoals126.top","trgoals127.top","trgoals128.top","turkleak1.live","videojs.online","videoseyred.in","vizyon18tv.com","vkfilmizle.net","vknsorgula.net","webteizle3.xyz","webteizle4.xyz","webteizle5.xyz","webteizle6.xyz","webteizle7.xyz","webteizle8.xyz","webteizle9.xyz","yavuzfilmm.com","zerotiktok.com","aydinlik.com.tr","bamfilmizle.com","betivotv156.com","betivotv157.com","betivotv158.com","betivotv159.com","betivotv160.com","betivotv161.com","betivotv162.com","betivotv163.com","betivotv164.com","betivotv165.com","betivotv166.com","birasyadizi.com","bloomberght.com","cizgivedizi.com","dizipal.website","eescobarvip.com","erotikkizle.com","escobarvip.blog","filmdizibox.com","filmkuzusu1.com","filmmakinesi1.*","hayrirsds24.cfd","ifsamerkezi.com","inattvgiris.pro","justintvsh.baby","kriptoradar.com","kuponuna476.top","kuponuna477.top","kuponuna478.top","kuponuna479.top","kuponuna480.top","kuponuna481.top","kuponuna482.top","kuponuna483.top","kuponuna484.top","kuponuna485.top","kuponuna486.top","kuponuna487.top","kuponuna488.top","kuponuna489.top","kuponuna490.top","kuponuna491.top","kuponuna492.top","kuponuna493.top","kuponuna494.top","kuponuna495.top","kuponuna496.top","kuponuna497.top","kuponuna498.top","kuponuna499.top","kuponuna500.top","kuponuna501.top","kuponuna502.top","kuponuna503.top","kuponuna504.top","kuponuna505.top","kuponuna506.top","kuponuna507.top","kuponuna508.top","kuponuna509.top","kuponuna510.top","kuponuna511.top","kuponuna512.top","kuponuna513.top","kuponuna514.top","kuponuna515.top","kuponuna516.top","kuponuna517.top","kuponuna518.top","kuponuna519.top","kuponuna520.top","kuponuna521.top","kuponuna522.top","kuponuna523.top","kuponuna524.top","kuponuna525.top","kuponuna526.top","kuponuna527.top","kuponuna528.top","kuponuna529.top","kuponuna530.top","kuponuna531.top","kuponuna532.top","kuponuna533.top","kuponuna534.top","kuponuna535.top","kuponuna536.top","kuponuna537.top","kuponuna538.top","kuponuna539.top","kuponuna540.top","kuponuna541.top","kuponuna542.top","kuponuna543.top","kuponuna544.top","kuponuna545.top","kuponuna546.top","kuponuna547.top","kuponuna548.top","kuponuna549.top","kuponuna550.top","kuponuna551.top","kuponuna552.top","kuponuna553.top","kuponuna554.top","kuponuna555.top","kuponuna556.top","kuponuna557.top","kuponuna558.top","kuponuna559.top","kuponuna560.top","kuponuna561.top","kuponuna562.top","kuponuna563.top","kuponuna564.top","kuponuna565.top","kuponuna566.top","kuponuna567.top","kuponuna568.top","kuponuna569.top","merlinscans.com","movietube32.xyz","pchocasi.com.tr","sinemakolik.net","sinemakolik.org","sinemakolix.com","sinemakolix.net","siyahfilmizle.*","tenshimanga.com","trgoals1495.xyz","trgoals1496.xyz","trgoals1497.xyz","trgoals1498.xyz","trgoals1499.xyz","trgoals1500.xyz","trgoals1501.xyz","trgoals1502.xyz","trgoals1503.xyz","trgoals1504.xyz","trgoals1505.xyz","trgoals1506.xyz","trgoals1507.xyz","trgoals1508.xyz","trgoals1509.xyz","trgoals1510.xyz","trgoals1511.xyz","trgoals1512.xyz","trgoals1513.xyz","trgoals1514.xyz","trgoals1515.xyz","trgoals1516.xyz","trgoals1517.xyz","trgoals1518.xyz","trgoals1519.xyz","trgoals1520.xyz","trgoals1521.xyz","trgoals1522.xyz","trgoals1523.xyz","trgoals1524.xyz","trgoals1525.xyz","trgoals1526.xyz","trgoals1527.xyz","trgoals1528.xyz","trgoals1529.xyz","trgoals1530.xyz","trgoals1531.xyz","trgoals1532.xyz","trgoals1533.xyz","trgoals1534.xyz","trgoals1535.xyz","trgoals1536.xyz","trgoals1537.xyz","trgoals1538.xyz","trgoals1539.xyz","trgoals1540.xyz","trgoals1541.xyz","trgoals1542.xyz","trgoals1543.xyz","veryansintv.com","webteizle10.xyz","yeniasya.com.tr","zipfilmizle.com","4kfilmizlesene.*","afroditscans.com","asyadiziizle.com","bakimlikadin.net","balfilmizle2.org","belestepe701.sbs","belestepe702.sbs","belestepe703.sbs","belestepe704.sbs","belestepe705.sbs","belestepe706.sbs","belestepe707.sbs","belestepe708.sbs","belestepe709.sbs","belestepe710.sbs","belestepe711.sbs","belestepe712.sbs","belestepe713.sbs","belestepe714.sbs","belestepe715.sbs","belestepe716.sbs","belestepe717.sbs","belestepe718.sbs","belestepe719.sbs","belestepe720.sbs","bumfilmizle1.com","filmerotixxx.com","filmizletv18.com","fullhdfilmizle.*","goodfilmizle.com","hdfilmizlesene.*","hdfilmizletv.net","hentaizm6.online","hentaizm7.online","hentaizm8.online","hentaizm9.online","klavyeanaliz.org","okultanitimi.net","sinemadafilm.com","sinemadelisi.com","teknoinfo.com.tr","webdramaturkey.*","asyaanimeleri.com","aydindenge.com.tr","beceriksizler.net","bosssports326.com","bosssports327.com","bosssports328.com","bosssports329.com","bosssports330.com","bosssports331.com","bosssports332.com","bosssports333.com","bosssports334.com","bosssports335.com","bosssports336.com","bosssports337.com","bosssports338.com","bosssports339.com","bosssports340.com","bosssports341.com","bosssports342.com","bosssports343.com","bosssports344.com","bosssports345.com","breakingbadizle.*","discordsunucu.com","erotizmvadisi.com","forumchess.com.tr","fullfilmcibaba.nl","fullhdfilmmodu2.*","hdfilmcehennemi.*","hdfilmizleamk.net","hdfilmizlesen.com","hentaizm10.online","hentaizm11.online","hentaizm12.online","hentaizm13.online","hentaizm14.online","hentaizm15.online","hentaizm16.online","hentaizm17.online","hentaizm18.online","hentaizm19.online","hentaizm20.online","hentaizm21.online","hentaizm22.online","hentaizm23.online","hentaizm24.online","hentaizm25.online","jetfilmizletv.net","kelebekfilmm1.com","klasikfilmler1.cc","klasikfilmler2.cc","klasikfilmler3.cc","klasikfilmler4.cc","klasikfilmler5.cc","klasikfilmler6.cc","klasikfilmler7.cc","klasikfilmler8.cc","klasikfilmler9.cc","kuzufilmizle1.com","macicanliizle.sbs","macizlevip741.sbs","macizlevip742.sbs","macizlevip743.sbs","macizlevip744.sbs","macizlevip745.sbs","macizlevip746.sbs","macizlevip747.sbs","macizlevip748.sbs","macizlevip749.sbs","macizlevip750.sbs","macizlevip751.sbs","macizlevip752.sbs","macizlevip753.sbs","macizlevip754.sbs","macizlevip755.sbs","macizlevip756.sbs","macizlevip757.sbs","macizlevip758.sbs","macizlevip759.sbs","macizlevip760.sbs","mactanmaca791.sbs","mactanmaca792.sbs","mactanmaca793.sbs","mactanmaca794.sbs","mactanmaca795.sbs","mactanmaca796.sbs","mactanmaca797.sbs","mactanmaca798.sbs","mactanmaca799.sbs","mactanmaca800.sbs","mactanmaca801.sbs","mactanmaca802.sbs","mactanmaca803.sbs","mactanmaca804.sbs","mactanmaca805.sbs","mactanmaca806.sbs","mactanmaca807.sbs","mactanmaca808.sbs","mactanmaca809.sbs","mactanmaca810.sbs","memoryhackers.org","royalfilmizle.com","selcuk-sports.com","sosyogaraj.com.tr","taraftariumxx.cfd","tempestmangas.com","turkifsaalemi.com","wheel-size.com.tr","yabancidiziio.com","zamaninvarken.com","1080hdfilmizle.com","arsiv.mackolik.com","dmlstechnology.com","erotikfilmtube.com","filmifullizlet.com","filmizlehdfilm.com","filmizlehdizle.com","fullhdfilmizletv.*","hdfilmizlesene.net","hdfilmizlesene.org","klasikfilmler10.cc","klasikfilmler11.cc","klasikfilmler12.cc","klasikfilmler13.cc","klasikfilmler14.cc","klasikfilmler15.cc","klasikfilmler16.cc","klasikfilmler17.cc","klasikfilmler18.cc","klasikfilmler19.cc","klasikfilmler20.cc","komputerdelisi.com","korsanedebiyat.com","lorabettvhd68.shop","lorabettvhd69.shop","lorabettvhd70.shop","lorabettvhd71.shop","lorabettvhd72.shop","lorabettvhd73.shop","lorabettvhd74.shop","lorabettvhd75.shop","lorabettvhd76.shop","lorabettvhd77.shop","lorabettvhd78.shop","lorabettvhd79.shop","lorabettvhd80.shop","lorabettvhd81.shop","lorabettvhd82.shop","lorabettvhd83.shop","lorabettvhd84.shop","lorabettvhd85.shop","lorabettvhd86.shop","lorabettvhd87.shop","papazsports922.pro","papazsports923.pro","papazsports924.pro","papazsports925.pro","papazsports926.pro","papazsports927.pro","papazsports928.pro","papazsports929.pro","papazsports930.pro","papazsports931.pro","papazsports932.pro","papazsports933.pro","papazsports934.pro","papazsports935.pro","papazsports936.pro","papazsports937.pro","papazsports938.pro","papazsports939.pro","papazsports940.pro","papazsports941.pro","papazsports942.pro","papazsports943.pro","papazsports944.pro","papazsports945.pro","papazsports946.pro","papazsports947.pro","papazsports948.pro","papazsports949.pro","papazsports950.pro","papazsports951.pro","papazsports952.pro","papazsports953.pro","papazsports954.pro","papazsports955.pro","papazsports956.pro","papazsports957.pro","papazsports958.pro","papazsports959.pro","papazsports960.pro","papazsports961.pro","papazsports962.pro","papazsports963.pro","papazsports964.pro","papazsports965.pro","papazsports966.pro","papazsports967.pro","papazsports968.pro","papazsports969.pro","papazsports970.pro","player.filmizle.in","sinemafilmizle.net","superfilmgeldi.biz","superfilmgeldi.net","turkerotikfilm.com","turkifsalar7.space","turkifsalar8.space","turkifsalar9.space","yabancidizibax.com","yabancidizilertv.*","yabancidizivip.com","yenierotikfilm.xyz","720pfilmizleme1.com","720pfilmizletir.com","edebiyatdefteri.com","erotikhdfilmx3.shop","filmseyretizlet.net","hdfilmcehennem.live","hudsonlegalblog.com","iddaaorantahmin.com","justintvizle550.top","justintvizle551.top","justintvizle552.top","justintvizle553.top","justintvizle554.top","justintvizle555.top","justintvizle556.top","justintvizle557.top","justintvizle558.top","justintvizle559.top","justintvizle560.top","justintvizle561.top","justintvizle562.top","justintvizle563.top","justintvizle564.top","justintvizle565.top","justintvizle566.top","justintvizle567.top","justintvizle568.top","justintvizle569.top","mustafabukulmez.com","onlinefilmizle.site","primeembedpanel.com","raindropteamfan.com","sexfilmleriizle.com","sotweturkifsa8.blog","turkdenizcileri.com","turkifsalar10.space","turkifsalar11.space","turkifsalar12.space","turkifsalar13.space","turkifsalar14.space","turkifsalar15.space","turkifsalar16.space","turkifsalar17.space","turkifsalar18.space","turkifsalar19.space","turkifsalar20.space","turkifsalife16.blog","webdramaturkey2.com","1080pfilmizletir.com","720pfilmizlesene.com","ankarakampkafasi.com","asyafanatiklerim.com","belgeselizlesene.com","boxofficeturkiye.com","buenosairesideal.com","filmifullizle.online","fullfilmizlebaba.com","fullfilmizlesene.net","fullhdfilmizlesene.*","menufiyatlari.com.tr","netfullfilmizle3.com","sinemadafilmizle.net","sinemadafilmizle.org","supernaturalizle.com","tekfullfilmizle5.com","tekparthdfilmizle.cc","telegramgruplari.com","turkifsalifetr1.blog","beintvcanliizle52.com","beintvcanliizle53.com","beintvcanliizle54.com","beintvcanliizle55.com","beintvcanliizle56.com","beintvcanliizle57.com","beintvcanliizle58.com","beintvcanliizle59.com","beintvcanliizle60.com","beintvcanliizle61.com","beintvcanliizle62.com","beintvcanliizle63.com","beintvcanliizle64.com","beintvcanliizle65.com","beintvcanliizle66.com","beintvcanliizle67.com","beintvcanliizle68.com","beintvcanliizle69.com","beintvcanliizle70.com","beintvcanliizle71.com","bilgalem.blogspot.com","fullhdfilmcenneti.pro","fullhdfilmizleabi.com","fullhdfilmizlett1.com","guneykoresinemasi.com","hdselcuksports368.top","hdselcuksports420.top","hdselcuksports421.top","hdselcuksports422.top","hdselcuksports423.top","hdselcuksports424.top","hdselcuksports425.top","hdselcuksports426.top","hdselcuksports427.top","hdselcuksports428.top","hdselcuksports429.top","hdselcuksports430.top","hdselcuksports431.top","hdselcuksports432.top","hdselcuksports433.top","hdselcuksports434.top","hdselcuksports435.top","hdselcuksports436.top","hdselcuksports437.top","hdselcuksports438.top","hdselcuksports439.top","hdselcuksports440.top","hdselcuksports441.top","hdselcuksports442.top","hdselcuksports443.top","hdselcuksports444.top","hdselcuksports445.top","hdselcuksports446.top","hdselcuksports447.top","hdselcuksports448.top","hdselcuksports449.top","hdselcuksports450.top","hdselcuksports451.top","hdselcuksports452.top","hdselcuksports453.top","hdselcuksports454.top","hdselcuksports455.top","hdselcuksports456.top","hdselcuksports457.top","hdselcuksports458.top","hdselcuksports459.top","hdselcuksports460.top","hdselcuksports461.top","hdselcuksports462.top","hdselcuksports463.top","hdselcuksports464.top","hdselcuksports465.top","hdselcuksports466.top","hdselcuksports467.top","hdselcuksports468.top","hdselcuksports469.top","hdselcuksports470.top","hdselcuksports471.top","hdselcuksports472.top","sinnerclownceviri.com","yabancidiziizlesene.*","bettercallsaulizle.com","canlimacizlemax446.top","canlimacizlemax447.top","canlimacizlemax448.top","canlimacizlemax449.top","canlimacizlemax450.top","canlimacizlemax451.top","canlimacizlemax452.top","canlimacizlemax453.top","canlimacizlemax454.top","canlimacizlemax455.top","canlimacizlemax456.top","canlimacizlemax457.top","canlimacizlemax458.top","canlimacizlemax459.top","canlimacizlemax460.top","canlimacizlemax461.top","canlimacizlemax462.top","canlimacizlemax463.top","canlimacizlemax464.top","canlimacizlemax465.top","canlimacizlemax466.top","canlimacizlemax467.top","canlimacizlemax468.top","canlimacizlemax469.top","canlimacizlemax470.top","canlimacizlemax471.top","canlimacizlemax472.top","canlimacizlemax473.top","canlimacizlemax474.top","canlimacizlemax475.top","canlimacizlemax476.top","canlimacizlemax477.top","canlimacizlemax478.top","canlimacizlemax479.top","da95848c82c933d2.click","forum.donanimhaber.com","fullhdfilmizlepala.com","hdfilmcehennemizle.com","veterinerhekimleri.com","azsekerlik.blogspot.com","fullfilmcibabaizlet.com","goley90canlitv3003.site","goley90canlitv3004.site","goley90canlitv3005.site","goley90canlitv3006.site","goley90canlitv3007.site","goley90canlitv3008.site","goley90canlitv3009.site","goley90canlitv3010.site","goley90canlitv3011.site","goley90canlitv3012.site","goley90canlitv3013.site","goley90canlitv3014.site","goley90canlitv3015.site","goley90canlitv3016.site","goley90canlitv3017.site","goley90canlitv3018.site","goley90canlitv3019.site","goley90canlitv3020.site","goley90canlitv3021.site","goley90canlitv3022.site","nefisyemektarifleri.com","search.donanimhaber.com","tekparthdfilmizlesene.*","justintvx30.blogspot.com","justintvxx10.blogspot.com","turkcealtyazilipornom.com","justintvgiris.blogspot.com","kampanyatakip.blogspot.com","canlimacizlene.blogspot.com","taraftarium402.blogspot.com","cinque.668a396e58bcbc27.click","taraftariummdeneme.blogspot.com","sportboss-macizlesbs.blogspot.com","taraftarium24hdgiris1.blogspot.com","inattv-taraftarium24-macizle.blogspot.com","taraftarium24canli-macizlesene.blogspot.com","canli-mac-izle-taraftarium24-izle.blogspot.com","selcukspor-taraftarium24canliizle1.blogspot.com"];
+
+const $scriptletFromRegexes$ = /* 31 */ ["canlitri","(^|.+\\.)canlitribun\\d+\\.live","21","lorabett","lorabettvhd\\d+\\.shop","57","canlimac","canlimacizlemax\\d+\\.top","57","hdselcuk","hdselcuksports\\d+\\.top","57,71","justintv","justintvizle\\d+\\.top","57,71","www.trgo","^www\\.trgoals\\d+\\.top$","57,175","papazspo","papazsports\\d+\\.pro","57","webteizl","^webteizle\\d+\\.xyz","58","trgoals","trgoals\\d+\\.xyz$","58,150","hdfilmce","hdfilmcehennemi\\d+.org","71","turkifsa","^turkifsalar\\d+\\.space$","120,158","beintvca","beintvcanliizle\\d+.com","139","dizipalx","dizipalx\\d+.com","140","zeustv","zeustv\\d+\\.com","159","canlimac","canlimaclar\\d+\\.sbs","159","macizlev","macizlevip\\d+\\.sbs","159","belestep","belestepe\\d+\\.sbs","159","mactanma","mactanmaca\\d+\\.sbs","159","bossspor","bosssports\\d+\\.com","160","betivotv","betivotv\\d+\\.com","161","goley90c","goley90canlitv\\d+\\.site","162","hentaizm","hentaizm\\d+.online","163","klasikfi","klasikfilmler\\d+\\.cc","164","izlemac","izlemac\\d+\\.sbs","165",".strmrdr","^i\\[a-z\\]*\\.strmrdr\\[a-z0-9\\]+\\..*","165","mackeyfi","mackeyfi\\d+\\.sbs$","165","diziyou","diziyou\\d+\\.com","167","dizilla","dizilla\\d*\\.(club|com|nl)","168","main.uxs","^main\\.uxsyplayer[a-z0-9]+\\.click$","169,170","dcdl","dcdl[a-z0-9-]+\\.xyz$","170","tvboff","tvboff\\d+\\.com","171"];
+
+const $hasEntities$ = true;
+const $hasAncestors$ = false;
+const $hasRegexes$ = true;
+
+/******************************************************************************/
+
+const entries = (( ) => {
+    const docloc = document.location;
+    const origins = [ docloc.origin ];
+    if ( docloc.ancestorOrigins ) {
+        origins.push(...docloc.ancestorOrigins);
+    }
+    return origins.map((origin, i) => {
+        const beg = origin.indexOf('://');
+        if ( beg === -1 ) { return; }
+        const hn1 = origin.slice(beg+3)
+        const end = hn1.indexOf(':');
+        const hn2 = end === -1 ? hn1 : hn1.slice(0, end);
+        const hnParts = hn2.split('.');
+        if ( hn2.length === 0 ) { return; }
+        const hns = [];
+        for ( let i = 0; i < hnParts.length; i++ ) {
+            hns.push(`${hnParts.slice(i).join('.')}`);
+        }
+        const ens = [];
+        if ( $hasEntities$ ) {
+            const n = hnParts.length - 1;
+            for ( let i = 0; i < n; i++ ) {
+                for ( let j = n; j > i; j-- ) {
+                    ens.push(`${hnParts.slice(i,j).join('.')}.*`);
+                }
+            }
+            ens.sort((a, b) => {
+                const d = b.length - a.length;
+                if ( d !== 0 ) { return d; }
+                return a > b ? -1 : 1;
+            });
+        }
+        return { hns, ens, i };
+    }).filter(a => a !== undefined);
+})();
+if ( entries.length === 0 ) { return; }
+
+const collectArglistRefIndices = (out, hn, r) => {
+    let l = 0, i = 0, d = 0;
+    let candidate = '';
+    while ( l < r ) {
+        i = l + r >>> 1;
+        candidate = $scriptletHostnames$[i];
+        d = hn.length - candidate.length;
+        if ( d === 0 ) {
+            if ( hn === candidate ) {
+                out.add(i); break;
+            }
+            d = hn < candidate ? -1 : 1;
+        }
+        if ( d < 0 ) {
+            r = i;
+        } else {
+            l = i + 1;
+        }
+    }
+    return i;
+};
+
+const indicesFromHostname = (out, hnDetails, suffix = '') => {
+    if ( hnDetails.hns.length === 0 ) { return; }
+    let r = $scriptletHostnames$.length;
+    for ( const hn of hnDetails.hns ) {
+        r = collectArglistRefIndices(out, `${hn}${suffix}`, r);
+    }
+    if ( $hasEntities$ ) {
+        let r = $scriptletHostnames$.length;
+        for ( const en of hnDetails.ens ) {
+            r = collectArglistRefIndices(out, `${en}${suffix}`, r);
+        }
+    }
+};
+
+const todoIndices = new Set();
+indicesFromHostname(todoIndices, entries[0]);
+if ( $hasAncestors$ ) {
+    for ( const entry of entries ) {
+        if ( entry.i === 0 ) { continue; }
+        indicesFromHostname(todoIndices, entry, '>>');
+    }
+}
+$scriptletHostnames$.length = 0;
+
+// Collect arglist references
+const todo = new Set();
+if ( todoIndices.size !== 0 ) {
+    const arglistRefs = $scriptletArglistRefs$.split(';');
+    for ( const i of todoIndices ) {
+        for ( const ref of JSON.parse(`[${arglistRefs[i]}]`) ) {
+            todo.add(ref);
+        }
+    }
+}
+if ( $hasRegexes$ ) {
+    const { hns } = entries[0];
+    for ( let i = 0, n = $scriptletFromRegexes$.length; i < n; i += 3 ) {
+        const needle = $scriptletFromRegexes$[i+0];
+        let regex;
+        for ( const hn of hns ) {
+            if ( hn.includes(needle) === false ) { continue; }
+            if ( regex === undefined ) {
+                regex = new RegExp($scriptletFromRegexes$[i+1]);
+            }
+            if ( regex.test(hn) === false ) { continue; }
+            for ( const ref of JSON.parse(`[${$scriptletFromRegexes$[i+2]}]`) ) {
+                todo.add(ref);
+            }
+        }
+    }
+}
+if ( todo.size === 0 ) { return; }
+
+// Execute scriplets
+{
+    const arglists = $scriptletArglists$.split(';');
+    const args = $scriptletArgs$;
+    for ( const ref of todo ) {
+        if ( ref < 0 ) { continue; }
+        if ( todo.has(~ref) ) { continue; }
+        const arglist = JSON.parse(`[${arglists[ref]}]`);
+        const fn = $scriptletFunctions$[arglist[0]];
+        try { fn(...arglist.slice(1).map(a => args[a])); }
+        catch { }
+    }
+}
+
+/******************************************************************************/
+
+// End of local scope
+})();
+
+void 0;

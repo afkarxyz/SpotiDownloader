@@ -238,6 +238,10 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                         <Switch id="embed-max-quality-cover" checked={tempSettings.embedMaxQualityCover} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedMaxQualityCover: checked }))}/>
                         <Label htmlFor="embed-max-quality-cover" className="cursor-pointer text-sm font-normal">Embed Max Quality Cover</Label>
                       </div>
+                      <div className="flex items-center gap-3">
+                        <Switch id="use-single-genre" checked={tempSettings.useSingleGenre} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, useSingleGenre: checked }))}/>
+                        <Label htmlFor="use-single-genre" className="cursor-pointer text-sm font-normal">Use Single Genre</Label>
+                      </div>
                    </div>
               </div>
           </div>)}
@@ -293,6 +297,8 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                       <Switch id="use-first-artist-only" checked={tempSettings.useFirstArtistOnly} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, useFirstArtistOnly: checked }))}/>
                        <Label htmlFor="use-first-artist-only" className="text-sm cursor-pointer font-normal">Use First Artist Only</Label>
                     </div>
+
+
               </div>
 
               <div className="space-y-2">

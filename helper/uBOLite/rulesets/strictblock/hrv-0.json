@@ -1,0 +1,32 @@
+[
+{
+ "action": {
+  "redirect": {
+   "regexSubstitution": "/strictblock.html#\\0"
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "regexFilter": "^https?://.*",
+  "requestDomains": [
+   "a.mabipa.com",
+   "btloader.com",
+   "eph-adsjutarnji.cdn.sysbee.net",
+   "klik-slider.morgancode.com",
+   "linker.hr",
+   "lupon.media",
+   "redakcija.alo.rs",
+   "swcs.24sata.rocks",
+   "traffic.styria.hr",
+   "widget.admiral.hr",
+   "widget.marktjagd.de",
+   "widgets.jutarnji.hr"
+  ],
+  "resourceTypes": [
+   "main_frame"
+  ]
+ },
+ "id": 1,
+ "priority": 29
+}
+]

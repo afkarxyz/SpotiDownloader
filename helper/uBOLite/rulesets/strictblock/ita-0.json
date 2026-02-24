@@ -1,0 +1,46 @@
+[
+{
+ "action": {
+  "redirect": {
+   "regexSubstitution": "/strictblock.html#\\0"
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "regexFilter": "^https?://.*",
+  "requestDomains": [
+   "ad-hub.it",
+   "ad.citynews.it",
+   "adserver.ilgazzettinovesuviano.com",
+   "adsystem.pages.dev",
+   "adtech.vivimedia.it",
+   "adv-img.edilportale.com",
+   "advx.esprimo.com",
+   "affiliatetxt.nextmediaweb.com",
+   "banner.moscarossa.biz",
+   "bannerpress.bps.plap.it",
+   "bn.radiogold.it",
+   "d1yhzddoi8ev99.cloudfront.net",
+   "d2moz0h55szev9.cloudfront.net",
+   "digitaladv.despar.it",
+   "limone.iltrovatore.it",
+   "loader.oraridiapertura24.it",
+   "middycdn-a.akamaihd.net",
+   "plx.mrpornogratis.it",
+   "plx.pornototale.com",
+   "roi.ediscom.it",
+   "rtbuzz.net",
+   "shoppydoo.com",
+   "tdn.da-services.ch",
+   "unifiedads.magellanotech.it",
+   "vzbl.eu",
+   "widgets.shop.moda.it"
+  ],
+  "resourceTypes": [
+   "main_frame"
+  ]
+ },
+ "id": 1,
+ "priority": 29
+}
+]

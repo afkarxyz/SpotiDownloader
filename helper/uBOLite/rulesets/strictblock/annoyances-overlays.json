@@ -1,0 +1,31 @@
+[
+{
+ "action": {
+  "redirect": {
+   "regexSubstitution": "/strictblock.html#\\0"
+  },
+  "type": "redirect"
+ },
+ "condition": {
+  "regexFilter": "^https?://.*",
+  "requestDomains": [
+   "algosit.com",
+   "bbc7dcd54670499dbd3ba50c33600830.pages.ubembed.com",
+   "data.reachplc.com",
+   "embeds.beehiiv.com",
+   "f.convertkit.com",
+   "gn-flagpoles.api.bbci.co.uk",
+   "newsletter.beautydea.it",
+   "ping.contactpigeon.com",
+   "subscription-forms.smsbump.com",
+   "wheelioapp.azureedge.net",
+   "widget.smsinfo.io"
+  ],
+  "resourceTypes": [
+   "main_frame"
+  ]
+ },
+ "id": 1,
+ "priority": 29
+}
+]

@@ -78,7 +78,7 @@ _If this software is useful and brings you value,
 consider supporting the project by buying me a coffee.
 Your support helps keep development going._
 
-[![Ko-fi](https://img.shields.io/badge/Support%20me%20on%20Ko--fi-72a5f2?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/afkarxyz)
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
 
 ## Disclaimer
 
@@ -93,6 +93,10 @@ You are solely responsible for:
 3. Any legal consequences resulting from the misuse of this tool.
 
 The software is provided "as is", without warranty of any kind. The author assumes no liability for any bans, damages, or legal issues arising from its use.
+
+## API Credits
+
+[MusicBrainz](https://musicbrainz.org) · [SpotiDownloader](https://spotidownloader.com) · [Spotify Lyrics API](https://github.akashrchandran.in/spotify-lyrics-api) · [LRCLIB](https://lrclib.net)
 
 > [!TIP]
 >

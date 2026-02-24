@@ -16,7 +16,6 @@ import SpotubeDLIcon from "@/assets/icons/spotubedl.svg";
 import SpotiFLACIcon from "@/assets/icons/spotiflac.svg";
 import XBatchDLIcon from "@/assets/icons/xbatchdl.svg";
 import SpotiFLACNextIcon from "@/assets/icons/next.svg";
-import BmcLogo from "@/assets/bmc-logo.svg";
 import KofiLogo from "@/assets/kofi_symbol.svg";
 import { langColors } from "@/assets/github-lang-colors";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -278,7 +277,7 @@ ${contextContent}`;
             </Button>
             <Button variant={activeTab === "support" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("support")} className="rounded-b-none">
                 <Heart className="h-4 w-4"/>
-                Support Us
+                Support Me
             </Button>
         </div>
 
@@ -451,21 +450,16 @@ ${contextContent}`;
             
             {activeTab === "support" && (<div className="flex flex-col items-center justify-center p-8 space-y-8">
                 <div className="text-center space-y-2">
-                    <h3 className="text-2xl font-bold tracking-tight">Support Our Work</h3>
+                    <h3 className="text-2xl font-bold tracking-tight">Support Me</h3>
                     <p className="text-muted-foreground max-w-[500px]">
-                        If this software is useful and brings you value, consider supporting the project by buying me a coffee. Your support helps keep development going.
+                        If this software is useful and brings you value, consider supporting the project on Ko-fi. Your support helps keep development going.
                     </p>
                 </div>
 
-                <div className="grid sm:grid-cols-2 gap-4 w-full max-w-lg">
+                <div className="flex justify-center w-full max-w-lg">
                     <Button size="lg" className="h-16 text-lg font-semibold text-white gap-3 group" style={{ backgroundColor: "#72a4f2" }} onClick={() => openExternal("https://ko-fi.com/afkarxyz")}>
                         <img src={KofiLogo} className="h-8 w-8 transition-transform group-hover:scale-110" alt="Ko-fi"/>
                         Support me on Ko-fi
-                    </Button>
-
-                    <Button size="lg" className="h-16 text-lg font-semibold text-black gap-3 group" style={{ backgroundColor: "#ffdd00" }} onClick={() => openExternal("https://buymeacoffee.com/afkarxyz")}>
-                        <img src={BmcLogo} className="h-6 w-6 transition-transform group-hover:scale-110" alt="Buy Me a Coffee"/>
-                        Buy Me a Coffee
                     </Button>
                 </div>
             </div>)}

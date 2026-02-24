@@ -1,0 +1,86 @@
+header {
+    background-color: var(--surface-1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    }
+nav {
+    border: 0;
+    border-bottom: 1px solid var(--border-1);
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    overflow-x: hidden;
+    padding: 0;
+    }
+nav > .tabButton {
+    background-color: transparent;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    color: var(--dashboard-tab-ink);
+        fill: var(--dashboard-tab-ink);
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    padding: 0.7em 1.4em calc(0.7em - 3px);
+    text-decoration: none;
+    white-space: nowrap;
+    }
+nav > .tabButton:focus {
+    outline: 0;
+    }
+nav > .tabButton:hover {
+    background-color: var(--dashboard-tab-hover-surface);
+    border-bottom-color: var(--dashboard-tab-hover-border);
+    }
+
+body[data-pane="settings"] #dashboard-nav .tabButton[data-pane="settings"],
+body[data-pane="rulesets"] #dashboard-nav .tabButton[data-pane="rulesets"],
+body[data-pane="filters"] #dashboard-nav .tabButton[data-pane="filters"],
+body[data-pane="develop"] #dashboard-nav .tabButton[data-pane="develop"],
+body[data-pane="about"] #dashboard-nav .tabButton[data-pane="about"] {
+    background-color: var(--dashboard-tab-active-surface);
+    border-bottom: 3px solid var(--dashboard-tab-active-ink);
+    color: var(--dashboard-tab-active-ink);
+        fill: var(--dashboard-tab-active-ink);
+    }
+body:not([data-develop="true"]) #dashboard-nav .tabButton[data-pane="develop"] {
+    display: none;
+    }
+body:not([data-pane="rulesets"]) header [data-pane-related="rulesets"] {
+    display: none;
+    }
+
+body > section {
+    box-sizing: border-box;
+    display: none;
+    padding: 0 var(--default-gap-xxsmall);
+    padding-bottom: 2rem;
+    }
+body [data-pane-related] {
+    padding: 0 var(--default-gap-xxsmall);
+    }
+
+body[data-pane="settings"]:not(.busy) > section[data-pane="settings"],
+body[data-pane="rulesets"]:not(.busy) > section[data-pane="rulesets"],
+body[data-pane="filters"]:not(.busy) > section[data-pane="filters"],
+body[data-pane="develop"]:not(.busy) > section[data-pane="develop"],
+body[data-pane="about"]:not(.busy) > section[data-pane="about"],
+body.busy[data-pane] > section[data-pane="busy"] {
+    display: block;
+    }
+
+/* high dpi devices */
+:root.hidpi .tabButton {
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    }
+
+/* touch-screen devices */
+:root.mobile nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    }
+:root.mobile nav .logo {
+    display: none;
+    }

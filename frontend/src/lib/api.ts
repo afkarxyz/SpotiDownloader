@@ -13,6 +13,9 @@ export async function fetchSpotifyMetadata(url: string, batch: boolean = true, d
 }
 export async function downloadTrack(request: DownloadRequest): Promise<DownloadResponse> {
     const req = new main.DownloadRequest(request);
+    if (request.use_single_genre !== undefined) {
+        (req as any).use_single_genre = request.use_single_genre;
+    }
     return await DownloadTrack(req);
 }
 export async function downloadLyrics(request: LyricsDownloadRequest): Promise<LyricsDownloadResponse> {

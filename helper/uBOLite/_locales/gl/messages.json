@@ -1,0 +1,422 @@
+{
+  "extName": {
+    "message": "uBlock Origin Lite",
+    "description": "extension name."
+  },
+  "extShortDesc": {
+    "message": "Un bloqueador de contido con menos permisos. Bloquea anuncios, rastreadores, criptomineiros e mais despois da instalación.",
+    "description": "this will be in the Chrome web store: must be 132 characters or less"
+  },
+  "perRulesetStats": {
+    "message": "{{ruleCount}} regras, convertidas dende {{filterCount}} filtros de redes",
+    "description": "Appears aside each filter list in the _3rd-party filters_ pane"
+  },
+  "dashboardName": {
+    "message": "uBO Lite — Panel de control",
+    "description": "English: uBO Lite — Dashboard"
+  },
+  "settingsPageName": {
+    "message": "Axustes",
+    "description": "appears as tab name in dashboard"
+  },
+  "customFiltersPageName": {
+    "message": "Filtros persoais",
+    "description": "appears as tab name in dashboard"
+  },
+  "developPageName": {
+    "message": "Desenvolvemento",
+    "description": "appears as tab name in dashboard. Inspired from 'Develop' menu in Safari, see https://developer.apple.com/documentation/safari-developer-tools/develop-menu"
+  },
+  "aboutPageName": {
+    "message": "Acerca de",
+    "description": "appears as tab name in dashboard"
+  },
+  "aboutPrivacyPolicy": {
+    "message": "Política de privacidade",
+    "description": "Link to privacy policy on GitHub (English)"
+  },
+  "popupFilteringModeLabel": {
+    "message": "modo de filtrado",
+    "description": "Label in the popup panel for the current filtering mode"
+  },
+  "popupLocalToolsLabel": {
+    "message": "Neste sitio web",
+    "description": "Label in the popup panel for the local tools section"
+  },
+  "popupTipReport": {
+    "message": "Informar dun problema nesta web",
+    "description": "Tooltip used for the 'chat' icon in the panel"
+  },
+  "popupTipDashboard": {
+    "message": "Abrir o panel",
+    "description": "English: Click to open the dashboard"
+  },
+  "popupMoreButton": {
+    "message": "Máis",
+    "description": "Label to be used to show popup panel sections"
+  },
+  "popupLessButton": {
+    "message": "Menos",
+    "description": "Label to be used to hide popup panel sections"
+  },
+  "3pGroupDefault": {
+    "message": "Por defecto",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupAds": {
+    "message": "Anuncios",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupPrivacy": {
+    "message": "Privacidade",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupMalware": {
+    "message": "Protección contra malware, seguridade",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupAnnoyances": {
+    "message": "Molestias",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupMisc": {
+    "message": "Varios",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "3pGroupRegions": {
+    "message": "Rexións, linguas",
+    "description": "Header for a ruleset section in 'Filter lists pane'"
+  },
+  "customFiltersImportExportLabel": {
+    "message": "Importar/Exportar",
+    "description": "Text label heading the import/export area of custom filters"
+  },
+  "customFiltersImportTextareaPlaceholder": {
+    "message": "Pega aquí os filtros cosméticos a engadir",
+    "description": "Placeholder text which describes the purpose of the textarea widget"
+  },
+  "aboutChangelog": {
+    "message": "Rexistro de cambios",
+    "description": ""
+  },
+  "aboutCode": {
+    "message": "Código fonte (GPLv3)",
+    "description": "English: Source code (GPLv3)"
+  },
+  "aboutContributors": {
+    "message": "Contribúen",
+    "description": "English: Contributors"
+  },
+  "aboutSourceCode": {
+    "message": "Código fonte",
+    "description": "Link text to source code repo"
+  },
+  "aboutTranslations": {
+    "message": "Traducións",
+    "description": "Link text to translations repo"
+  },
+  "aboutFilterLists": {
+    "message": "Listas de filtrado",
+    "description": "Link text to uBO's own filter lists repo"
+  },
+  "aboutDependencies": {
+    "message": "Dependencias externas (GPLv3-compatible):",
+    "description": "Shown in the About pane"
+  },
+  "supportS6H": {
+    "message": "Informar dun problema co filtro",
+    "description": "Header of 'Report a filter issue' section in Support pane"
+  },
+  "supportS3P1": {
+    "message": "Informa de problemas cos filtros en webs concretas no <span data-url=\"https://github.com/uBlockOrigin/uAssets/issues?q=is%3Aissue\">seguimento de problemas en <code>uBlockOrigin/uAssets</code>. <u>Require unha conta GitHub.</u>",
+    "description": "First paragraph of 'Filter issues' section in Support pane"
+  },
+  "supportS5H": {
+    "message": "Información para arranxar problemas",
+    "description": "Label of 'Troubleshooting information' section in 'Report a filter issue' page"
+  },
+  "supportS6P1S1": {
+    "message": "Para evitar a sobrecarga de traballo para as persoas voluntarias con duplicados dos problemas, comproba que aínda non se informou sobre o problema. <b>Nota:</b> ao premer no botón enviarás a orixe da páxina a GitHub.",
+    "description": "A paragraph in the filter issue reporter section"
+  },
+  "supportFindSpecificButton": {
+    "message": "Atopar denuncias parecidas",
+    "description": "A clickable link in the filter issue reporter section"
+  },
+  "supportS6URL": {
+    "message": "Enderezo da páxina web:",
+    "description": "Label for the URL of the page"
+  },
+  "supportS6Select1": {
+    "message": "A páxina web...",
+    "description": "Label for widget to select type of issue"
+  },
+  "supportS6Select1Option0": {
+    "message": "-- Escolle unha opción --",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option1": {
+    "message": "Mostra publicidade ou restos dela",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option2": {
+    "message": "Ten capas sobreimpostas ou elementos molestos",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option3": {
+    "message": "Detecta uBO Lite",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option4": {
+    "message": "Ten problemas relacionados coa privacidade",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option5": {
+    "message": "Funciona mal se uBO Lite está activado",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option6": {
+    "message": "Abre xanelas ou pestanas non solicitadas",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Select1Option7": {
+    "message": "Leva a software malicioso, phishing",
+    "description": "An entry in the widget used to select the type of issue"
+  },
+  "supportS6Checkbox1": {
+    "message": "Etiqueta a páxina como «NSFW» (<a href=\"https://wikipedia.org/wiki/Not_safe_for_work\">Non axeitada no traballo</a>)",
+    "description": "A checkbox to use for NSFW sites"
+  },
+  "supportReportSpecificButton": {
+    "message": "Crear nova denuncia",
+    "description": "Text for button which opens an external web page in Support pane"
+  },
+  "defaultFilteringModeSectionLabel": {
+    "message": "Modo de filtrado por defecto",
+    "description": "The header text for the default filtering mode section"
+  },
+  "defaultFilteringModeDescription": {
+    "message": "O modo de filtrado por defecto vaise sobrescribir usando os filtros propios para cada web. Podes axustar o modo de filtrado para calquera web acorde ás túas preferencias para esa web. Cada modo ten as súas vantaxes e inconvintes.",
+    "description": "This describes the default filtering mode setting"
+  },
+  "filteringMode0Name": {
+    "message": "sen filtrar",
+    "description": "Name of blocking mode 0"
+  },
+  "filteringMode1Name": {
+    "message": "básico",
+    "description": "Name of blocking mode 1"
+  },
+  "filteringMode2Name": {
+    "message": "óptimo",
+    "description": "Name of blocking mode 2"
+  },
+  "filteringMode3Name": {
+    "message": "completo",
+    "description": "Name of blocking mode 3"
+  },
+  "basicFilteringModeDescription": {
+    "message": "Filtrado básico na rede usando listas de filtrado seleccionadas.\n\nNon require permiso de lectura ou modificar datos do sitio web.",
+    "description": "This describes the 'basic' filtering mode"
+  },
+  "optimalFilteringModeDescription": {
+    "message": "Filtrado avanzado da rede e filtrado estendido específico usando listas de filtrado seleccionadas.\n\nRequire permisos máis amplos para ler e modificar datos en todas as webs.",
+    "description": "This describes the 'optimal' filtering mode"
+  },
+  "completeFilteringModeDescription": {
+    "message": "Filtro avanzado na rede e filtrado extenso usando listas xenéricas e específicas para as webs.\n\nRequire permisos máis amplos para ler e modificar datos en todas as webs.\n\nO filtrado extendido xenérico podería facer que aumentasen os recursos que usa a páxina web.",
+    "description": "This describes the 'complete' filtering mode"
+  },
+  "noFilteringModeDescription": {
+    "message": "Lista de nomes de host para os que non se fará filtrado",
+    "description": "A short description for the editable field which lists trusted sites"
+  },
+  "noFilteringModePlaceholder": {
+    "message": "[só nomes de servidor]\nexample.com\ngames.example\n...",
+    "description": "Default text for in edit field"
+  },
+  "behaviorSectionLabel": {
+    "message": "Comportamento",
+    "description": "The header text for the 'Behavior' section"
+  },
+  "autoReloadLabel": {
+    "message": "Recargar automáticamente a páxina a cambiar o modo de filtrado",
+    "description": "Label for a checkbox in the options page"
+  },
+  "showBlockedCountLabel": {
+    "message": "Mostrar na icona da barra o número de peticións bloqueadas",
+    "description": "Label for a checkbox in the options page"
+  },
+  "enableStrictBlockLabel": {
+    "message": "Activar bloqueo estrito",
+    "description": "Label for a checkbox in the options page"
+  },
+  "enableStrictBlockLegend": {
+    "message": "Vaise bloquear a navegación en webs potencialmente non desexables, e ofrecerase a opción de bloquealas.",
+    "description": "Short description for a checkbox in the options page"
+  },
+  "developerModeLabel": {
+    "message": "Modo desenvolvemento",
+    "description": "Label for a checkbox in the options page"
+  },
+  "developerModeLegend": {
+    "message": "Permitir acceso a funcións pensadas para persoas con experiencia técnica.",
+    "description": "Short description for a checkbox in the options page"
+  },
+  "settingsBackupRestoreLabel": {
+    "message": "Copia de apoio",
+    "description": "The header text for the back up/restore section"
+  },
+  "settingsBackupRestoreSummary": {
+    "message": "Garda nun ficheiro a túa configuración ou restablece os axustes desde un ficheiro.",
+    "description": "A summary description of the back up/restore section."
+  },
+  "settingsBackupRestoreLegend": {
+    "message": "Ao restablecer vas sobrescribir a configuración actual.",
+    "description": "Important information about the back up/restore section."
+  },
+  "findListsPlaceholder": {
+    "message": "Atopa listas",
+    "description": "Placeholder for the input field used to find lists"
+  },
+  "strictblockTitle": {
+    "message": "Páxina bloqueada",
+    "description": "Web page title for the strict-blocked page"
+  },
+  "strictblockSentence1": {
+    "message": "uBO Lite evitou que a seguinte páxina se cargase:",
+    "description": "Sentence used in the strict-blocked page"
+  },
+  "strictblockReasonSentence1": {
+    "message": "Bloqueouse a páxina porque concorda cun filtro de {{listname}}.",
+    "description": "Text informing about what is causing the page to be blocked"
+  },
+  "strictblockRedirectSentence1": {
+    "message": "A páxina bloqueada quere redirixir a outra web. Se elixes continuar vas ir directamente a: {{url}}",
+    "description": "Text warning about an incoming redirect"
+  },
+  "strictblockNoParamsPrompt": {
+    "message": "sen parámetros",
+    "description": "Label to be used for the parameter-less URL"
+  },
+  "strictblockBack": {
+    "message": "Volver",
+    "description": "A button to go back to the previous web page"
+  },
+  "strictblockClose": {
+    "message": "Pechar esta xanela",
+    "description": "A button to close the current tab"
+  },
+  "strictblockDontWarn": {
+    "message": "Non volver avisarme sobre esta web",
+    "description": "Label for checkbox in document-blocked page"
+  },
+  "strictblockProceed": {
+    "message": "Proceder",
+    "description": "A button to navigate to the blocked page"
+  },
+  "zapperTipEnter": {
+    "message": "Entrar no modo eliminador de elementos",
+    "description": "Tooltip for the button used to enter zapper mode"
+  },
+  "zapperTipQuit": {
+    "message": "Sair do modo eliminador de elementos",
+    "description": "Tooltip for the button used to exit zapper mode"
+  },
+  "pickerTipEnter": {
+    "message": "Crear un filtro personalizado",
+    "description": "Label for the menu entry to create cosmetic filters"
+  },
+  "unpickerTipEnter": {
+    "message": "Retirar un filtro personalizado",
+    "description": "Label for the menu entry to delete cosmetic filters"
+  },
+  "developDropdownLabel": {
+    "message": "Ver:",
+    "description": "A label of a dropdown list"
+  },
+  "developOptionFilteringModeDetails": {
+    "message": "Detalles do modo de filtrado",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionCustomDnrRules": {
+    "message": "Regras DNR persoais",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionDnrRulesOf": {
+    "message": "Regras DNR de…",
+    "description": "A section header in a dropdown list"
+  },
+  "developOptionDynamicRuleset": {
+    "message": "Conxunto de regras dinámicas",
+    "description": "An option in a dropdown list"
+  },
+  "developOptionSessionRuleset": {
+    "message": "Conxunto de regras de sesión",
+    "description": "An option in a dropdown list"
+  },
+  "saveButton": {
+    "message": "Gardar",
+    "description": "Text for buttons used to save changes"
+  },
+  "revertButton": {
+    "message": "Reverter",
+    "description": "Text for buttons used to revert changes"
+  },
+  "addButton": {
+    "message": "Engadir",
+    "description": "Text for buttons used to add content"
+  },
+  "importAndAppendButton": {
+    "message": "Importar e engadir…",
+    "description": "Text for buttons used to import and append content"
+  },
+  "exportButton": {
+    "message": "Exportar…",
+    "description": "Text for buttons used to export content"
+  },
+  "backupButton": {
+    "message": "Gardar axustes…",
+    "description": "Text for buttons used to back up content"
+  },
+  "restoreButton": {
+    "message": "Restablecer…",
+    "description": "Text for buttons used to restore content"
+  },
+  "resetToDefaultButton": {
+    "message": "Reset to default settings…",
+    "description": "Text for buttons used to reset configurations to default"
+  },
+  "resetToDefaultConfirm": {
+    "message": "All your custom settings will be removed. Do you really want to reset to default settings?",
+    "description": "Message asking user to confirm reset to default settings"
+  },
+  "dnrRulesWarning": {
+    "message": "Non engadir contido desde orixes non fiables",
+    "description": "Short description of the DNR rules editor pane"
+  },
+  "dnrRulesCountInfo": {
+    "message": "Número de regras rexistradas: {count}",
+    "description": "Short sentence to report the number of currently registered DNR rules"
+  },
+  "pickerSliderLabel": {
+    "message": "Move o desprazador para elixir a mellor concordancia",
+    "description": "Label to describe the purpose of the slider"
+  },
+  "pickerPick": {
+    "message": "Elixir",
+    "description": "Text for the button to re-enter element-picking mode"
+  },
+  "pickerPreview": {
+    "message": "Vista previa",
+    "description": "Text for the button to activate preview mode"
+  },
+  "pickerCreate": {
+    "message": "Crear",
+    "description": "Text for the button to create the filter"
+  },
+  "unpickerUsage": {
+    "message": "Escolle un filtro para destacar os elementos que representa na páxina web. Preme no caldeiro do lixo para eliminar un filtro.",
+    "description": "Summary description on how to use the tool to remove custom filters"
+  }
+}
