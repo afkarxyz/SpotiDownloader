@@ -1,0 +1,1 @@
+PyInstaller --noconfirm --onefile --clean --add-data "uBOLite;uBOLite" get_token.py

@@ -3,16 +3,9 @@ import { downloadTrack, fetchSpotifyMetadata } from "@/lib/api";
 import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
 import { ensureValidToken } from "@/lib/token-manager";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
-import { joinPath, sanitizePath } from "@/lib/utils";
+import { joinPath, sanitizePath, getFirstArtist } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
-function getFirstArtist(artistString: string): string {
-    if (!artistString)
-        return artistString;
-    const delimiters = /[,&]|(?:\s+(?:feat\.?|ft\.?|featuring)\s+)/i;
-    const parts = artistString.split(delimiters);
-    return parts[0].trim();
-}
 interface CheckFileExistenceRequest {
     spotify_id: string;
     track_name: string;
@@ -96,6 +89,7 @@ export function useDownload() {
             track: trackNumberForTemplate,
             disc: track.disc_number,
             year: yearValue,
+            date: track.release_date,
             playlist: playlistName?.replace(/\//g, placeholder) || undefined,
         };
         const folderTemplate = settings.folderTemplate || "";
@@ -178,6 +172,7 @@ export function useDownload() {
             embed_max_quality_cover: settings.embedMaxQualityCover,
             item_id: itemID,
             use_single_genre: settings.useSingleGenre,
+            embed_genre: settings.embedGenre,
         });
         if (!response.success && retryCount < 2) {
             const errorMsg = response.error?.toLowerCase() || "";
@@ -283,6 +278,7 @@ export function useDownload() {
                 track: trackNumberForTemplate,
                 disc: track.disc_number,
                 year: yearValue,
+                date: track.release_date,
                 playlist: playlistName?.replace(/\//g, placeholder),
             };
             let relativePath = "";
@@ -390,6 +386,7 @@ export function useDownload() {
                     embed_max_quality_cover: settings.embedMaxQualityCover,
                     use_first_artist_only: settings.useFirstArtistOnly,
                     use_single_genre: settings.useSingleGenre,
+                    embed_genre: settings.embedGenre,
                 });
                 if (response.success) {
                     if (response.already_exists) {
@@ -510,6 +507,7 @@ export function useDownload() {
                 track: trackNumberForTemplate,
                 disc: track.disc_number,
                 year: yearValue,
+                date: track.release_date,
                 playlist: playlistName?.replace(/\//g, placeholder),
             };
             let relativePath = "";
@@ -612,6 +610,7 @@ export function useDownload() {
                     embed_max_quality_cover: settings.embedMaxQualityCover,
                     use_first_artist_only: settings.useFirstArtistOnly,
                     use_single_genre: settings.useSingleGenre,
+                    embed_genre: settings.embedGenre,
                 });
                 if (response.success) {
                     if (response.already_exists) {

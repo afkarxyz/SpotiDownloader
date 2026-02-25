@@ -33,6 +33,7 @@ export function SearchAndSort({ searchQuery, sortBy, onSearchChange, onSortChang
           <SelectItem value="plays-desc">Plays (High)</SelectItem>
           <SelectItem value="downloaded">Downloaded</SelectItem>
           <SelectItem value="not-downloaded">Not Downloaded</SelectItem>
+          <SelectItem value="failed">Failed Downloads</SelectItem>
         </SelectContent>
       </Select>
     </div>);

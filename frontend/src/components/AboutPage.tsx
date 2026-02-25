@@ -387,7 +387,7 @@ ${contextContent}`;
                             <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC")}>
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2"><img src={SpotiFLACIcon} className="h-5 w-5" alt="SpotiFLAC"/> SpotiFLAC</CardTitle>
-                                    <CardDescription>Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account required.</CardDescription>
+                                    <CardDescription>Get Spotify tracks in true FLAC from Tidal, Qobuz, Amazon Music & Deezer — no account required.</CardDescription>
                                 </CardHeader>
                                 {repoStats['SpotiFLAC'] && (<CardContent className="space-y-3">
                                     <div className="flex flex-wrap gap-2 text-xs">

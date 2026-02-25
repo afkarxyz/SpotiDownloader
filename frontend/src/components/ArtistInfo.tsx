@@ -314,7 +314,7 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                       <h2 className="text-4xl font-bold text-white">{artistInfo.name}</h2>
                       {artistInfo.verified && (<BadgeCheck className="h-6 w-6 text-white fill-blue-400 shrink-0"/>)}
                     </div>
-                    {artistInfo.biography && (<p className="text-sm text-white/90">{artistInfo.biography}</p>)}
+                    {artistInfo.biography && (<p className="text-sm text-white/90 line-clamp-4">{artistInfo.biography}</p>)}
                     <div className="flex items-center gap-2 text-sm flex-wrap text-white/90">
                       {artistInfo.rank && (<>
                           <span>#{artistInfo.rank} rank</span>
@@ -367,7 +367,7 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
               <h2 className="text-4xl font-bold">{artistInfo.name}</h2>
                   {artistInfo.verified && (<BadgeCheck className="h-6 w-6 text-white fill-blue-500 shrink-0"/>)}
                 </div>
-                {artistInfo.biography && (<p className="text-sm text-muted-foreground">{artistInfo.biography}</p>)}
+                {artistInfo.biography && (<p className="text-sm text-muted-foreground line-clamp-4">{artistInfo.biography}</p>)}
               <div className="flex items-center gap-2 text-sm flex-wrap">
                 {artistInfo.rank && (<>
                     <span>#{artistInfo.rank} rank</span>
