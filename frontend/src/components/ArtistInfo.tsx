@@ -443,14 +443,35 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
         </div>)}
 
       {activeTab === "albums" && albumList.length > 0 && (<div className="space-y-4">
-          <h3 className="text-2xl font-bold">Discography</h3>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-2xl font-bold">Discography</h3>
+            <div className="flex gap-2">
+                <Button onClick={onDownloadAll} size="sm" disabled={isDownloading}>
+                    {isDownloading && bulkDownloadType === "all" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
+                    Download Discography
+                </Button>
+                {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} size="sm" variant="secondary" disabled={isDownloading}>
+                        {isDownloading && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
+                        Download Selected ({selectedTracks.length})
+                    </Button>)}
+            </div>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {albumList.map((album) => (<div key={album.id} className="group cursor-pointer" onClick={() => onAlbumClick({
-                    id: album.id,
-                    name: album.name,
-                    external_urls: album.external_urls,
-                })}>
+            {albumList.map((album) => {
+                const albumTracks = trackList.filter(t => t.album_name === album.name);
+                const tracksWithId = albumTracks.filter(t => t.spotify_id);
+                const isSelected = tracksWithId.length > 0 && tracksWithId.every(t => selectedTracks.includes(t.spotify_id!));
+                const hasTracks = tracksWithId.length > 0;
+                return (<div key={album.id} className="group cursor-pointer relative" onClick={() => onAlbumClick({
+                        id: album.id,
+                        name: album.name,
+                        external_urls: album.external_urls,
+                    })}>
                 <div className="relative mb-2">
+                  
+                  {hasTracks && (<div className={`absolute top-2 left-2 z-20 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`} onClick={(e) => e.stopPropagation()}>
+                        <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelectAll(albumTracks)} className="bg-black/50 border-white/70 data-[state=checked]:bg-primary data-[state=checked]:border-primary"/>
+                    </div>)}
                   {album.images && (<img src={album.images} alt={album.name} className="w-full aspect-square object-cover rounded-md shadow-md transition-shadow group-hover:shadow-xl"/>)}
                   <div className="absolute bottom-2 right-2">
                     <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-black/60 text-white backdrop-blur-[2px]">
@@ -466,7 +487,8 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                             <span>{album.total_tracks} {album.total_tracks === 1 ? "track" : "tracks"}</span>
                         </>)}
                 </div>
-              </div>))}
+              </div>);
+            })}
           </div>
         </div>)}
 
