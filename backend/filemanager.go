@@ -344,7 +344,7 @@ func GenerateFilename(metadata *AudioMetadata, format string, ext string) string
 	result = strings.TrimSpace(result)
 	result = strings.Join(strings.Fields(result), " ")
 
-	result = strings.Trim(result, " -._")
+	result = strings.Trim(result, " -.")
 
 	if result == "" {
 		return ""

@@ -100,7 +100,7 @@ func SanitizeFilename(filename string) string {
 	re = regexp.MustCompile(`_+`)
 	result = re.ReplaceAllString(result, "_")
 
-	result = strings.Trim(result, "_ ")
+	result = strings.TrimSpace(result)
 
 	if result == "" {
 		return "Unknown"
