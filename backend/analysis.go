@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
+	"strconv"
+	"strings"
+	"time"
 
-	"github.com/go-flac/go-flac"
 	mewflac "github.com/mewkiz/flac"
 )
 
@@ -17,6 +20,7 @@ type AnalysisResult struct {
 	BitsPerSample uint8         `json:"bits_per_sample"`
 	TotalSamples  uint64        `json:"total_samples"`
 	Duration      float64       `json:"duration"`
+	Bitrate       int           `json:"bit_rate"`
 	BitDepth      string        `json:"bit_depth"`
 	DynamicRange  float64       `json:"dynamic_range"`
 	PeakAmplitude float64       `json:"peak_amplitude"`
@@ -29,53 +33,97 @@ func AnalyzeTrack(filepath string) (*AnalysisResult, error) {
 		return nil, fmt.Errorf("file does not exist: %s", filepath)
 	}
 
-	fileInfo, err := os.Stat(filepath)
+	return GetMetadataWithFFprobe(filepath)
+}
+
+func GetTrackMetadata(filepath string) (*AnalysisResult, error) {
+	if !fileExists(filepath) {
+		return nil, fmt.Errorf("file does not exist: %s", filepath)
+	}
+
+	return GetMetadataWithFFprobe(filepath)
+}
+
+func GetMetadataWithFFprobe(filePath string) (*AnalysisResult, error) {
+	ffprobePath, err := GetFFprobePath()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get file info: %w", err)
+		return nil, err
 	}
 
-	f, err := flac.ParseFile(filepath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse FLAC file: %w", err)
+	for i := 0; i < 5; i++ {
+		if f, err := os.Open(filePath); err == nil {
+			f.Close()
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 
-	result := &AnalysisResult{
-		FilePath: filepath,
-		FileSize: fileInfo.Size(),
+	infoMap := make(map[string]string)
+	args := []string{
+		"-v", "error",
+		"-select_streams", "a:0",
+		"-show_entries", "stream=sample_rate,channels,bits_per_raw_sample,bits_per_sample,duration,bit_rate",
+		"-of", "default=noprint_wrappers=0",
+		filePath,
 	}
-
-	if len(f.Meta) > 0 {
-		streamInfo := f.Meta[0]
-		if streamInfo.Type == flac.StreamInfo {
-			data := streamInfo.Data
-			if len(data) >= 18 {
-				result.SampleRate = uint32(data[10])<<12 | uint32(data[11])<<4 | uint32(data[12])>>4
-				result.Channels = ((data[12] >> 1) & 0x07) + 1
-				result.BitsPerSample = ((data[12]&0x01)<<4 | data[13]>>4) + 1
-				result.TotalSamples = uint64(data[13]&0x0F)<<32 |
-					uint64(data[14])<<24 |
-					uint64(data[15])<<16 |
-					uint64(data[16])<<8 |
-					uint64(data[17])
-
-				if result.SampleRate > 0 {
-					result.Duration = float64(result.TotalSamples) / float64(result.SampleRate)
-				}
+	cmd := exec.Command(ffprobePath, args...)
+	setHideWindow(cmd)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "=") {
+				parts := strings.SplitN(line, "=", 2)
+				infoMap[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 			}
+		}
+	} else {
+		return nil, fmt.Errorf("ffprobe failed: %v - %s", err, string(output))
+	}
+
+	res := &AnalysisResult{
+		FilePath: filePath,
+	}
+
+	if info, err := os.Stat(filePath); err == nil {
+		res.FileSize = info.Size()
+	}
+
+	if val, ok := infoMap["sample_rate"]; ok {
+		s, _ := strconv.Atoi(val)
+		res.SampleRate = uint32(s)
+	}
+	if val, ok := infoMap["channels"]; ok {
+		c, _ := strconv.Atoi(val)
+		res.Channels = uint8(c)
+	}
+	if val, ok := infoMap["duration"]; ok {
+		d, _ := strconv.ParseFloat(val, 64)
+		res.Duration = d
+	}
+	if val, ok := infoMap["bit_rate"]; ok && val != "N/A" {
+		br, _ := strconv.Atoi(val)
+		res.Bitrate = br
+	}
+
+	bits := 0
+	if val, ok := infoMap["bits_per_raw_sample"]; ok && val != "N/A" {
+		bits, _ = strconv.Atoi(val)
+	}
+	if bits == 0 {
+		if val, ok := infoMap["bits_per_sample"]; ok && val != "N/A" {
+			bits, _ = strconv.Atoi(val)
 		}
 	}
 
-	spectrum, err := AnalyzeSpectrum(filepath)
-	if err != nil {
-		fmt.Printf("Warning: failed to analyze spectrum: %v\n", err)
+	res.BitsPerSample = uint8(bits)
+	if bits > 0 {
+		res.BitDepth = fmt.Sprintf("%d-bit", bits)
 	} else {
-		result.Spectrum = spectrum
-		calculateRealAudioMetrics(result, filepath)
+		res.BitDepth = "Unknown"
 	}
 
-	result.BitDepth = fmt.Sprintf("%d-bit", result.BitsPerSample)
-
-	return result, nil
+	return res, nil
 }
 
 func calculateRealAudioMetrics(result *AnalysisResult, filepath string) {

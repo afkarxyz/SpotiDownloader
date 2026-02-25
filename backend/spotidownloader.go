@@ -219,6 +219,7 @@ func (s *SpotiDownloader) DownloadTrack(
 	playlistOwner string,
 	useFirstArtistOnly bool,
 	useSingleGenre bool,
+	embedGenre bool,
 ) (string, error) {
 
 	outputDir = NormalizePath(outputDir)
@@ -266,26 +267,30 @@ func (s *SpotiDownloader) DownloadTrack(
 	}
 
 	metaChan := make(chan mbResult, 1)
-	go func() {
-		client := NewSongLinkClient()
-		res := mbResult{}
-		if val, err := client.GetISRC(trackID); err == nil {
-			res.ISRC = val
-			if val != "" {
-				fmt.Println("Fetching MusicBrainz metadata...")
+	if embedGenre {
+		go func() {
+			client := NewSongLinkClient()
+			res := mbResult{}
+			if val, err := client.GetISRC(trackID); err == nil {
+				res.ISRC = val
+				if val != "" {
+					fmt.Println("Fetching MusicBrainz metadata...")
 
-				if fetchedMeta, err := FetchMusicBrainzMetadata(val, trackName, artistName, albumName, useSingleGenre); err == nil {
-					res.Metadata = fetchedMeta
-					fmt.Println("✓ MusicBrainz metadata fetched")
-				} else {
-					fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+					if fetchedMeta, err := FetchMusicBrainzMetadata(val, trackName, artistName, albumName, useSingleGenre, embedGenre); err == nil {
+						res.Metadata = fetchedMeta
+						fmt.Println("✓ MusicBrainz metadata fetched")
+					} else {
+						fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+					}
 				}
-			}
-		} else {
+			} else {
 
-		}
-		metaChan <- res
-	}()
+			}
+			metaChan <- res
+		}()
+	} else {
+		metaChan <- mbResult{}
+	}
 
 	if err := s.DownloadFile(downloadURL, outputPath); err != nil {
 		return "", fmt.Errorf("failed to download file: %v", err)

@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -88,6 +87,7 @@ type DownloadRequest struct {
 	PlaylistOwner        string `json:"playlist_owner,omitempty"`
 	UseFirstArtistOnly   bool   `json:"use_first_artist_only,omitempty"`
 	UseSingleGenre       bool   `json:"use_single_genre,omitempty"`
+	EmbedGenre           bool   `json:"embed_genre,omitempty"`
 }
 
 type DownloadResponse struct {
@@ -367,6 +367,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.PlaylistOwner,
 		req.UseFirstArtistOnly,
 		req.UseSingleGenre,
+		req.EmbedGenre,
 	)
 
 	if err != nil {
@@ -427,29 +428,19 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			quality := "Unknown"
 			durationStr := "--:--"
 
-			props, err := backend.GetAudioProperties(fPath)
-			if err == nil && props != nil {
-
-				if br, err := strconv.Atoi(props.BitRate); err == nil {
-					quality = fmt.Sprintf("%dkbps", br/1000)
-				} else {
-					quality = props.BitRate
+			meta, err := backend.GetTrackMetadata(fPath)
+			if err == nil && meta != nil {
+				if meta.BitsPerSample > 0 {
+					quality = fmt.Sprintf("%d-bit/%.1fkHz", meta.BitsPerSample, float64(meta.SampleRate)/1000.0)
+				} else if meta.Bitrate > 0 {
+					quality = fmt.Sprintf("%dkbps/%.1fkHz", meta.Bitrate/1000, float64(meta.SampleRate)/1000.0)
+				} else if meta.SampleRate > 0 {
+					quality = fmt.Sprintf("%.1fkHz", float64(meta.SampleRate)/1000.0)
 				}
-
-				if val, err := strconv.ParseFloat(props.Duration, 64); err == nil {
-					d := int(val)
-					durationStr = fmt.Sprintf("%d:%02d", d/60, d%60)
-				}
-
-				if props.Format != "" {
-					itemFormat := props.Format
-					if itemFormat == "mp3" {
-						format = "MP3"
-					} else if itemFormat == "flac" {
-						format = "FLAC"
-						quality = "16-bit/44.1kHz"
-					}
-				}
+				d := int(meta.Duration)
+				durationStr = fmt.Sprintf("%d:%02d", d/60, d%60)
+			} else if err != nil {
+				fmt.Printf("[History] Failed to get metadata for %s: %v\n", fPath, err)
 			} else {
 
 			}

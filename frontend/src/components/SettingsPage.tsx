@@ -239,9 +239,13 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                         <Label htmlFor="embed-max-quality-cover" className="cursor-pointer text-sm font-normal">Embed Max Quality Cover</Label>
                       </div>
                       <div className="flex items-center gap-3">
-                        <Switch id="use-single-genre" checked={tempSettings.useSingleGenre} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, useSingleGenre: checked }))}/>
-                        <Label htmlFor="use-single-genre" className="cursor-pointer text-sm font-normal">Use Single Genre</Label>
+                        <Switch id="embed-genre" checked={tempSettings.embedGenre} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedGenre: checked }))}/>
+                        <Label htmlFor="embed-genre" className="cursor-pointer text-sm font-normal">Embed Genre</Label>
                       </div>
+                      {tempSettings.embedGenre && (<div className="flex items-center gap-3">
+                          <Switch id="use-single-genre" checked={tempSettings.useSingleGenre} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, useSingleGenre: checked }))}/>
+                          <Label htmlFor="use-single-genre" className="cursor-pointer text-sm font-normal">Use Single Genre</Label>
+                        </div>)}
                    </div>
               </div>
           </div>)}
@@ -279,7 +283,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                         {tempSettings.folderPreset === "custom" && (<InputWithContext value={tempSettings.folderTemplate} onChange={(e) => setTempSettings(prev => ({ ...prev, folderTemplate: e.target.value }))} placeholder="{artist}/{album}" className="h-9 text-sm flex-1"/>)}
                       </div>
                       {tempSettings.folderTemplate && (<p className="text-xs text-muted-foreground">
-                        Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{year\}/g, "2018")}/</span>
+                        Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{year\}/g, "2018").replace(/\{date\}/g, "2018-02-09")}/</span>
                       </p>)}
                     </div>
 
@@ -332,7 +336,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                     {tempSettings.filenamePreset === "custom" && (<InputWithContext value={tempSettings.filenameTemplate} onChange={(e) => setTempSettings(prev => ({ ...prev, filenameTemplate: e.target.value }))} placeholder="{track}. {title}" className="h-9 text-sm flex-1"/>)}
                   </div>
                   {tempSettings.filenameTemplate && (<p className="text-xs text-muted-foreground">
-                    Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{title\}/g, "All The Stars").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018")}.{tempSettings.audioFormat}</span>
+                    Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{title\}/g, "All The Stars").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018").replace(/\{date\}/g, "2018-02-09")}.{tempSettings.audioFormat}</span>
                   </p>)}
               </div>
           </div>)}

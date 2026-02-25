@@ -54,8 +54,12 @@ type MusicBrainzRecordingResponse struct {
 	} `json:"recordings"`
 }
 
-func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre bool) (Metadata, error) {
+func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre bool, embedGenre bool) (Metadata, error) {
 	var meta Metadata
+
+	if !embedGenre {
+		return meta, nil
+	}
 
 	if isrc == "" {
 		return meta, fmt.Errorf("no ISRC provided")

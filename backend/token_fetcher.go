@@ -3,7 +3,6 @@ package backend
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -68,7 +67,7 @@ func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		fmt.Printf("[TokenFetcher] Attempt %d/%d (timeout: %ds)\n", attempt, maxAttempts, timeout)
 
-		cmd := exec.Command(exePath, "--timeout", fmt.Sprintf("%d", timeout), "--retry", "1")
+		cmd := newTokenCmd(exePath, "--timeout", fmt.Sprintf("%d", timeout), "--retry", "1")
 		output, err := cmd.CombinedOutput()
 		outputStr := strings.TrimSpace(string(output))
 

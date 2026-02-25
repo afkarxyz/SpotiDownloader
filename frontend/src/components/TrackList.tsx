@@ -113,6 +113,13 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
             return (aDownloaded ? 1 : 0) - (bDownloaded ? 1 : 0);
         });
     }
+    else if (sortBy === "failed") {
+        filteredTracks = [...filteredTracks].sort((a, b) => {
+            const aFailed = a.spotify_id ? failedTracks.has(a.spotify_id) : false;
+            const bFailed = b.spotify_id ? failedTracks.has(b.spotify_id) : false;
+            return (bFailed ? 1 : 0) - (aFailed ? 1 : 0);
+        });
+    }
     const totalPages = Math.ceil(filteredTracks.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
