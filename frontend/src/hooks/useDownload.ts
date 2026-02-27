@@ -45,6 +45,10 @@ export function useDownload() {
         artists: string;
     } | null>(null);
     const shouldStopDownloadRef = useRef(false);
+    const isUnauthorizedDownloadError = (error?: string) => {
+        const msg = (error || "").toLowerCase();
+        return msg.includes("unauthorized") || msg.includes("403") || msg.includes("401") || msg.includes("err_unauthorized");
+    };
     const downloadWithSpotiDownloader = async (track: TrackMetadata, settings: any, playlistName?: string, position?: number, retryCount: number = 0, isAlbum?: boolean, releaseYear?: string) => {
         const os = settings.operatingSystem;
         let outputDir = settings.downloadPath;
@@ -338,6 +342,22 @@ export function useDownload() {
             const trackID = track.spotify_id || "";
             return !existingSpotifyIDs.has(trackID);
         });
+        let sessionToken = settings.sessionToken || "";
+        if (tracksToDownload.length > 0) {
+            try {
+                sessionToken = await ensureValidToken();
+            }
+            catch (err) {
+                logger.error(`failed to fetch session token for batch: ${err}`);
+                toast.error(err instanceof Error ? err.message : "Failed to fetch session token");
+                setDownloadingTrack(null);
+                setCurrentDownloadInfo(null);
+                setIsDownloading(false);
+                setBulkDownloadType(null);
+                shouldStopDownloadRef.current = false;
+                return;
+            }
+        }
         let successCount = 0;
         let errorCount = 0;
         let skippedCount = existingSpotifyIDs.size;
@@ -361,9 +381,9 @@ export function useDownload() {
                     ? track.track_number
                     : playlistIndex;
                 logger.debug(`[DEBUG] handleDownloadSelected - Track: ${track.name} | release_date: "${track.release_date}" | releaseYear: "${releaseYear}" | track.track_number: ${track.track_number} | useAlbumTrackNumber: ${useAlbumTrackNumber} | playlistIndex: ${playlistIndex} | trackPosition used: ${trackPosition}`);
-                const response = await downloadTrack({
+                let response = await downloadTrack({
                     track_id: id,
-                    session_token: settings.sessionToken || "",
+                    session_token: sessionToken,
                     track_name: track.name || "",
                     artist_name: track.artists,
                     album_name: track.album_name,
@@ -388,6 +408,36 @@ export function useDownload() {
                     use_single_genre: settings.useSingleGenre,
                     embed_genre: settings.embedGenre,
                 });
+                if (!response.success && isUnauthorizedDownloadError(response.error)) {
+                    sessionToken = await ensureValidToken(true);
+                    response = await downloadTrack({
+                        track_id: id,
+                        session_token: sessionToken,
+                        track_name: track.name || "",
+                        artist_name: track.artists,
+                        album_name: track.album_name,
+                        album_artist: track.album_artist || track.artists,
+                        release_date: track.release_date,
+                        cover_url: track.images,
+                        album_track_number: track.track_number,
+                        disc_number: track.disc_number,
+                        total_tracks: track.total_tracks,
+                        spotify_total_discs: track.total_discs,
+                        copyright: track.copyright,
+                        publisher: track.publisher,
+                        output_dir: outputDir,
+                        audio_format: settings.audioFormat,
+                        filename_format: settings.filenameTemplate,
+                        track_number: settings.trackNumber,
+                        position: trackPosition,
+                        use_album_track_number: useAlbumTrackNumber,
+                        embed_lyrics: settings.embedLyrics,
+                        embed_max_quality_cover: settings.embedMaxQualityCover,
+                        use_first_artist_only: settings.useFirstArtistOnly,
+                        use_single_genre: settings.useSingleGenre,
+                        embed_genre: settings.embedGenre,
+                    });
+                }
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;
@@ -568,6 +618,22 @@ export function useDownload() {
             const trackID = track.spotify_id || "";
             return !existingSpotifyIDs.has(trackID);
         });
+        let sessionToken = settings.sessionToken || "";
+        if (tracksToDownload.length > 0) {
+            try {
+                sessionToken = await ensureValidToken();
+            }
+            catch (err) {
+                logger.error(`failed to fetch session token for batch: ${err}`);
+                toast.error(err instanceof Error ? err.message : "Failed to fetch session token");
+                setDownloadingTrack(null);
+                setCurrentDownloadInfo(null);
+                setIsDownloading(false);
+                setBulkDownloadType(null);
+                shouldStopDownloadRef.current = false;
+                return;
+            }
+        }
         let successCount = 0;
         let errorCount = 0;
         let skippedCount = existingSpotifyIDs.size;
@@ -585,9 +651,9 @@ export function useDownload() {
             setCurrentDownloadInfo({ name: track.name, artists: displayArtist || "" });
             try {
                 const playlistIndex = tracksWithId.findIndex((t) => t.spotify_id === id) + 1;
-                const response = await downloadTrack({
+                let response = await downloadTrack({
                     track_id: id,
-                    session_token: settings.sessionToken || "",
+                    session_token: sessionToken,
                     track_name: track.name || "",
                     artist_name: track.artists || "",
                     album_name: track.album_name || "",
@@ -612,6 +678,36 @@ export function useDownload() {
                     use_single_genre: settings.useSingleGenre,
                     embed_genre: settings.embedGenre,
                 });
+                if (!response.success && isUnauthorizedDownloadError(response.error)) {
+                    sessionToken = await ensureValidToken(true);
+                    response = await downloadTrack({
+                        track_id: id,
+                        session_token: sessionToken,
+                        track_name: track.name || "",
+                        artist_name: track.artists || "",
+                        album_name: track.album_name || "",
+                        album_artist: track.album_artist || track.artists || "",
+                        release_date: track.release_date || "",
+                        cover_url: track.images || "",
+                        album_track_number: track.track_number || 0,
+                        disc_number: track.disc_number || 0,
+                        total_tracks: track.total_tracks || 0,
+                        spotify_total_discs: track.total_discs || 0,
+                        copyright: track.copyright || "",
+                        publisher: track.publisher || "",
+                        output_dir: outputDir,
+                        audio_format: settings.audioFormat,
+                        filename_format: settings.filenameTemplate,
+                        track_number: settings.trackNumber,
+                        position: playlistIndex,
+                        use_album_track_number: isAlbum,
+                        embed_lyrics: settings.embedLyrics,
+                        embed_max_quality_cover: settings.embedMaxQualityCover,
+                        use_first_artist_only: settings.useFirstArtistOnly,
+                        use_single_genre: settings.useSingleGenre,
+                        embed_genre: settings.embedGenre,
+                    });
+                }
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;
