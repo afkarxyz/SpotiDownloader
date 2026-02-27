@@ -24,11 +24,11 @@ var ErrChromeNotInstalled = fmt.Errorf("chrome_not_installed")
 
 func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 
-	chromeInstalled, _, err := IsChromeInstalled()
+	browserInstalled, browserPath, err := IsChromeInstalled()
 	if err != nil {
 		return "", fmt.Errorf("failed to check Chrome installation: %v", err)
 	}
-	if !chromeInstalled {
+	if !browserInstalled {
 		return "", ErrChromeNotInstalled
 	}
 
@@ -67,7 +67,12 @@ func FetchSessionTokenWithParams(timeout int, retry int) (string, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		fmt.Printf("[TokenFetcher] Attempt %d/%d (timeout: %ds)\n", attempt, maxAttempts, timeout)
 
-		cmd := newTokenCmd(exePath, "--timeout", fmt.Sprintf("%d", timeout), "--retry", "1")
+		args := []string{"--timeout", fmt.Sprintf("%d", timeout), "--retry", "1"}
+		if browserPath != "" {
+			args = append(args, "--browser-path", browserPath)
+		}
+
+		cmd := newTokenCmd(exePath, args...)
 		output, err := cmd.CombinedOutput()
 		outputStr := strings.TrimSpace(string(output))
 

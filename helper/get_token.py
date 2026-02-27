@@ -14,14 +14,51 @@ else:
 
 EXT_PATH = os.path.join(base_path, "uBOLite")
 
-async def get_session_token_async(max_wait=5):
+async def close_browser_safely(browser):
+    if not browser:
+        return
+
+    try:
+        tabs = list(getattr(browser, "tabs", []) or [])
+        for tab in tabs:
+            try:
+                await tab.close()
+            except:
+                pass
+    except:
+        pass
+
+    process = getattr(browser, "_process", None)
+
+    try:
+        browser.stop()
+    except:
+        pass
+
+    if process:
+        try:
+            for _ in range(20):
+                if process.poll() is not None:
+                    return
+                await asyncio.sleep(0.1)
+            process.kill()
+        except:
+            pass
+
+async def get_session_token_async(max_wait=5, browser_path=None):
     browser = None
     try:
-        browser = await uc.start(browser_args=[
+        start_kwargs = {
+            "browser_args": [
             "--disable-features=DisableDisableExtensionsExceptCommandLineSwitch,DisableLoadExtensionCommandLineSwitch",
             f"--load-extension={EXT_PATH}",
             f"--disable-extensions-except={EXT_PATH}"
-        ])
+            ]
+        }
+        if browser_path:
+            start_kwargs["browser_executable_path"] = browser_path
+
+        browser = await uc.start(**start_kwargs)
         
         page = await browser.get("https://spotidownloader.com/")
         await asyncio.sleep(2)
@@ -62,14 +99,14 @@ async def get_session_token_async(max_wait=5):
         return None
     except: return None
     finally:
-        if browser:
-            try: browser.stop()
-            except: pass
+        await close_browser_safely(browser)
 
-def get_token(max_retries=1, timeout=5):
+def get_token(max_retries=1, timeout=5, browser_path=None):
     for _ in range(max_retries):
         try:
-            token = uc.loop().run_until_complete(get_session_token_async(max_wait=timeout))
+            token = uc.loop().run_until_complete(
+                get_session_token_async(max_wait=timeout, browser_path=browser_path)
+            )
             if token: return token
         except: pass
         time.sleep(1)
@@ -82,7 +119,7 @@ if __name__ == "__main__":
     sys.stderr = open(os.devnull, 'w')
     
     try:
-        timeout, retry = 5, 1
+        timeout, retry, browser_path = 5, 1, None
         args = sys.argv[1:]
         for i, arg in enumerate(args):
             if arg == "--timeout" and i+1 < len(args):
@@ -91,8 +128,10 @@ if __name__ == "__main__":
             elif arg == "--retry" and i+1 < len(args):
                 try: retry = int(args[i+1])
                 except: pass
+            elif arg == "--browser-path" and i+1 < len(args):
+                browser_path = args[i+1]
                 
-        token = get_token(max_retries=retry, timeout=timeout)
+        token = get_token(max_retries=retry, timeout=timeout, browser_path=browser_path)
         if token:
             print(token, file=original_stdout)
     except:
