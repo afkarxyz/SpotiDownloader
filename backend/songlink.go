@@ -416,16 +416,7 @@ func (s *SongLinkClient) GetDeezerURLFromSpotify(spotifyTrackID string) (string,
 }
 
 func getDeezerISRC(deezerURL string) (string, error) {
-
-	var trackID string
-	if strings.Contains(deezerURL, "/track/") {
-		parts := strings.Split(deezerURL, "/track/")
-		if len(parts) > 1 {
-			trackID = strings.Split(parts[1], "?")[0]
-			trackID = strings.TrimSpace(trackID)
-		}
-	}
-
+	trackID := parseDeezerTrackID(deezerURL)
 	if trackID == "" {
 		return "", fmt.Errorf("could not extract track ID from Deezer URL: %s", deezerURL)
 	}
@@ -458,6 +449,133 @@ func getDeezerISRC(deezerURL string) (string, error) {
 
 	fmt.Printf("Found ISRC from Deezer: %s (track: %s)\n", deezerTrack.ISRC, deezerTrack.Title)
 	return deezerTrack.ISRC, nil
+}
+
+func parseDeezerTrackID(deezerURL string) string {
+	if !strings.Contains(deezerURL, "/track/") {
+		return ""
+	}
+	parts := strings.Split(deezerURL, "/track/")
+	if len(parts) <= 1 {
+		return ""
+	}
+	trackID := strings.Split(parts[1], "?")[0]
+	return strings.TrimSpace(trackID)
+}
+
+func getDeezerGenreByID(genreID int64) (string, error) {
+	if genreID <= 0 {
+		return "", fmt.Errorf("invalid Deezer genre ID: %d", genreID)
+	}
+
+	apiURL := fmt.Sprintf("https://api.deezer.com/genre/%d", genreID)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to call Deezer genre API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("Deezer genre API returned status %d", resp.StatusCode)
+	}
+
+	var deezerGenre struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&deezerGenre); err != nil {
+		return "", fmt.Errorf("failed to decode Deezer genre response: %w", err)
+	}
+
+	if strings.TrimSpace(deezerGenre.Name) == "" {
+		return "", fmt.Errorf("genre name is empty for Deezer genre ID %d", genreID)
+	}
+
+	return strings.TrimSpace(deezerGenre.Name), nil
+}
+
+func getDeezerGenreFromTrackURL(deezerURL string) (string, error) {
+	trackID := parseDeezerTrackID(deezerURL)
+	if trackID == "" {
+		return "", fmt.Errorf("could not extract track ID from Deezer URL: %s", deezerURL)
+	}
+
+	apiURL := fmt.Sprintf("https://api.deezer.com/track/%s", trackID)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to call Deezer track API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("Deezer track API returned status %d", resp.StatusCode)
+	}
+
+	var deezerTrack struct {
+		Title   string `json:"title"`
+		GenreID int64  `json:"genre_id"`
+		Album   struct {
+			ID      int64 `json:"id"`
+			GenreID int64 `json:"genre_id"`
+		} `json:"album"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&deezerTrack); err != nil {
+		return "", fmt.Errorf("failed to decode Deezer track response: %w", err)
+	}
+
+	if deezerTrack.GenreID > 0 {
+		if genre, err := getDeezerGenreByID(deezerTrack.GenreID); err == nil && genre != "" {
+			return genre, nil
+		}
+	}
+
+	if deezerTrack.Album.GenreID > 0 {
+		if genre, err := getDeezerGenreByID(deezerTrack.Album.GenreID); err == nil && genre != "" {
+			return genre, nil
+		}
+	}
+
+	if deezerTrack.Album.ID > 0 {
+		albumURL := fmt.Sprintf("https://api.deezer.com/album/%d", deezerTrack.Album.ID)
+		albumResp, err := client.Get(albumURL)
+		if err == nil {
+			defer albumResp.Body.Close()
+			if albumResp.StatusCode == 200 {
+				var deezerAlbum struct {
+					GenreID int64 `json:"genre_id"`
+					Genres  struct {
+						Data []struct {
+							Name string `json:"name"`
+						} `json:"data"`
+					} `json:"genres"`
+				}
+				if json.NewDecoder(albumResp.Body).Decode(&deezerAlbum) == nil {
+					for _, g := range deezerAlbum.Genres.Data {
+						name := strings.TrimSpace(g.Name)
+						if name != "" {
+							return name, nil
+						}
+					}
+					if deezerAlbum.GenreID > 0 {
+						if genre, err := getDeezerGenreByID(deezerAlbum.GenreID); err == nil && genre != "" {
+							return genre, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("genre not found in Deezer track/album response for track %s", deezerTrack.Title)
+}
+
+func (s *SongLinkClient) GetGenre(spotifyID string) (string, error) {
+	deezerURL, err := s.GetDeezerURLFromSpotify(spotifyID)
+	if err != nil {
+		return "", err
+	}
+	return getDeezerGenreFromTrackURL(deezerURL)
 }
 
 func (s *SongLinkClient) GetISRC(spotifyID string) (string, error) {

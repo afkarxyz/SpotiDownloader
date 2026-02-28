@@ -2,12 +2,14 @@ package backend
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -308,6 +310,23 @@ func (s *SpotiDownloader) DownloadTrack(
 	result := <-metaChan
 	isrc := result.ISRC
 	mbMeta := result.Metadata
+	resolvedReleaseDate := strings.TrimSpace(releaseDate)
+	resolvedGenre := strings.TrimSpace(mbMeta.Genre)
+
+	if resolvedReleaseDate == "" || (embedGenre && resolvedGenre == "") {
+		spotifyReleaseDate, spotifyGenre := fetchTrackTaggingMetadata(trackID)
+		if resolvedReleaseDate == "" && spotifyReleaseDate != "" {
+			resolvedReleaseDate = spotifyReleaseDate
+		}
+		if embedGenre && resolvedGenre == "" && spotifyGenre != "" {
+			resolvedGenre = spotifyGenre
+		}
+	}
+	if embedGenre && resolvedGenre == "" {
+		if deezerGenre, err := fetchGenreFromDeezer(trackID); err == nil && deezerGenre != "" {
+			resolvedGenre = deezerGenre
+		}
+	}
 
 	if isrc != "" {
 		fmt.Printf("Found ISRC: %s\n", isrc)
@@ -318,7 +337,7 @@ func (s *SpotiDownloader) DownloadTrack(
 		Artist:      artistName,
 		Album:       albumName,
 		AlbumArtist: albumArtist,
-		Date:        releaseDate,
+		Date:        resolvedReleaseDate,
 		TrackNumber: actualTrackNumber,
 		TotalTracks: totalTracks,
 		DiscNumber:  discNumber,
@@ -328,7 +347,7 @@ func (s *SpotiDownloader) DownloadTrack(
 		Publisher:   publisher,
 		Description: "https://github.com/afkarxyz/SpotiDownloader",
 		ISRC:        isrc,
-		Genre:       mbMeta.Genre,
+		Genre:       resolvedGenre,
 	}
 
 	if err := EmbedMetadata(outputPath, metadata, coverPath); err != nil {
@@ -374,4 +393,42 @@ func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string, embedMa
 	}
 
 	return coverPath, nil
+}
+
+func fetchTrackTaggingMetadata(trackID string) (string, string) {
+	if strings.TrimSpace(trackID) == "" {
+		return "", ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+
+	client := NewSpotifyMetadataClient()
+	data, err := client.GetFilteredData(ctx, fmt.Sprintf("https://open.spotify.com/track/%s", trackID), false, 0)
+	if err != nil {
+		return "", ""
+	}
+
+	switch resp := data.(type) {
+	case TrackResponse:
+		return strings.TrimSpace(resp.Track.ReleaseDate), strings.TrimSpace(resp.Track.Genre)
+	case *TrackResponse:
+		if resp != nil {
+			return strings.TrimSpace(resp.Track.ReleaseDate), strings.TrimSpace(resp.Track.Genre)
+		}
+	}
+
+	return "", ""
+}
+
+func fetchGenreFromDeezer(trackID string) (string, error) {
+	if strings.TrimSpace(trackID) == "" {
+		return "", fmt.Errorf("empty track ID")
+	}
+	client := NewSongLinkClient()
+	genre, err := client.GetGenre(trackID)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(genre), nil
 }
