@@ -12,7 +12,7 @@ require (
 	github.com/ulikunitz/xz v0.5.15
 	github.com/wailsapp/wails/v2 v2.11.0
 	go.etcd.io/bbolt v1.4.3
-	golang.org/x/text v0.31.0
+	golang.org/x/sys v0.38.0
 )
 
 require (
@@ -44,5 +44,5 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 )
