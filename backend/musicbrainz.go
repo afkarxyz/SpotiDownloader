@@ -7,9 +7,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 var AppVersion = "Unknown"
@@ -146,35 +143,30 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 	}
 
 	var genres []string
-	caser := cases.Title(language.English)
+	seen := make(map[string]struct{}, len(recording.Tags))
+
+	for _, tag := range recording.Tags {
+		name := strings.TrimSpace(tag.Name)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		genres = append(genres, name)
+		if len(genres) >= 5 {
+			break
+		}
+	}
 
 	if useSingleGenre {
-
-		maxCount := -1
-		var bestTag string
-
-		for _, tag := range recording.Tags {
-			if tag.Count > maxCount {
-				maxCount = tag.Count
-				bestTag = tag.Name
-			}
-		}
-
-		if bestTag != "" {
-			meta.Genre = caser.String(bestTag)
-		}
-	} else {
-		for _, tag := range recording.Tags {
-
-			genres = append(genres, caser.String(tag.Name))
-		}
 		if len(genres) > 0 {
-
-			if len(genres) > 5 {
-				genres = genres[:5]
-			}
-			meta.Genre = strings.Join(genres, "; ")
+			meta.Genre = genres[0]
 		}
+	} else if len(genres) > 0 {
+		meta.Genre = strings.Join(genres, ", ")
 	}
 
 	if meta.Genre == "" {

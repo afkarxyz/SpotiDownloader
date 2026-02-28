@@ -311,13 +311,19 @@ func (s *SpotiDownloader) DownloadTrack(
 	resolvedReleaseDate := strings.TrimSpace(releaseDate)
 	resolvedGenre := strings.TrimSpace(mbMeta.Genre)
 
-	if resolvedReleaseDate == "" || (embedGenre && resolvedGenre == "") {
-		spotifyReleaseDate, spotifyGenre := fetchTrackTaggingMetadata(trackID)
+	if resolvedReleaseDate == "" {
+		spotifyReleaseDate, _, _ := fetchTrackTaggingMetadata(trackID)
 		if resolvedReleaseDate == "" && spotifyReleaseDate != "" {
 			resolvedReleaseDate = spotifyReleaseDate
 		}
-		if embedGenre && resolvedGenre == "" && spotifyGenre != "" {
-			resolvedGenre = spotifyGenre
+	}
+	if embedGenre && resolvedGenre == "" {
+		if chosicGenres, err := fetchGenresFromChosic(trackID); err == nil && len(chosicGenres) > 0 {
+			if useSingleGenre {
+				resolvedGenre = strings.TrimSpace(chosicGenres[0])
+			} else {
+				resolvedGenre = strings.Join(chosicGenres, ", ")
+			}
 		}
 	}
 	if embedGenre && resolvedGenre == "" {
@@ -393,9 +399,9 @@ func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string, embedMa
 	return coverPath, nil
 }
 
-func fetchTrackTaggingMetadata(trackID string) (string, string) {
+func fetchTrackTaggingMetadata(trackID string) (string, string, bool) {
 	if strings.TrimSpace(trackID) == "" {
-		return "", ""
+		return "", "", false
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -404,19 +410,19 @@ func fetchTrackTaggingMetadata(trackID string) (string, string) {
 	client := NewSpotifyMetadataClient()
 	data, err := client.GetFilteredData(ctx, fmt.Sprintf("https://open.spotify.com/track/%s", trackID), false, 0)
 	if err != nil {
-		return "", ""
+		return "", "", false
 	}
 
 	switch resp := data.(type) {
 	case TrackResponse:
-		return strings.TrimSpace(resp.Track.ReleaseDate), strings.TrimSpace(resp.Track.Genre)
+		return strings.TrimSpace(resp.Track.ReleaseDate), "", false
 	case *TrackResponse:
 		if resp != nil {
-			return strings.TrimSpace(resp.Track.ReleaseDate), strings.TrimSpace(resp.Track.Genre)
+			return strings.TrimSpace(resp.Track.ReleaseDate), "", false
 		}
 	}
 
-	return "", ""
+	return "", "", false
 }
 
 func fetchGenreFromDeezer(trackID string) (string, error) {

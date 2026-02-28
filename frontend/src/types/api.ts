@@ -12,7 +12,6 @@ export interface TrackMetadata {
     images: string;
     release_date: string;
     genre?: string;
-    year?: number;
     track_number: number;
     total_tracks?: number;
     total_discs?: number;

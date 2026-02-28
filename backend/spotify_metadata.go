@@ -37,8 +37,6 @@ type TrackMetadata struct {
 	DurationMS  int    `json:"duration_ms"`
 	Images      string `json:"images"`
 	ReleaseDate string `json:"release_date"`
-	Genre       string `json:"genre,omitempty"`
-	Year        int    `json:"year,omitempty"`
 	TrackNumber int    `json:"track_number"`
 	TotalTracks int    `json:"total_tracks,omitempty"`
 	DiscNumber  int    `json:"disc_number,omitempty"`
@@ -66,8 +64,6 @@ type AlbumTrackMetadata struct {
 	DurationMS  int            `json:"duration_ms"`
 	Images      string         `json:"images"`
 	ReleaseDate string         `json:"release_date"`
-	Genre       string         `json:"genre,omitempty"`
-	Year        int            `json:"year,omitempty"`
 	TrackNumber int            `json:"track_number"`
 	TotalTracks int            `json:"total_tracks,omitempty"`
 	DiscNumber  int            `json:"disc_number,omitempty"`
@@ -130,7 +126,6 @@ type PlaylistResponsePayload struct {
 type ArtistInfoMetadata struct {
 	Name            string   `json:"name"`
 	Followers       int      `json:"followers"`
-	Genres          []string `json:"genres"`
 	Images          string   `json:"images"`
 	Header          string   `json:"header,omitempty"`
 	Gallery         []string `json:"gallery,omitempty"`
@@ -163,12 +158,11 @@ type ArtistDiscographyPayload struct {
 
 type ArtistResponsePayload struct {
 	Artist struct {
-		Name        string   `json:"name"`
-		Followers   int      `json:"followers"`
-		Genres      []string `json:"genres"`
-		Images      string   `json:"images"`
-		ExternalURL string   `json:"external_urls"`
-		Popularity  int      `json:"popularity"`
+		Name        string `json:"name"`
+		Followers   int    `json:"followers"`
+		Images      string `json:"images"`
+		ExternalURL string `json:"external_urls"`
+		Popularity  int    `json:"popularity"`
 	} `json:"artist"`
 }
 
@@ -182,7 +176,6 @@ type apiTrackResponse struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	Artists   string `json:"artists"`
-	Genre     string `json:"genre,omitempty"`
 	Duration  string `json:"duration"`
 	Track     int    `json:"track"`
 	Disc      int    `json:"disc"`
@@ -424,15 +417,6 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 		return nil, fmt.Errorf("failed to query track: %w", err)
 	}
 
-	primaryArtistID := extractPrimaryArtistIDFromTrackQuery(data)
-	genre := ""
-	if primaryArtistID != "" {
-		genres, err := c.fetchArtistGenresWithClient(ctx, client, primaryArtistID)
-		if err == nil && len(genres) > 0 {
-			genre = genres[0]
-		}
-	}
-
 	var albumFetchData map[string]interface{}
 	if trackData, ok := data["data"].(map[string]interface{}); ok {
 		if trackUnion, ok := trackData["trackUnion"].(map[string]interface{}); ok {
@@ -497,9 +481,6 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 	}
 
 	filteredData := FilterTrack(data, albumFetchData)
-	if genre != "" {
-		filteredData["genre"] = genre
-	}
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {
@@ -512,110 +493,6 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 	}
 
 	return &result, nil
-}
-
-func extractPrimaryArtistIDFromTrackQuery(data map[string]interface{}) string {
-	dataMap := getMap(data, "data")
-	trackData := getMap(dataMap, "trackUnion")
-	if len(trackData) == 0 {
-		return ""
-	}
-
-	extractFromArtistItems := func(container map[string]interface{}) string {
-		items := getSlice(container, "items")
-		for _, item := range items {
-			itemMap, ok := item.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			if id := getString(itemMap, "id"); id != "" {
-				return id
-			}
-			if uri := getString(itemMap, "uri"); uri != "" {
-				if parts := strings.Split(uri, ":"); len(parts) > 0 {
-					return parts[len(parts)-1]
-				}
-			}
-
-			profile := getMap(itemMap, "profile")
-			if id := getString(profile, "id"); id != "" {
-				return id
-			}
-			if uri := getString(profile, "uri"); uri != "" {
-				if parts := strings.Split(uri, ":"); len(parts) > 0 {
-					return parts[len(parts)-1]
-				}
-			}
-		}
-		return ""
-	}
-
-	if id := extractFromArtistItems(getMap(trackData, "artists")); id != "" {
-		return id
-	}
-	if id := extractFromArtistItems(getMap(trackData, "firstArtist")); id != "" {
-		return id
-	}
-	if id := extractFromArtistItems(getMap(trackData, "otherArtists")); id != "" {
-		return id
-	}
-
-	albumData := getMap(trackData, "albumOfTrack")
-	if id := extractFromArtistItems(getMap(albumData, "artists")); id != "" {
-		return id
-	}
-
-	return ""
-}
-
-func (c *SpotifyMetadataClient) fetchArtistGenresWithClient(ctx context.Context, client *SpotifyClient, artistID string) ([]string, error) {
-	if artistID == "" {
-		return nil, nil
-	}
-	if client == nil {
-		return nil, fmt.Errorf("spotify client is nil")
-	}
-	if client.accessToken == "" {
-		if err := client.Initialize(); err != nil {
-			return nil, err
-		}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.spotify.com/v1/artists/%s", artistID), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+client.accessToken)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
-
-	resp, err := client.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("artist genres request failed: HTTP %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		Genres []string `json:"genres"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, err
-	}
-
-	genres := make([]string, 0, len(payload.Genres))
-	for _, g := range payload.Genres {
-		g = strings.TrimSpace(g)
-		if g != "" {
-			genres = append(genres, g)
-		}
-	}
-
-	return genres, nil
 }
 
 func (c *SpotifyMetadataClient) fetchAlbum(ctx context.Context, albumID string) (*apiAlbumResponse, error) {
@@ -994,10 +871,6 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 	if releaseDate == "" && raw.Album.Year > 0 {
 		releaseDate = fmt.Sprintf("%d", raw.Album.Year)
 	}
-	releaseYear := raw.Album.Year
-	if releaseYear == 0 {
-		releaseYear = parseYearFromReleaseDate(releaseDate)
-	}
 	trackMetadata := TrackMetadata{
 		SpotifyID:   raw.ID,
 		Artists:     raw.Artists,
@@ -1007,8 +880,6 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 		DurationMS:  durationMS,
 		Images:      coverURL,
 		ReleaseDate: releaseDate,
-		Genre:       raw.Genre,
-		Year:        releaseYear,
 		TrackNumber: raw.Track,
 		TotalTracks: raw.Album.Tracks,
 		DiscNumber:  raw.Disc,
@@ -1027,7 +898,6 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 
 func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumResponsePayload, error) {
 	var artistID, artistURL string
-	albumYear := parseYearFromReleaseDate(raw.ReleaseDate)
 
 	info := AlbumInfoMetadata{
 		TotalTracks: raw.Count,
@@ -1068,7 +938,6 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 			DurationMS:  durationMS,
 			Images:      raw.Cover,
 			ReleaseDate: raw.ReleaseDate,
-			Year:        albumYear,
 			TrackNumber: trackNumber,
 			TotalTracks: raw.Count,
 			DiscNumber:  item.DiscNumber,
@@ -1128,7 +997,6 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse) Pla
 			DurationMS:  durationMS,
 			Images:      item.Cover,
 			ReleaseDate: "",
-			Year:        0,
 			TrackNumber: 0,
 			TotalTracks: 0,
 			DiscNumber:  item.DiscNumber,
@@ -1157,7 +1025,6 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 	info := ArtistInfoMetadata{
 		Name:            raw.Name,
 		Followers:       raw.Stats.Followers,
-		Genres:          []string{},
 		Images:          raw.Avatar,
 		Header:          raw.Header,
 		Gallery:         raw.Gallery,
@@ -1248,7 +1115,6 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 					DurationMS:  durationMS,
 					Images:      albumData.Cover,
 					ReleaseDate: albumData.ReleaseDate,
-					Year:        parseYearFromReleaseDate(albumData.ReleaseDate),
 					TrackNumber: trackNumber,
 					TotalTracks: albumData.Count,
 					DiscNumber:  tr.DiscNumber,
@@ -1298,17 +1164,6 @@ func parseDuration(durationStr string) int {
 	}
 
 	return (minutes*60 + seconds) * 1000
-}
-
-func parseYearFromReleaseDate(releaseDate string) int {
-	if len(releaseDate) < 4 {
-		return 0
-	}
-	year, err := strconv.Atoi(releaseDate[:4])
-	if err != nil {
-		return 0
-	}
-	return year
 }
 
 func parseSpotifyURI(input string) (spotifyURI, error) {
