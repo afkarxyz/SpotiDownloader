@@ -17,6 +17,12 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 		return GetFilteredSpotifyData(ctx, spotifyURL, batch, delay)
 	}
 
+	// Artist discography URLs should be handled by the local parser.
+	// The external SpotFetch API artist endpoint may return a different payload shape.
+	if isArtistDiscographyURL(spotifyURL) {
+		return GetFilteredSpotifyData(ctx, spotifyURL, batch, delay)
+	}
+
 	spotifyType, id := parseSpotifyURLToTypeAndID(spotifyURL)
 	if spotifyType == "" || id == "" {
 		return nil, fmt.Errorf("invalid Spotify URL: %s", spotifyURL)
@@ -29,9 +35,7 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 		return nil, fmt.Errorf("failed to create API request: %w", err)
 	}
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := newHTTPClient(30 * time.Second)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -80,6 +84,14 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 	}
 
 	return data, nil
+}
+
+func isArtistDiscographyURL(spotifyURL string) bool {
+	u := strings.ToLower(strings.TrimSpace(spotifyURL))
+	if u == "" {
+		return false
+	}
+	return strings.Contains(u, "/artist/") && strings.Contains(u, "/discography/")
 }
 
 func parseSpotifyURLToTypeAndID(url string) (string, string) {

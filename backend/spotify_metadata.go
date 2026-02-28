@@ -24,7 +24,7 @@ type SpotifyMetadataClient struct {
 
 func NewSpotifyMetadataClient() *SpotifyMetadataClient {
 	return &SpotifyMetadataClient{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: newHTTPClient(30 * time.Second),
 	}
 }
 
@@ -126,7 +126,6 @@ type PlaylistResponsePayload struct {
 type ArtistInfoMetadata struct {
 	Name            string   `json:"name"`
 	Followers       int      `json:"followers"`
-	Genres          []string `json:"genres"`
 	Images          string   `json:"images"`
 	Header          string   `json:"header,omitempty"`
 	Gallery         []string `json:"gallery,omitempty"`
@@ -159,12 +158,11 @@ type ArtistDiscographyPayload struct {
 
 type ArtistResponsePayload struct {
 	Artist struct {
-		Name        string   `json:"name"`
-		Followers   int      `json:"followers"`
-		Genres      []string `json:"genres"`
-		Images      string   `json:"images"`
-		ExternalURL string   `json:"external_urls"`
-		Popularity  int      `json:"popularity"`
+		Name        string `json:"name"`
+		Followers   int    `json:"followers"`
+		Images      string `json:"images"`
+		ExternalURL string `json:"external_urls"`
+		Popularity  int    `json:"popularity"`
 	} `json:"artist"`
 }
 
@@ -899,7 +897,20 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 }
 
 func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumResponsePayload, error) {
-	var artistID, artistURL string
+	albumArtistID := ""
+	albumArtistURL := ""
+	for _, item := range raw.Tracks {
+		if len(item.ArtistIds) == 0 {
+			continue
+		}
+		candidate := strings.TrimSpace(item.ArtistIds[0])
+		if candidate == "" {
+			continue
+		}
+		albumArtistID = candidate
+		albumArtistURL = fmt.Sprintf("https://open.spotify.com/artist/%s", candidate)
+		break
+	}
 
 	info := AlbumInfoMetadata{
 		TotalTracks: raw.Count,
@@ -907,8 +918,8 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 		ReleaseDate: raw.ReleaseDate,
 		Artists:     raw.Artists,
 		Images:      raw.Cover,
-		ArtistID:    artistID,
-		ArtistURL:   artistURL,
+		ArtistID:    albumArtistID,
+		ArtistURL:   albumArtistURL,
 	}
 
 	tracks := make([]AlbumTrackMetadata, 0, len(raw.Tracks))
@@ -916,10 +927,10 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 		durationMS := parseDuration(item.Duration)
 		trackNumber := idx + 1
 
-		var artistID, artistURL string
+		var trackArtistID, trackArtistURL string
 		if len(item.ArtistIds) > 0 {
-			artistID = item.ArtistIds[0]
-			artistURL = fmt.Sprintf("https://open.spotify.com/artist/%s", artistID)
+			trackArtistID = item.ArtistIds[0]
+			trackArtistURL = fmt.Sprintf("https://open.spotify.com/artist/%s", trackArtistID)
 		}
 
 		artistsData := make([]ArtistSimple, 0, len(item.ArtistIds))
@@ -947,8 +958,8 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 			ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", item.ID),
 			AlbumID:     raw.ID,
 			AlbumURL:    fmt.Sprintf("https://open.spotify.com/album/%s", raw.ID),
-			ArtistID:    artistID,
-			ArtistURL:   artistURL,
+			ArtistID:    trackArtistID,
+			ArtistURL:   trackArtistURL,
 			ArtistsData: artistsData,
 			Plays:       item.Plays,
 			IsExplicit:  item.IsExplicit,
@@ -1027,7 +1038,6 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 	info := ArtistInfoMetadata{
 		Name:            raw.Name,
 		Followers:       raw.Stats.Followers,
-		Genres:          []string{},
 		Images:          raw.Avatar,
 		Header:          raw.Header,
 		Gallery:         raw.Gallery,
@@ -1488,7 +1498,7 @@ func GetPreviewURL(trackID string) (string, error) {
 
 	embedURL := fmt.Sprintf("https://open.spotify.com/embed/track/%s", trackID)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := newHTTPClient(15 * time.Second)
 	resp, err := client.Get(embedURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch embed page: %w", err)
