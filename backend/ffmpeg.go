@@ -243,7 +243,7 @@ func downloadAndExtract(url, destDir string, progressCallback func(int), progres
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
-	client := &http.Client{}
+	client := newHTTPClient(0)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

@@ -61,9 +61,7 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 		return meta, nil
 	}
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
+	client := newHTTPClient(10 * time.Second)
 
 	queries := make([]string, 0, 2)
 	if strings.TrimSpace(isrc) != "" {

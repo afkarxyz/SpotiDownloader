@@ -29,9 +29,7 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 		return nil, fmt.Errorf("failed to create API request: %w", err)
 	}
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := newHTTPClient(30 * time.Second)
 
 	resp, err := client.Do(req)
 	if err != nil {

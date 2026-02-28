@@ -36,9 +36,7 @@ type TrackAvailability struct {
 
 func NewSongLinkClient() *SongLinkClient {
 	return &SongLinkClient{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client:           newHTTPClient(30 * time.Second),
 		apiCallResetTime: time.Now(),
 	}
 }
@@ -296,7 +294,7 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string) (*TrackAv
 }
 
 func checkQobuzAvailability(isrc string) bool {
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(10 * time.Second)
 	appID := "798273057"
 
 	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly93d3cucW9idXouY29tL2FwaS5qc29uLzAuMi90cmFjay9zZWFyY2g/cXVlcnk9")
@@ -423,7 +421,7 @@ func getDeezerISRC(deezerURL string) (string, error) {
 
 	apiURL := fmt.Sprintf("https://api.deezer.com/track/%s", trackID)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(10 * time.Second)
 	resp, err := client.Get(apiURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to call Deezer API: %w", err)
@@ -469,7 +467,7 @@ func getDeezerGenreByID(genreID int64) (string, error) {
 	}
 
 	apiURL := fmt.Sprintf("https://api.deezer.com/genre/%d", genreID)
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(10 * time.Second)
 	resp, err := client.Get(apiURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to call Deezer genre API: %w", err)
@@ -501,7 +499,7 @@ func getDeezerGenreFromTrackURL(deezerURL string) (string, error) {
 	}
 
 	apiURL := fmt.Sprintf("https://api.deezer.com/track/%s", trackID)
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newHTTPClient(10 * time.Second)
 	resp, err := client.Get(apiURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to call Deezer track API: %w", err)

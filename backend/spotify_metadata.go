@@ -24,7 +24,7 @@ type SpotifyMetadataClient struct {
 
 func NewSpotifyMetadataClient() *SpotifyMetadataClient {
 	return &SpotifyMetadataClient{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: newHTTPClient(30 * time.Second),
 	}
 }
 
@@ -1630,7 +1630,7 @@ func GetPreviewURL(trackID string) (string, error) {
 
 	embedURL := fmt.Sprintf("https://open.spotify.com/embed/track/%s", trackID)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := newHTTPClient(15 * time.Second)
 	resp, err := client.Get(embedURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch embed page: %w", err)

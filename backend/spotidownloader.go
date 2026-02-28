@@ -43,9 +43,7 @@ type DownloadResponse struct {
 func NewSpotiDownloader(sessionToken string) *SpotiDownloader {
 	return &SpotiDownloader{
 		sessionToken: sessionToken,
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		httpClient:   newHTTPClient(60 * time.Second),
 	}
 }
 
