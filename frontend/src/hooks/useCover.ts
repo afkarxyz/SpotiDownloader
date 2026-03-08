@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { DownloadCover } from "../../wailsjs/go/main/App";
-import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
+import { getSettingsWithDefaults, parseTemplate, type TemplateData } from "@/lib/settings";
 import { joinPath, sanitizePath, getFirstArtist } from "@/lib/utils";
 import type { TrackMetadata } from "@/types/api";
 import { logger } from "@/lib/logger";
@@ -20,7 +20,7 @@ export const useCover = () => {
         }
         const id = trackId || `${trackName}-${artistName}`;
         logger.info(`downloading cover: ${trackName} - ${artistName}`);
-        const settings = getSettings();
+        const settings = await getSettingsWithDefaults();
         setDownloadingCoverTrack(id);
         try {
             const os = settings.operatingSystem;
@@ -101,7 +101,7 @@ export const useCover = () => {
             toast.error("No tracks with cover URL available");
             return;
         }
-        const settings = getSettings();
+        const settings = await getSettingsWithDefaults();
         setIsBulkDownloadingCovers(true);
         setCoverDownloadProgress(0);
         stopBulkDownloadRef.current = false;

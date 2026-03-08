@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { downloadTrack, fetchSpotifyMetadata } from "@/lib/api";
-import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
+import { getSettingsWithDefaults, parseTemplate, type TemplateData } from "@/lib/settings";
 import { ensureValidToken } from "@/lib/token-manager";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath, getFirstArtist } from "@/lib/utils";
@@ -199,7 +199,7 @@ export function useDownload() {
             toast.error("No ID found for this track");
             return;
         }
-        const settings = getSettings();
+        const settings = await getSettingsWithDefaults();
         const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
         logger.info(`starting download: ${track.name} - ${displayArtist}`);
         setDownloadingTrack(id);
@@ -243,7 +243,7 @@ export function useDownload() {
             return;
         }
         logger.info(`starting batch download: ${selectedTracks.length} selected tracks`);
-        const settings = getSettings();
+        const settings = await getSettingsWithDefaults();
         setIsDownloading(true);
         setBulkDownloadType("selected");
         setDownloadProgress(0);
@@ -521,7 +521,7 @@ export function useDownload() {
             return;
         }
         logger.info(`starting batch download: ${tracksWithId.length} tracks`);
-        const settings = getSettings();
+        const settings = await getSettingsWithDefaults();
         setIsDownloading(true);
         setBulkDownloadType("all");
         setDownloadProgress(0);

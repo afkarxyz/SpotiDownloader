@@ -27,7 +27,7 @@ export async function ensureValidToken(forceRefresh: boolean = false): Promise<s
         const timeout = settings.tokenTimeout || 5;
         const retry = settings.tokenRetry || 1;
         const response = await FetchSessionTokenWithParams(timeout, retry);
-        updateSettings({
+        await updateSettings({
             sessionToken: response.token,
             sessionTokenExpiry: response.expires_at,
         });
