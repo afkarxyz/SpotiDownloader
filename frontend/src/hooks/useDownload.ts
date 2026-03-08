@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { downloadTrack, fetchSpotifyMetadata } from "@/lib/api";
-import { getSettingsWithDefaults, parseTemplate, type TemplateData } from "@/lib/settings";
+import { CheckFilesExistence, CreateM3U8File, SkipDownloadItem } from "../../wailsjs/go/main/App";
+import { getSettingsWithDefaults, parseTemplate, type Settings, type TemplateData } from "@/lib/settings";
 import { ensureValidToken } from "@/lib/token-manager";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath, getFirstArtist } from "@/lib/utils";
@@ -22,16 +23,6 @@ interface CheckFileExistenceRequest {
     audio_format?: string;
     relative_path?: string;
 }
-interface FileExistenceResult {
-    spotify_id: string;
-    exists: boolean;
-    file_path?: string;
-    track_name?: string;
-    artist_name?: string;
-}
-const CheckFilesExistence = (outputDir: string, rootDir: string, audioFormat: string, tracks: CheckFileExistenceRequest[]): Promise<FileExistenceResult[]> => (window as any)["go"]["main"]["App"]["CheckFilesExistence"](outputDir, rootDir, audioFormat, tracks);
-const SkipDownloadItem = (itemID: string, filePath: string): Promise<void> => (window as any)["go"]["main"]["App"]["SkipDownloadItem"](itemID, filePath);
-const CreateM3U8File = (playlistName: string, outputDir: string, filePaths: string[]): Promise<void> => (window as any)["go"]["main"]["App"]["CreateM3U8File"](playlistName, outputDir, filePaths);
 export function useDownload() {
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -49,7 +40,7 @@ export function useDownload() {
         const msg = (error || "").toLowerCase();
         return msg.includes("unauthorized") || msg.includes("403") || msg.includes("401") || msg.includes("err_unauthorized");
     };
-    const downloadWithSpotiDownloader = async (track: TrackMetadata, settings: any, playlistName?: string, position?: number, retryCount: number = 0, isAlbum?: boolean, releaseYear?: string) => {
+    const downloadWithSpotiDownloader = async (track: TrackMetadata, settings: Settings, playlistName?: string, position?: number, retryCount: number = 0, isAlbum?: boolean, releaseYear?: string) => {
         const os = settings.operatingSystem;
         let outputDir = settings.downloadPath;
         let useAlbumTrackNumber = false;
@@ -69,7 +60,9 @@ export function useDownload() {
                     }
                 }
             }
-            catch (err) { }
+            catch {
+                // Ignore metadata enrichment failures and use the track fields already available.
+            }
         }
         const yearValue = releaseYear || finalReleaseDate?.substring(0, 4);
         const hasSubfolder = settings.folderTemplate && settings.folderTemplate.trim() !== "";
