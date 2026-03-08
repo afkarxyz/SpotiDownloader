@@ -32,6 +32,64 @@ interface BatchTrackPathInfo {
     trackPosition: number;
     useAlbumTrackNumber: boolean;
 }
+function normalizeReleaseDate(releaseDate?: string): string {
+    if (!releaseDate) {
+        return "";
+    }
+    const trimmedReleaseDate = releaseDate.trim();
+    if (!trimmedReleaseDate) {
+        return "";
+    }
+    const dateWithoutTime = trimmedReleaseDate.split("T")[0] || trimmedReleaseDate;
+    return dateWithoutTime.split(" ")[0] || dateWithoutTime;
+}
+function getReleaseYear(releaseDate?: string): string {
+    const normalizedReleaseDate = normalizeReleaseDate(releaseDate);
+    return normalizedReleaseDate.length >= 4 ? normalizedReleaseDate.slice(0, 4) : "";
+}
+function folderTemplateNeedsReleaseDate(settings: Settings): boolean {
+    const folderTemplate = settings.folderTemplate || "";
+    return folderTemplate.includes("{year}") || folderTemplate.includes("{date}");
+}
+async function enrichTrackReleaseDate(track: TrackMetadata, settings: Settings): Promise<TrackMetadata> {
+    const normalizedReleaseDate = normalizeReleaseDate(track.release_date);
+    if (!folderTemplateNeedsReleaseDate(settings)) {
+        return normalizedReleaseDate === (track.release_date || "")
+            ? track
+            : { ...track, release_date: normalizedReleaseDate };
+    }
+    if (normalizedReleaseDate) {
+        return normalizedReleaseDate === (track.release_date || "")
+            ? track
+            : { ...track, release_date: normalizedReleaseDate };
+    }
+    if (!track.spotify_id) {
+        return track;
+    }
+    try {
+        const trackURL = `https://open.spotify.com/track/${track.spotify_id}`;
+        const trackMetadata = await fetchSpotifyMetadata(trackURL, false, 0, 10);
+        if ("track" in trackMetadata && trackMetadata.track?.release_date) {
+            const enrichedReleaseDate = normalizeReleaseDate(trackMetadata.track.release_date);
+            if (enrichedReleaseDate) {
+                return {
+                    ...track,
+                    release_date: enrichedReleaseDate,
+                };
+            }
+        }
+    }
+    catch {
+        // Ignore release date enrichment failures and fall back to the existing track fields.
+    }
+    return track;
+}
+async function enrichTracksReleaseDates(tracks: TrackMetadata[], settings: Settings): Promise<TrackMetadata[]> {
+    if (!folderTemplateNeedsReleaseDate(settings)) {
+        return tracks;
+    }
+    return await Promise.all(tracks.map((track) => enrichTrackReleaseDate(track, settings)));
+}
 function buildBatchTrackPathInfo(track: TrackMetadata, settings: Settings, playlistName: string | undefined, isAlbum: boolean | undefined, fallbackPosition: number): BatchTrackPathInfo {
     const os = settings.operatingSystem;
     const placeholder = "__SLASH_PLACEHOLDER__";
@@ -50,8 +108,8 @@ function buildBatchTrackPathInfo(track: TrackMetadata, settings: Settings, playl
         title: (track.name || "").replace(/\//g, placeholder),
         track: trackPosition,
         disc: track.disc_number,
-        year: track.release_date?.substring(0, 4) || "",
-        date: track.release_date,
+        year: getReleaseYear(track.release_date),
+        date: normalizeReleaseDate(track.release_date),
         playlist: playlistName?.replace(/\//g, placeholder),
     };
     const useAlbumSubfolder = folderTemplate.includes("{album}") ||
@@ -111,7 +169,7 @@ export function useDownload() {
         let outputDir = settings.downloadPath;
         let useAlbumTrackNumber = false;
         const placeholder = "__SLASH_PLACEHOLDER__";
-        let finalReleaseDate = track.release_date;
+        let finalReleaseDate = normalizeReleaseDate(track.release_date);
         let finalTrackNumber = track.track_number;
         if (track.spotify_id) {
             try {
@@ -119,7 +177,7 @@ export function useDownload() {
                 const trackMetadata = await fetchSpotifyMetadata(trackURL, false, 0, 10);
                 if ("track" in trackMetadata && trackMetadata.track) {
                     if (trackMetadata.track.release_date) {
-                        finalReleaseDate = trackMetadata.track.release_date;
+                        finalReleaseDate = normalizeReleaseDate(trackMetadata.track.release_date);
                     }
                     if (trackMetadata.track.track_number > 0) {
                         finalTrackNumber = trackMetadata.track.track_number;
@@ -130,7 +188,8 @@ export function useDownload() {
                 // Ignore metadata enrichment failures and use the track fields already available.
             }
         }
-        const yearValue = releaseYear || finalReleaseDate?.substring(0, 4);
+        const resolvedReleaseDate = finalReleaseDate || normalizeReleaseDate(track.release_date);
+        const yearValue = releaseYear || getReleaseYear(resolvedReleaseDate);
         const hasSubfolder = settings.folderTemplate && settings.folderTemplate.trim() !== "";
         const trackNumberForTemplate = hasSubfolder && finalTrackNumber > 0 ? finalTrackNumber : position || 0;
         if (hasSubfolder) {
@@ -152,7 +211,7 @@ export function useDownload() {
             track: trackNumberForTemplate,
             disc: track.disc_number,
             year: yearValue,
-            date: track.release_date,
+            date: resolvedReleaseDate || undefined,
             playlist: playlistName?.replace(/\//g, placeholder) || undefined,
         };
         const folderTemplate = settings.folderTemplate || "";
@@ -182,7 +241,7 @@ export function useDownload() {
                     artist_name: displayArtist || "",
                     album_name: track.album_name,
                     album_artist: displayAlbumArtist,
-                    release_date: finalReleaseDate || "",
+                    release_date: resolvedReleaseDate || "",
                     track_number: finalTrackNumber || 0,
                     disc_number: track.disc_number || 0,
                     position: trackNumberForTemplate,
@@ -215,7 +274,7 @@ export function useDownload() {
             artist_name: track.artists,
             album_name: track.album_name,
             album_artist: track.album_artist || track.artists,
-            release_date: finalReleaseDate || track.release_date,
+            release_date: resolvedReleaseDate,
             cover_url: track.images,
             album_track_number: finalTrackNumber || track.track_number,
             disc_number: track.disc_number,
@@ -306,9 +365,9 @@ export function useDownload() {
         setIsDownloading(true);
         setBulkDownloadType("selected");
         setDownloadProgress(0);
-        const selectedTrackObjects = selectedTracks
+        const selectedTrackObjects = await enrichTracksReleaseDates(selectedTracks
             .map((id) => allTracks.find((t) => t.spotify_id === id))
-            .filter((t): t is TrackMetadata => t !== undefined);
+            .filter((t): t is TrackMetadata => t !== undefined), settings);
         const selectedTrackPathInfo = selectedTrackObjects.map((track, index) => ({
             track,
             pathInfo: buildBatchTrackPathInfo(track, settings, playlistName, isAlbum, index + 1),
@@ -322,7 +381,7 @@ export function useDownload() {
                 artist_name: pathInfo.displayArtist,
                 album_name: track.album_name || "",
                 album_artist: pathInfo.displayAlbumArtist,
-                release_date: track.release_date || "",
+                release_date: normalizeReleaseDate(track.release_date),
                 track_number: track.track_number || 0,
                 disc_number: track.disc_number || 0,
                 position: pathInfo.trackPosition,
@@ -401,7 +460,7 @@ export function useDownload() {
                     artist_name: track.artists,
                     album_name: track.album_name,
                     album_artist: track.album_artist || track.artists,
-                    release_date: track.release_date,
+                    release_date: normalizeReleaseDate(track.release_date),
                     cover_url: track.images,
                     album_track_number: track.track_number,
                     disc_number: track.disc_number,
@@ -430,7 +489,7 @@ export function useDownload() {
                         artist_name: track.artists,
                         album_name: track.album_name,
                         album_artist: track.album_artist || track.artists,
-                        release_date: track.release_date,
+                        release_date: normalizeReleaseDate(track.release_date),
                         cover_url: track.images,
                         album_track_number: track.track_number,
                         disc_number: track.disc_number,
@@ -538,7 +597,8 @@ export function useDownload() {
         setIsDownloading(true);
         setBulkDownloadType("all");
         setDownloadProgress(0);
-        const trackPathInfo = tracksWithId.map((track, index) => ({
+        const enrichedTracksWithId = await enrichTracksReleaseDates(tracksWithId, settings);
+        const trackPathInfo = enrichedTracksWithId.map((track, index) => ({
             track,
             pathInfo: buildBatchTrackPathInfo(track, settings, playlistName, isAlbum, index + 1),
         }));
@@ -551,7 +611,7 @@ export function useDownload() {
                 artist_name: pathInfo.displayArtist,
                 album_name: track.album_name || "",
                 album_artist: pathInfo.displayAlbumArtist,
-                release_date: track.release_date || "",
+                release_date: normalizeReleaseDate(track.release_date),
                 track_number: track.track_number || 0,
                 disc_number: track.disc_number || 0,
                 position: pathInfo.trackPosition,
@@ -563,7 +623,7 @@ export function useDownload() {
             };
         });
         const existenceResults = await CheckFilesExistence(outputDir, settings.downloadPath, settings.audioFormat, existenceChecks);
-        const finalFilePaths: string[] = new Array(tracksWithId.length).fill("");
+        const finalFilePaths: string[] = new Array(enrichedTracksWithId.length).fill("");
         const existingSpotifyIDs = new Set<string>();
         const existingFilePaths = new Map<string, string>();
         for (let i = 0; i < existenceResults.length; i++) {
@@ -586,7 +646,7 @@ export function useDownload() {
                 setDownloadedTracks((prev: Set<string>) => new Set(prev).add(trackID));
             }
         }
-        const tracksToDownload = tracksWithId.filter((track) => {
+        const tracksToDownload = enrichedTracksWithId.filter((track) => {
             const trackID = track.spotify_id || "";
             return !existingSpotifyIDs.has(trackID);
         });
@@ -609,7 +669,7 @@ export function useDownload() {
         let successCount = 0;
         let errorCount = 0;
         let skippedCount = existingSpotifyIDs.size;
-        const total = tracksWithId.length;
+        const total = enrichedTracksWithId.length;
         setDownloadProgress(Math.round((skippedCount / total) * 100));
         for (let i = 0; i < tracksToDownload.length; i++) {
             if (shouldStopDownloadRef.current) {
@@ -622,7 +682,7 @@ export function useDownload() {
             setDownloadingTrack(id);
             setCurrentDownloadInfo({ name: track.name, artists: displayArtist || "" });
             try {
-                const playlistIndex = tracksWithId.findIndex((t) => t.spotify_id === id) + 1;
+                const playlistIndex = enrichedTracksWithId.findIndex((t) => t.spotify_id === id) + 1;
                 const pathInfo = buildBatchTrackPathInfo(track, settings, playlistName, isAlbum, playlistIndex);
                 let response = await downloadTrack({
                     track_id: id,
@@ -631,7 +691,7 @@ export function useDownload() {
                     artist_name: track.artists || "",
                     album_name: track.album_name || "",
                     album_artist: track.album_artist || track.artists || "",
-                    release_date: track.release_date || "",
+                    release_date: normalizeReleaseDate(track.release_date),
                     cover_url: track.images || "",
                     album_track_number: track.track_number || 0,
                     disc_number: track.disc_number || 0,
@@ -660,7 +720,7 @@ export function useDownload() {
                         artist_name: track.artists || "",
                         album_name: track.album_name || "",
                         album_artist: track.album_artist || track.artists || "",
-                        release_date: track.release_date || "",
+                        release_date: normalizeReleaseDate(track.release_date),
                         cover_url: track.images || "",
                         album_track_number: track.track_number || 0,
                         disc_number: track.disc_number || 0,
