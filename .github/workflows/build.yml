@@ -9,8 +9,6 @@ on:
 env:
   GO_VERSION: "1.26"
   NODE_VERSION: "24"
-  PYTHON_VERSION: "3.12"
-  APP_NAME: "SpotiDownloader"
 
 jobs:
   build-windows:
@@ -30,22 +28,6 @@ jobs:
             VERSION="dev"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Build get_token with PyInstaller
-        working-directory: helper
-        run: |
-          pip install DrissionPage pyinstaller ordered-set zstandard nodriver
-          pyinstaller --noconfirm --onefile --console --clean --add-data "uBOLite;uBOLite" get_token.py
-
-      - name: Copy get_token for Go embed
-        run: |
-          New-Item -ItemType Directory -Force -Path "backend\bin"
-          Copy-Item -Path "helper\dist\get_token.exe" -Destination "backend\bin\get_token.exe" -Force
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -86,125 +68,30 @@ jobs:
           pnpm run generate-icon
 
       - name: Install UPX
-        run: choco install upx -y
+        run: |
+          choco install upx -y
 
       - name: Build application
         run: wails build -platform windows/amd64
 
       - name: Compress with UPX
-        run: upx --best --lzma "build\bin\${{ env.APP_NAME }}.exe"
+        run: |
+          upx --best --lzma "build\bin\SpotiDownloader.exe"
 
       - name: Prepare artifacts
         run: |
           mkdir -p dist
-          Copy-Item -Path "build\bin\${{ env.APP_NAME }}.exe" -Destination "dist\${{ env.APP_NAME }}.exe"
+          Copy-Item -Path "build\bin\SpotiDownloader.exe" -Destination "dist\SpotiDownloader.exe"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-portable
-          path: dist/${{ env.APP_NAME }}.exe
+          path: dist/SpotiDownloader.exe
           retention-days: 7
 
-  build-macos-intel:
-    name: Build macOS Intel
-    runs-on: macos-15-intel
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Get version from tag
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-          else
-            VERSION="dev"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Build get_token with PyInstaller
-        working-directory: helper
-        run: |
-          pip install DrissionPage pyinstaller ordered-set zstandard nodriver
-          pyinstaller --noconfirm --onefile --console --clean --add-data "uBOLite:uBOLite" get_token.py
-
-      - name: Copy get_token for Go embed
-        run: |
-          mkdir -p backend/bin
-          cp helper/dist/get_token backend/bin/get_token
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Get pnpm store directory
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        continue-on-error: true
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-intel-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-intel-pnpm-store-
-
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: |
-          pnpm install
-          pnpm run generate-icon
-
-      - name: Build application
-        run: wails build -platform darwin/amd64
-
-      - name: Create DMG
-        run: |
-          mkdir -p dist
-          brew install create-dmg || true
-
-          create-dmg \
-            --volname "${{ env.APP_NAME }}" \
-            --window-pos 200 120 \
-            --window-size 600 400 \
-            --icon-size 100 \
-            --icon "${{ env.APP_NAME }}.app" 175 120 \
-            --hide-extension "${{ env.APP_NAME }}.app" \
-            --app-drop-link 425 120 \
-            "dist/${{ env.APP_NAME }}-Intel.dmg" \
-            "build/bin/${{ env.APP_NAME }}.app" || \
-          hdiutil create -volname ${{ env.APP_NAME }} -srcfolder build/bin/${{ env.APP_NAME }}.app -ov -format UDZO dist/${{ env.APP_NAME }}-Intel.dmg
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-intel
-          path: dist/${{ env.APP_NAME }}-Intel.dmg
-          retention-days: 7
-
-  build-macos-arm:
-    name: Build macOS Apple Silicon
+  build-macos:
+    name: Build macOS
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -220,22 +107,6 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Build get_token with PyInstaller
-        working-directory: helper
-        run: |
-          pip install DrissionPage pyinstaller ordered-set zstandard nodriver
-          pyinstaller --noconfirm --onefile --console --clean --add-data "uBOLite:uBOLite" get_token.py
-
-      - name: Copy get_token for Go embed
-        run: |
-          mkdir -p backend/bin
-          cp helper/dist/get_token backend/bin/get_token
-
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -260,9 +131,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-arm-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-arm-pnpm-store-
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -274,30 +145,33 @@ jobs:
           pnpm run generate-icon
 
       - name: Build application
-        run: wails build -platform darwin/arm64
+        run: wails build -platform darwin/universal
 
       - name: Create DMG
         run: |
           mkdir -p dist
+          # Install create-dmg if not available
           brew install create-dmg || true
 
+          # Create DMG
           create-dmg \
-            --volname "${{ env.APP_NAME }}" \
+            --volname "SpotiDownloader" \
             --window-pos 200 120 \
             --window-size 600 400 \
             --icon-size 100 \
-            --icon "${{ env.APP_NAME }}.app" 175 120 \
-            --hide-extension "${{ env.APP_NAME }}.app" \
+            --icon "SpotiDownloader.app" 175 120 \
+            --hide-extension "SpotiDownloader.app" \
             --app-drop-link 425 120 \
-            "dist/${{ env.APP_NAME }}.dmg" \
-            "build/bin/${{ env.APP_NAME }}.app" || \
-          hdiutil create -volname ${{ env.APP_NAME }} -srcfolder build/bin/${{ env.APP_NAME }}.app -ov -format UDZO dist/${{ env.APP_NAME }}.dmg
+            "dist/SpotiDownloader.dmg" \
+            "build/bin/SpotiDownloader.app" || \
+          # Fallback to hdiutil if create-dmg fails
+          hdiutil create -volname SpotiDownloader -srcfolder build/bin/SpotiDownloader.app -ov -format UDZO dist/SpotiDownloader.dmg
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-arm
-          path: dist/${{ env.APP_NAME }}.dmg
+          name: macos-dmg
+          path: dist/SpotiDownloader.dmg
           retention-days: 7
 
   build-linux:
@@ -316,27 +190,6 @@ jobs:
             VERSION="dev"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install Nuitka dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y patchelf ccache
-
-      - name: Build get_token with PyInstaller
-        working-directory: helper
-        run: |
-          pip install DrissionPage pyinstaller ordered-set zstandard nodriver
-          pyinstaller --noconfirm --onefile --console --clean --add-data "uBOLite:uBOLite" get_token.py
-
-      - name: Copy get_token for Go embed
-        run: |
-          mkdir -p backend/bin
-          cp helper/dist/get_token backend/bin/get_token
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -368,7 +221,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2 imagemagick upx-ucl
+
+          # Create symlink for webkit2gtk-4.0 -> webkit2gtk-4.1 (Ubuntu 24.04 compatibility)
           sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
 
       - name: Install Wails CLI
@@ -384,7 +240,8 @@ jobs:
         run: wails build -platform linux/amd64
 
       - name: Compress with UPX
-        run: upx --best --lzma build/bin/${{ env.APP_NAME }}
+        run: |
+          upx --best --lzma build/bin/SpotiDownloader
 
       - name: Cache appimagetool
         id: cache-appimagetool
@@ -408,31 +265,38 @@ jobs:
           mkdir -p AppDir/usr/share/applications
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 
-          cp build/bin/${{ env.APP_NAME }} AppDir/usr/bin/
+          # Copy binary
+          cp build/bin/SpotiDownloader AppDir/usr/bin/
 
-          cat > AppDir/${{ env.APP_NAME }}.desktop << 'EOF'
+          # Create desktop file
+          cat > AppDir/spotidownloader.desktop << 'EOF'
           [Desktop Entry]
           Name=SpotiDownloader
           Exec=SpotiDownloader
           Icon=spotidownloader
           Type=Application
-          Categories=Audio;Network;
-          Comment=Download music from Spotify
+          Categories=Audio;AudioVideo;
+          Comment=Download songs from Spotify
           EOF
 
-          cp AppDir/${{ env.APP_NAME }}.desktop AppDir/usr/share/applications/
+          cp AppDir/spotidownloader.desktop AppDir/usr/share/applications/
 
+          # Create icon
           if [ -f "build/appicon.png" ]; then
             convert build/appicon.png -resize 256x256 AppDir/spotidownloader.png
           elif [ -f "frontend/public/icon.svg" ]; then
             convert -background none -size 256x256 frontend/public/icon.svg AppDir/spotidownloader.png
+          else
+            echo "Warning: No icon found, building without icon"
           fi
 
+          # Copy icon if exists
           if [ -f "AppDir/spotidownloader.png" ]; then
             cp AppDir/spotidownloader.png AppDir/usr/share/icons/hicolor/256x256/apps/
             cp AppDir/spotidownloader.png AppDir/.DirIcon
           fi
 
+          # Create AppRun
           cat > AppDir/AppRun << 'EOF'
           #!/bin/sh
           SELF=$(readlink -f "$0")
@@ -443,19 +307,20 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
 
+          # Create AppImage
           mkdir -p dist
-          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/${{ env.APP_NAME }}.AppImage
+          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/SpotiDownloader.AppImage
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-portable
-          path: dist/${{ env.APP_NAME }}.AppImage
+          path: dist/SpotiDownloader.AppImage
           retention-days: 7
 
   create-release:
     name: Create Release
-    needs: [build-windows, build-macos-intel, build-macos-arm, build-linux]
+    needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -490,75 +355,39 @@ jobs:
             ## Downloads
 
             - `SpotiDownloader.exe` - Windows
-            - `SpotiDownloader-Intel.dmg` - macOS Intel
-            - `SpotiDownloader.dmg` - macOS Apple Silicon
+            - `SpotiDownloader.dmg` - macOS
             - `SpotiDownloader.AppImage` - Linux
-
-            ## Requirements
 
             <details>
             <summary><b>Linux Requirements</b></summary>
 
-            The AppImage requires `webkit2gtk-4.1` and Chromium/ChromeDriver to be installed:
+            The AppImage requires `webkit2gtk-4.1` to be installed on your system:
 
             **Ubuntu/Debian:**
             ```bash
             sudo apt install libwebkit2gtk-4.1-0
-            sudo apt install chromium-browser chromium-chromedriver
             ```
 
             **Arch Linux:**
             ```bash
-            sudo pacman -S webkit2gtk-4.1 chromium
+            sudo pacman -S webkit2gtk-4.1
             ```
 
             **Fedora:**
             ```bash
-            sudo dnf install webkit2gtk4.1 chromium chromedriver
+            sudo dnf install webkit2gtk4.1
             ```
 
-            After installing dependencies, make the AppImage executable:
+            After installing the dependency, make the AppImage executable:
             ```bash
             chmod +x SpotiDownloader.AppImage
             ./SpotiDownloader.AppImage
             ```
 
             </details>
-
-            <details>
-            <summary><b>macOS Requirements</b></summary>
-
-            ChromeDriver is required for token fetching.
-
-            If Homebrew is not installed, install it first:
-
-            ```bash
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            ```
-
-            Then install ChromeDriver:
-
-            ```bash
-            brew install --cask chromedriver
-            ```
-
-            After installation, you may need to allow ChromeDriver in System Preferences > Security & Privacy.
-
-            If ChromeDriver still doesn't work, install Chrome browser:
-            https://www.google.com/chrome
-
-            </details>
-
-            <details>
-            <summary><b>Windows Requirements</b></summary>
-
-            Chrome browser should be installed. ChromeDriver will be automatically managed.
-
-            </details>
           files: |
             artifacts/windows-portable/*.exe
-            artifacts/macos-intel/*.dmg
-            artifacts/macos-arm/*.dmg
+            artifacts/macos-portable/*.dmg
             artifacts/linux-portable/*.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

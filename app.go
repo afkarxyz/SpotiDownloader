@@ -50,10 +50,11 @@ func (a *App) shutdown(ctx context.Context) {
 }
 
 type SpotifyMetadataRequest struct {
-	URL     string  `json:"url"`
-	Batch   bool    `json:"batch"`
-	Delay   float64 `json:"delay"`
-	Timeout float64 `json:"timeout"`
+	URL       string  `json:"url"`
+	Batch     bool    `json:"batch"`
+	Delay     float64 `json:"delay"`
+	Timeout   float64 `json:"timeout"`
+	Separator string  `json:"separator,omitempty"`
 }
 
 type DownloadRequest struct {
@@ -88,6 +89,7 @@ type DownloadRequest struct {
 	UseFirstArtistOnly   bool   `json:"use_first_artist_only,omitempty"`
 	UseSingleGenre       bool   `json:"use_single_genre,omitempty"`
 	EmbedGenre           bool   `json:"embed_genre,omitempty"`
+	Separator            string `json:"separator,omitempty"`
 }
 
 type DownloadResponse struct {
@@ -328,7 +330,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		go func() {
 			fmt.Println("Fetching lyrics in background...")
 			client := backend.NewLyricsClient()
-			resp, _, err := client.FetchLyricsAllSources(trackID, req.TrackName, req.ArtistName, req.Duration)
+			resp, _, err := client.FetchLyricsAllSources(trackID, req.TrackName, req.ArtistName, req.AlbumName, req.Duration)
 			if err == nil && resp != nil && len(resp.Lines) > 0 {
 				lrc := client.ConvertToLRC(resp, req.TrackName, req.ArtistName)
 				lyricsChan <- lrc
@@ -490,6 +492,18 @@ func (a *App) OpenFolder(path string) error {
 	return nil
 }
 
+func (a *App) OpenConfigFolder() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %v", err)
+	}
+	configDir := filepath.Join(homeDir, ".spotidownloader")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %v", err)
+	}
+	return backend.OpenFolderInExplorer(configDir)
+}
+
 func (a *App) SelectFolder(defaultPath string) (string, error) {
 	return backend.SelectFolderDialog(a.ctx, defaultPath)
 }
@@ -532,17 +546,8 @@ type TokenResponse struct {
 }
 
 func (a *App) FetchSessionToken() (TokenResponse, error) {
-	return a.FetchSessionTokenWithParams(5, 1)
-}
-
-func (a *App) FetchSessionTokenWithParams(timeout int, retry int) (TokenResponse, error) {
-	token, err := backend.FetchSessionTokenWithParams(timeout, retry)
+	token, err := backend.FetchSessionToken()
 	if err != nil {
-
-		if err == backend.ErrChromeNotInstalled {
-			message := backend.GetChromeInstallationMessage()
-			return TokenResponse{}, fmt.Errorf("CHROME_NOT_INSTALLED: %s", message)
-		}
 		return TokenResponse{}, fmt.Errorf("failed to fetch session token: %v", err)
 	}
 
@@ -918,23 +923,6 @@ func (a *App) GetFFmpegPath() (string, error) {
 
 type DownloadFFmpegRequest struct{}
 
-func (a *App) UploadImage(filePath string) (string, error) {
-	return backend.UploadToSendNow(filePath)
-}
-
-func (a *App) UploadImageBytes(filename string, base64Data string) (string, error) {
-
-	if idx := strings.Index(base64Data, ","); idx != -1 {
-		base64Data = base64Data[idx+1:]
-	}
-
-	data, err := base64.StdEncoding.DecodeString(base64Data)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode base64: %v", err)
-	}
-	return backend.UploadBytesToSendNow(filename, data)
-}
-
 func (a *App) SelectImageVideo() ([]string, error) {
 	return backend.SelectImageVideoDialog(a.ctx)
 }
@@ -1291,10 +1279,6 @@ func (a *App) LoadSettings() (map[string]interface{}, error) {
 
 func (a *App) CheckFFmpegInstalled() (bool, error) {
 	return backend.IsFFmpegInstalled()
-}
-
-func (a *App) GetOSInfo() (string, error) {
-	return backend.GetOSInfo()
 }
 
 func (a *App) CreateM3U8File(m3u8Name string, outputDir string, filePaths []string) error {

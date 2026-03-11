@@ -75,7 +75,6 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                 external_urls: albumInfo.artist_url,
             };
         }
-
         for (const track of trackList) {
             if (track.artists_data && track.artists_data.length > 0) {
                 const first = track.artists_data[0];
@@ -95,10 +94,8 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                 };
             }
         }
-
         return null;
     })();
-
     return (<div className="space-y-6">
       <Card className="relative">
       {onBack && (<div className="absolute top-4 right-4 z-10">

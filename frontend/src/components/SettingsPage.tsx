@@ -5,12 +5,12 @@ import { InputWithContext } from "@/components/ui/input-with-context";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderOpen, Save, RotateCcw, Info, Settings, FolderCog } from "lucide-react";
+import { FolderOpen, Save, RotateCcw, Info, MonitorCog, FolderCog, FolderLock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
-import { SelectFolder } from "../../wailsjs/go/main/App";
+import { SelectFolder, OpenConfigFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 const FlacIcon = () => (<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" className="inline-block mr-2 fill-muted-foreground">
   <path d="M.821 7.73L0 7.728l.295-1.4l.526.001V6.2q.001-.58.181-.992q.182-.421.511-.686q.341-.274.809-.4a4 4 0 0 1 1.05-.128l.397 1.56l-.481-.01c-.306-.007-.535.065-.683.203c-.144.133-.213.345-.213.595l.906-.017v1.4h-.906v3.99l-1.57.18v-4.17zM5.79 4.21l.005 7.52l-1.59.204v-7.54l1.59-.182z"/>
@@ -110,6 +110,17 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
       <div className="flex items-center justify-between shrink-0">
           <h1 className="text-2xl font-bold">Settings</h1>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={async () => {
+            try {
+                await OpenConfigFolder();
+            }
+            catch (e) {
+                toast.error(`Failed to open config folder: ${e}`);
+            }
+        }} className="gap-1.5">
+              <FolderLock className="h-4 w-4"/>
+              Open Config Folder
+            </Button>
             <Button variant="outline" onClick={() => setShowResetConfirm(true)} className="gap-1.5">
               <RotateCcw className="h-4 w-4"/>
               Reset to Default
@@ -123,7 +134,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
 
       <div className="flex gap-2 border-b shrink-0">
         <Button variant={activeTab === "general" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("general")} className="rounded-b-none gap-2">
-          <Settings className="h-4 w-4"/>
+          <MonitorCog className="h-4 w-4"/>
           General
         </Button>
         <Button variant={activeTab === "files" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("files")} className="rounded-b-none gap-2">
@@ -283,7 +294,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                         {tempSettings.folderPreset === "custom" && (<InputWithContext value={tempSettings.folderTemplate} onChange={(e) => setTempSettings(prev => ({ ...prev, folderTemplate: e.target.value }))} placeholder="{artist}/{album}" className="h-9 text-sm flex-1"/>)}
                       </div>
                       {tempSettings.folderTemplate && (<p className="text-xs text-muted-foreground">
-                        Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{year\}/g, "2018").replace(/\{date\}/g, "2018-02-09")}/</span>
+                        Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, tempSettings.separator === "comma" ? "Kendrick Lamar, SZA" : "Kendrick Lamar; SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{year\}/g, "2018").replace(/\{date\}/g, "2018-02-09")}/</span>
                       </p>)}
                     </div>
 
@@ -335,8 +346,24 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                     </Select>
                     {tempSettings.filenamePreset === "custom" && (<InputWithContext value={tempSettings.filenameTemplate} onChange={(e) => setTempSettings(prev => ({ ...prev, filenameTemplate: e.target.value }))} placeholder="{track}. {title}" className="h-9 text-sm flex-1"/>)}
                   </div>
-                  {tempSettings.filenameTemplate && (<p className="text-xs text-muted-foreground">
-                    Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{title\}/g, "All The Stars").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018").replace(/\{date\}/g, "2018-02-09")}.{tempSettings.audioFormat}</span>
+                  <div className="space-y-1.5 pt-2">
+                    <Label className="text-sm">Separator</Label>
+                    <Select value={tempSettings.separator} onValueChange={(value: "comma" | "semicolon") => setTempSettings((prev) => ({
+                ...prev,
+                separator: value,
+            }))}>
+                      <SelectTrigger className="h-9 w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="comma">Comma (,)</SelectItem>
+                        <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {tempSettings.filenameTemplate && (<p className="text-xs text-muted-foreground pt-1">
+                    Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, tempSettings.separator === "comma" ? "Kendrick Lamar, SZA" : "Kendrick Lamar; SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{title\}/g, "All The Stars").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018").replace(/\{date\}/g, "2018-02-09")}.{tempSettings.audioFormat}</span>
                   </p>)}
               </div>
           </div>)}

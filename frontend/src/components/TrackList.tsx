@@ -300,7 +300,7 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {downloadingLyricsTrack === track.spotify_id ? (<p>Downloading lyrics...</p>) : skippedLyrics?.has(track.spotify_id) ? (<p>Lyrics already exists</p>) : downloadedLyrics?.has(track.spotify_id) ? (<p>Lyrics downloaded</p>) : failedLyrics?.has(track.spotify_id) ? (<p>Lyrics failed</p>) : (<p>Download Lyrics</p>)}
+                      {downloadingLyricsTrack === track.spotify_id ? (<p>Downloading lyrics...</p>) : skippedLyrics?.has(track.spotify_id) ? (<p>Lyrics already exists</p>) : downloadedLyrics?.has(track.spotify_id) ? (<p>Lyrics downloaded</p>) : failedLyrics?.has(track.spotify_id) ? (<p>Lyrics failed</p>) : (<p>Download Separate Lyric</p>)}
                     </TooltipContent>
                   </Tooltip>)}
                   {track.images && onDownloadCover && (<Tooltip>
@@ -313,7 +313,7 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`) ? (<p>Downloading cover...</p>) : skippedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (<p>Cover already exists</p>) : downloadedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (<p>Cover downloaded</p>) : failedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (<p>Cover failed</p>) : (<p>Download Cover</p>)}
+                      {downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`) ? (<p>Downloading cover...</p>) : skippedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (<p>Cover already exists</p>) : downloadedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (<p>Cover downloaded</p>) : failedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (<p>Cover failed</p>) : (<p>Download Separate Cover</p>)}
                     </TooltipContent>
                   </Tooltip>)}
                 </div>

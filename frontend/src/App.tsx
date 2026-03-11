@@ -364,7 +364,7 @@ function App() {
         if ("track" in metadata.metadata) {
             const { track } = metadata.metadata;
             const trackId = track.spotify_id || "";
-            return (<TrackInfo track={track} isDownloading={download.isDownloading} downloadingTrack={download.downloadingTrack} isDownloaded={download.downloadedTracks.has(trackId)} isFailed={download.failedTracks.has(trackId)} isSkipped={download.skippedTracks.has(trackId)} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingCover={cover.downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)} downloadedCover={cover.downloadedCovers.has(track.spotify_id || "")} failedCover={cover.failedCovers.has(track.spotify_id || "")} skippedCover={cover.skippedCovers.has(track.spotify_id || "")} onDownload={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, track.album_name, undefined, undefined, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _isArtistDiscography, _position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, track.album_name, undefined, undefined, trackId, albumArtist, releaseDate, discNumber)} onOpenFolder={handleOpenFolder} onBack={metadata.resetMetadata}/>);
+            return (<TrackInfo track={track} isDownloading={download.isDownloading} downloadingTrack={download.downloadingTrack} isDownloaded={download.downloadedTracks.has(trackId)} isFailed={download.failedTracks.has(trackId)} isSkipped={download.skippedTracks.has(trackId)} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingCover={cover.downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)} downloadedCover={cover.downloadedCovers.has(track.spotify_id || "")} failedCover={cover.failedCovers.has(track.spotify_id || "")} skippedCover={cover.skippedCovers.has(track.spotify_id || "")} onDownload={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, undefined, undefined, undefined, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _isArtistDiscography, _position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, undefined, undefined, undefined, trackId, albumArtist, releaseDate, discNumber)} onOpenFolder={handleOpenFolder} onBack={metadata.resetMetadata}/>);
         }
         if ("album_info" in metadata.metadata) {
             const { album_info, track_list } = metadata.metadata;
@@ -428,7 +428,7 @@ function App() {
             case "debug":
                 return <DebugLoggerPage />;
             case "about":
-                return <AboutPage version={CURRENT_VERSION}/>;
+                return <AboutPage />;
             case "history":
                 return <HistoryPage onHistorySelect={(data: string) => {
                         metadata.loadFromCache(data);

@@ -23,8 +23,6 @@ export interface Settings {
     embedLyrics: boolean;
     embedMaxQualityCover: boolean;
     operatingSystem: "Windows" | "linux/MacOS";
-    tokenTimeout: number;
-    tokenRetry: number;
     useSpotFetchAPI: boolean;
     spotFetchAPIUrl: string;
     createPlaylistFolder: boolean;
@@ -32,6 +30,7 @@ export interface Settings {
     useFirstArtistOnly: boolean;
     useSingleGenre: boolean;
     embedGenre: boolean;
+    separator: "comma" | "semicolon";
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -105,15 +104,14 @@ export const DEFAULT_SETTINGS: Settings = {
     embedLyrics: false,
     embedMaxQualityCover: false,
     operatingSystem: detectOS(),
-    tokenTimeout: 5,
-    tokenRetry: 1,
     useSpotFetchAPI: false,
     spotFetchAPIUrl: "https://spotify.afkarxyz.fun/api",
     createPlaylistFolder: true,
     createM3u8File: false,
     useFirstArtistOnly: false,
     useSingleGenre: false,
-    embedGenre: true
+    embedGenre: true,
+    separator: "semicolon"
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
@@ -164,7 +162,9 @@ type LegacySettings = Partial<Settings> & {
     artistSubfolder?: boolean;
     albumSubfolder?: boolean;
 };
-function toBackendSettingsPayload(settings: Settings): { [key: string]: unknown } {
+function toBackendSettingsPayload(settings: Settings): {
+    [key: string]: unknown;
+} {
     return { ...settings };
 }
 function normalizeSettingsData(source: LegacySettings | null | undefined): Settings {
@@ -222,6 +222,9 @@ function normalizeSettingsData(source: LegacySettings | null | undefined): Setti
     }
     if (!("embedGenre" in parsed)) {
         parsed.embedGenre = true;
+    }
+    if (!("separator" in parsed)) {
+        parsed.separator = "semicolon";
     }
     parsed.operatingSystem = detectOS();
     return { ...DEFAULT_SETTINGS, ...parsed };

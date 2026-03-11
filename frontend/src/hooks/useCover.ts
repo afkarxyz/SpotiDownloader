@@ -41,7 +41,7 @@ export const useCover = () => {
             };
             const folderTemplate = settings.folderTemplate || "";
             const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
-            if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
+            if (settings.createPlaylistFolder && playlistName && (!isAlbum || !useAlbumSubfolder)) {
                 outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
             }
             if (settings.folderTemplate) {
@@ -140,7 +140,7 @@ export const useCover = () => {
                 };
                 const folderTemplate = settings.folderTemplate || "";
                 const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
-                if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
+                if (settings.createPlaylistFolder && playlistName && (!isAlbum || !useAlbumSubfolder)) {
                     outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
                 }
                 if (settings.folderTemplate) {

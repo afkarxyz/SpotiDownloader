@@ -115,7 +115,7 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {downloadingLyricsTrack === track.spotify_id ? (<p>Downloading lyrics...</p>) : skippedLyrics?.has(track.spotify_id) ? (<p>Lyrics already exists</p>) : downloadedLyrics?.has(track.spotify_id) ? (<p>Lyrics downloaded</p>) : failedLyrics?.has(track.spotify_id) ? (<p>Lyrics failed</p>) : (<p>Download Lyrics</p>)}
+                {downloadingLyricsTrack === track.spotify_id ? (<p>Downloading lyrics...</p>) : skippedLyrics?.has(track.spotify_id) ? (<p>Lyrics already exists</p>) : downloadedLyrics?.has(track.spotify_id) ? (<p>Lyrics downloaded</p>) : failedLyrics?.has(track.spotify_id) ? (<p>Lyrics failed</p>) : (<p>Download Separate Lyric</p>)}
               </TooltipContent>
             </Tooltip>)}
             {track.images && onDownloadCover && (<Tooltip>
@@ -125,7 +125,7 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {downloadingCover ? (<p>Downloading cover...</p>) : skippedCover ? (<p>Cover already exists</p>) : downloadedCover ? (<p>Cover downloaded</p>) : failedCover ? (<p>Cover failed</p>) : (<p>Download Cover</p>)}
+                {downloadingCover ? (<p>Downloading cover...</p>) : skippedCover ? (<p>Cover already exists</p>) : downloadedCover ? (<p>Cover downloaded</p>) : failedCover ? (<p>Cover failed</p>) : (<p>Download Separate Cover</p>)}
               </TooltipContent>
             </Tooltip>)}
             {isDownloaded && (<Button onClick={onOpenFolder} variant="outline">

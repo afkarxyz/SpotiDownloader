@@ -83,7 +83,7 @@ The software is provided "as is", without warranty of any kind. The author assum
 
 ## API Credits
 
-[MusicBrainz](https://musicbrainz.org) · [SpotiDownloader](https://spotidownloader.com) · [LRCLIB](https://lrclib.net)
+[MusicBrainz](https://musicbrainz.org) · [SpotiDownloader](https://spotidownloader.com) · [LRCLIB](https://lrclib.net) · [Chosic](https://www.chosic.com)
 
 > [!TIP]
 >

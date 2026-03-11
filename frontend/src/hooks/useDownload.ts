@@ -80,7 +80,6 @@ async function enrichTrackReleaseDate(track: TrackMetadata, settings: Settings):
         }
     }
     catch {
-        // Ignore release date enrichment failures and fall back to the existing track fields.
     }
     return track;
 }
@@ -185,7 +184,6 @@ export function useDownload() {
                 }
             }
             catch {
-                // Ignore metadata enrichment failures and use the track fields already available.
             }
         }
         const resolvedReleaseDate = finalReleaseDate || normalizeReleaseDate(track.release_date);
