@@ -8,19 +8,17 @@ Get Spotify tracks in MP3 and FLAC via spotidownloader.com
 
 ### [Download](https://github.com/afkarxyz/SpotiDownloader/releases)
 
-## Screenshot
-
-![Image](https://github.com/user-attachments/assets/0559e531-4daf-46d1-82c7-3938cba5e94a)
+![Image](https://github.com/user-attachments/assets/32cb65ab-c13f-4de1-bbbc-fcd95820223c)
 
 ## Other projects
 
 ### [SpotiFLAC](https://github.com/afkarxyz/SpotiFLAC)
 
-Get Spotify tracks in true FLAC from Tidal, Qobuz, Amazon Music & Deezer — no account required.
+Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account required.
 
 ### [SpotiFLAC Next](https://github.com/spotiverse/SpotiFLAC-Next)
 
-Get Spotify tracks in Hi-Res lossless FLACs — no account required.
+Get Spotify tracks in true FLAC from Tidal, Qobuz, Amazon Music & Deezer — no account required.
 
 ### [SpotubeDL](https://spotubedl.com)
 
@@ -56,11 +54,6 @@ It likely happens because the executable is compressed using UPX._
 
 _If you are concerned, you can fork the repository and build the software yourself from source._
 
-### Why does the app sometimes fail to obtain a token?
-
-_The target website uses Cloudflare protection.
-The app attempts to bypass it using ChromeDriver, which may require multiple retries._
-
 ### Why do I get a 500 error when a download fails?
 
 _A 500 error indicates a server-side issue.
@@ -90,7 +83,7 @@ The software is provided "as is", without warranty of any kind. The author assum
 
 ## API Credits
 
-[MusicBrainz](https://musicbrainz.org) · [SpotiDownloader](https://spotidownloader.com) · [Spotify Lyrics API](https://github.akashrchandran.in/spotify-lyrics-api) · [LRCLIB](https://lrclib.net)
+[MusicBrainz](https://musicbrainz.org) · [SpotiDownloader](https://spotidownloader.com) · [LRCLIB](https://lrclib.net)
 
 > [!TIP]
 >
