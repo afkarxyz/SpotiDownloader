@@ -3,6 +3,7 @@ import { getSettings } from "@/lib/settings";
 import { fetchSpotifyMetadata } from "@/lib/api";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { logger } from "@/lib/logger";
+import { extractArtistID } from "@/lib/spotify-url";
 import { AddFetchHistory } from "../../wailsjs/go/main/App";
 import type { SpotifyMetadataResponse } from "@/types/api";
 export function useMetadata() {
@@ -15,7 +16,6 @@ export function useMetadata() {
         name: string;
         external_urls: string;
     } | null>(null);
-    const [pendingArtistName, setPendingArtistName] = useState<string | null>(null);
     const getUrlType = (url: string): string => {
         if (url.includes("/track/"))
             return "track";
@@ -26,6 +26,12 @@ export function useMetadata() {
         if (url.includes("/artist/"))
             return "artist";
         return "unknown";
+    };
+    const isKnownMetadataResponse = (data: SpotifyMetadataResponse): boolean => {
+        return ("track" in data) ||
+            ("album_info" in data) ||
+            ("playlist_info" in data) ||
+            ("artist_info" in data);
     };
     const saveToHistory = async (url: string, data: SpotifyMetadataResponse) => {
         try {
@@ -83,18 +89,21 @@ export function useMetadata() {
         logger.info(`fetching ${urlType} metadata...`);
         logger.debug(`url: ${url}`);
         setLoading(true);
-        setMetadata(null);
         try {
             const startTime = Date.now();
             const timeout = urlType === "artist" ? 60 : 300;
             const data = await fetchSpotifyMetadata(url, true, 1.0, timeout);
+            if (!isKnownMetadataResponse(data)) {
+                logger.error(`unknown metadata payload for url: ${url}`);
+                toast.error("Failed to parse metadata response");
+                return;
+            }
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
             if ("playlist_info" in data) {
                 const playlistInfo = data.playlist_info;
                 if (!playlistInfo.owner.name && playlistInfo.tracks.total === 0 && data.track_list.length === 0) {
                     logger.warning("playlist appears to be empty or private");
                     toast.error("Playlist not found or may be private");
-                    setMetadata(null);
                     return;
                 }
             }
@@ -103,7 +112,6 @@ export function useMetadata() {
                 if (!albumInfo.name && albumInfo.total_tracks === 0 && data.track_list.length === 0) {
                     logger.warning("album appears to be empty or not found");
                     toast.error("Album not found or may be private");
-                    setMetadata(null);
                     return;
                 }
             }
@@ -161,14 +169,19 @@ export function useMetadata() {
             return;
         }
         let urlToFetch = url.trim();
-        const isArtistUrl = urlToFetch.includes("/artist/");
-        if (isArtistUrl && !urlToFetch.includes("/discography")) {
-            urlToFetch = urlToFetch.replace(/\/$/, "") + "/discography/all";
-            logger.debug("converted to discography url");
+        const isArtistUrl = urlToFetch.includes("/artist/") || urlToFetch.startsWith("spotify:artist:");
+        if (isArtistUrl) {
+            const artistID = extractArtistID(urlToFetch);
+            if (!artistID) {
+                logger.error(`invalid artist url: ${urlToFetch}`);
+                toast.error("Invalid artist URL");
+                return;
+            }
+            urlToFetch = `https://open.spotify.com/artist/${artistID}/discography/all`;
+            logger.debug("normalized artist url to discography");
         }
         if (isArtistUrl) {
             logger.info("artist url detected");
-            setPendingArtistName(null);
             await fetchMetadataDirectly(urlToFetch);
         }
         else {
@@ -184,17 +197,6 @@ export function useMetadata() {
         logger.debug(`album clicked: ${album.name}`);
         setSelectedAlbum(album);
         setShowAlbumDialog(true);
-    };
-    const handleArtistClick = async (artist: {
-        id: string;
-        name: string;
-        external_urls: string;
-    }) => {
-        logger.debug(`artist clicked: ${artist.name}`);
-        const artistUrl = artist.external_urls.replace(/\/$/, "") + "/discography/all";
-        setPendingArtistName(artist.name);
-        await fetchMetadataDirectly(artistUrl);
-        return artistUrl;
     };
     const handleConfirmAlbumFetch = async () => {
         if (!selectedAlbum)
@@ -251,11 +253,9 @@ export function useMetadata() {
         showAlbumDialog,
         setShowAlbumDialog,
         selectedAlbum,
-        pendingArtistName,
         handleFetchMetadata,
         handleAlbumClick,
         handleConfirmAlbumFetch,
-        handleArtistClick,
         loadFromCache,
         showApiModal,
         setShowApiModal,

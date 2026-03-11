@@ -67,6 +67,38 @@ interface AlbumInfoProps {
     onBack?: () => void;
 }
 export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, downloadingLyricsTrack, downloadedLyrics, failedLyrics, skippedLyrics, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, currentPage, itemsPerPage, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onArtistClick, onTrackClick, onBack, }: AlbumInfoProps) {
+    const resolvedAlbumArtist = (() => {
+        if (albumInfo.artist_id && albumInfo.artist_url) {
+            return {
+                id: albumInfo.artist_id,
+                name: albumInfo.artists,
+                external_urls: albumInfo.artist_url,
+            };
+        }
+
+        for (const track of trackList) {
+            if (track.artists_data && track.artists_data.length > 0) {
+                const first = track.artists_data[0];
+                if (first?.id && first?.external_urls) {
+                    return {
+                        id: first.id,
+                        name: albumInfo.artists || track.artists,
+                        external_urls: first.external_urls,
+                    };
+                }
+            }
+            if (track.artist_id && track.artist_url) {
+                return {
+                    id: track.artist_id,
+                    name: albumInfo.artists || track.artists,
+                    external_urls: track.artist_url,
+                };
+            }
+        }
+
+        return null;
+    })();
+
     return (<div className="space-y-6">
       <Card className="relative">
       {onBack && (<div className="absolute top-4 right-4 z-10">
@@ -82,10 +114,10 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                 <p className="text-sm font-medium">Album</p>
                 <h2 className="text-4xl font-bold">{albumInfo.name}</h2>
                 <div className="flex items-center gap-2 text-sm">
-                  {onArtistClick && albumInfo.artist_id && albumInfo.artist_url ? (<span className="font-medium cursor-pointer hover:underline" onClick={() => onArtistClick({
-                id: albumInfo.artist_id!,
-                name: albumInfo.artists,
-                external_urls: albumInfo.artist_url!,
+                  {onArtistClick && resolvedAlbumArtist ? (<span className="font-medium cursor-pointer hover:underline" onClick={() => onArtistClick({
+                id: resolvedAlbumArtist.id,
+                name: resolvedAlbumArtist.name,
+                external_urls: resolvedAlbumArtist.external_urls,
             })}>
                       {albumInfo.artists}
                     </span>) : (<span className="font-medium">{albumInfo.artists}</span>)}

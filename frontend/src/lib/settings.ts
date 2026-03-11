@@ -157,52 +157,80 @@ async function fetchDefaultPath(): Promise<string> {
 }
 const SETTINGS_KEY = "spotidownloader-settings";
 let cachedSettings: Settings | null = null;
+let hasLoadedSettings = false;
+let loadSettingsPromise: Promise<Settings> | null = null;
+type LegacySettings = Partial<Settings> & {
+    darkMode?: boolean;
+    artistSubfolder?: boolean;
+    albumSubfolder?: boolean;
+};
+function toBackendSettingsPayload(settings: Settings): { [key: string]: unknown } {
+    return { ...settings };
+}
+function normalizeSettingsData(source: LegacySettings | null | undefined): Settings {
+    const parsed = { ...(source || {}) };
+    if ("darkMode" in parsed && !("themeMode" in parsed)) {
+        parsed.themeMode = parsed.darkMode ? "dark" : "light";
+        delete parsed.darkMode;
+    }
+    if (!("folderPreset" in parsed) && ("artistSubfolder" in parsed || "albumSubfolder" in parsed)) {
+        const hasArtist = parsed.artistSubfolder;
+        const hasAlbum = parsed.albumSubfolder;
+        if (hasArtist && hasAlbum) {
+            parsed.folderPreset = "artist-album";
+            parsed.folderTemplate = "{artist}/{album}";
+        }
+        else if (hasArtist) {
+            parsed.folderPreset = "artist";
+            parsed.folderTemplate = "{artist}";
+        }
+        else if (hasAlbum) {
+            parsed.folderPreset = "album";
+            parsed.folderTemplate = "{album}";
+        }
+        else {
+            parsed.folderPreset = "none";
+            parsed.folderTemplate = "";
+        }
+    }
+    if (!("filenamePreset" in parsed) && "filenameFormat" in parsed) {
+        const format = parsed.filenameFormat;
+        if (format === "title-artist") {
+            parsed.filenamePreset = "title-artist";
+            parsed.filenameTemplate = "{title} - {artist}";
+        }
+        else if (format === "artist-title") {
+            parsed.filenamePreset = "artist-title";
+            parsed.filenameTemplate = "{artist} - {title}";
+        }
+        else {
+            parsed.filenamePreset = "title";
+            parsed.filenameTemplate = "{title}";
+        }
+    }
+    if (!("createPlaylistFolder" in parsed)) {
+        parsed.createPlaylistFolder = true;
+    }
+    if (!("createM3u8File" in parsed)) {
+        parsed.createM3u8File = false;
+    }
+    if (!("useFirstArtistOnly" in parsed)) {
+        parsed.useFirstArtistOnly = false;
+    }
+    if (!("useSingleGenre" in parsed)) {
+        parsed.useSingleGenre = false;
+    }
+    if (!("embedGenre" in parsed)) {
+        parsed.embedGenre = true;
+    }
+    parsed.operatingSystem = detectOS();
+    return { ...DEFAULT_SETTINGS, ...parsed };
+}
 function getSettingsFromLocalStorage(): Settings {
     try {
         const stored = localStorage.getItem(SETTINGS_KEY);
         if (stored) {
-            const parsed = JSON.parse(stored);
-            if ('darkMode' in parsed && !('themeMode' in parsed)) {
-                parsed.themeMode = parsed.darkMode ? 'dark' : 'light';
-                delete parsed.darkMode;
-            }
-            if (!('folderPreset' in parsed) && ('artistSubfolder' in parsed || 'albumSubfolder' in parsed)) {
-                const hasArtist = parsed.artistSubfolder;
-                const hasAlbum = parsed.albumSubfolder;
-                if (hasArtist && hasAlbum) {
-                    parsed.folderPreset = "artist-album";
-                    parsed.folderTemplate = "{artist}/{album}";
-                }
-                else if (hasArtist) {
-                    parsed.folderPreset = "artist";
-                    parsed.folderTemplate = "{artist}";
-                }
-                else if (hasAlbum) {
-                    parsed.folderPreset = "album";
-                    parsed.folderTemplate = "{album}";
-                }
-                else {
-                    parsed.folderPreset = "none";
-                    parsed.folderTemplate = "";
-                }
-            }
-            if (!('filenamePreset' in parsed) && 'filenameFormat' in parsed) {
-                const format = parsed.filenameFormat;
-                if (format === "title-artist") {
-                    parsed.filenamePreset = "title-artist";
-                    parsed.filenameTemplate = "{title} - {artist}";
-                }
-                else if (format === "artist-title") {
-                    parsed.filenamePreset = "artist-title";
-                    parsed.filenameTemplate = "{artist} - {title}";
-                }
-                else {
-                    parsed.filenamePreset = "title";
-                    parsed.filenameTemplate = "{title}";
-                }
-            }
-            parsed.operatingSystem = detectOS();
-            return { ...DEFAULT_SETTINGS, ...parsed };
+            return normalizeSettingsData(JSON.parse(stored));
         }
     }
     catch (error) {
@@ -216,81 +244,41 @@ export function getSettings(): Settings {
     return getSettingsFromLocalStorage();
 }
 export async function loadSettings(): Promise<Settings> {
-    try {
-        const backendSettings = await LoadSettings();
-        if (backendSettings) {
-            const parsed = backendSettings as any;
-            if ('darkMode' in parsed && !('themeMode' in parsed)) {
-                parsed.themeMode = parsed.darkMode ? 'dark' : 'light';
-                delete parsed.darkMode;
+    if (hasLoadedSettings && cachedSettings) {
+        return cachedSettings;
+    }
+    if (loadSettingsPromise) {
+        return loadSettingsPromise;
+    }
+    loadSettingsPromise = (async () => {
+        try {
+            const backendSettings = await LoadSettings();
+            if (backendSettings) {
+                cachedSettings = normalizeSettingsData(backendSettings);
+                hasLoadedSettings = true;
+                return cachedSettings;
             }
-            if (!('folderPreset' in parsed) && ('artistSubfolder' in parsed || 'albumSubfolder' in parsed)) {
-                const hasArtist = parsed.artistSubfolder;
-                const hasAlbum = parsed.albumSubfolder;
-                if (hasArtist && hasAlbum) {
-                    parsed.folderPreset = "artist-album";
-                    parsed.folderTemplate = "{artist}/{album}";
-                }
-                else if (hasArtist) {
-                    parsed.folderPreset = "artist";
-                    parsed.folderTemplate = "{artist}";
-                }
-                else if (hasAlbum) {
-                    parsed.folderPreset = "album";
-                    parsed.folderTemplate = "{album}";
-                }
-                else {
-                    parsed.folderPreset = "none";
-                    parsed.folderTemplate = "";
-                }
-            }
-            if (!('filenamePreset' in parsed) && 'filenameFormat' in parsed) {
-                const format = parsed.filenameFormat;
-                if (format === "title-artist") {
-                    parsed.filenamePreset = "title-artist";
-                    parsed.filenameTemplate = "{title} - {artist}";
-                }
-                else if (format === "artist-title") {
-                    parsed.filenamePreset = "artist-title";
-                    parsed.filenameTemplate = "{artist} - {title}";
-                }
-                else {
-                    parsed.filenamePreset = "title";
-                    parsed.filenameTemplate = "{title}";
-                }
-            }
-            if (!('createPlaylistFolder' in parsed)) {
-                parsed.createPlaylistFolder = true;
-            }
-            if (!('createM3u8File' in parsed)) {
-                parsed.createM3u8File = false;
-            }
-            if (!('useFirstArtistOnly' in parsed)) {
-                parsed.useFirstArtistOnly = false;
-            }
-            if (!('useSingleGenre' in parsed)) {
-                parsed.useSingleGenre = false;
-            }
-            if (!('embedGenre' in parsed)) {
-                parsed.embedGenre = true;
-            }
-            parsed.operatingSystem = detectOS();
-            cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
-            return cachedSettings!;
         }
-    }
-    catch (error) {
-        console.error("Failed to load settings from backend:", error);
-    }
-    const local = getSettingsFromLocalStorage();
-    try {
-        await SaveToBackend(local as any);
+        catch (error) {
+            console.error("Failed to load settings from backend:", error);
+        }
+        const local = getSettingsFromLocalStorage();
+        try {
+            await SaveToBackend(toBackendSettingsPayload(local));
+        }
+        catch (error) {
+            console.error("Failed to migrate settings to backend:", error);
+        }
         cachedSettings = local;
+        hasLoadedSettings = true;
+        return local;
+    })();
+    try {
+        return await loadSettingsPromise;
     }
-    catch (error) {
-        console.error("Failed to migrate settings to backend:", error);
+    finally {
+        loadSettingsPromise = null;
     }
-    return local;
 }
 export interface TemplateData {
     artist?: string;
@@ -329,8 +317,9 @@ export async function getSettingsWithDefaults(): Promise<Settings> {
 export async function saveSettings(settings: Settings): Promise<void> {
     try {
         cachedSettings = settings;
+        hasLoadedSettings = true;
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-        await SaveToBackend(settings as any);
+        await SaveToBackend(toBackendSettingsPayload(settings));
         window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: settings }));
     }
     catch (error) {
@@ -338,7 +327,7 @@ export async function saveSettings(settings: Settings): Promise<void> {
     }
 }
 export async function updateSettings(partial: Partial<Settings>): Promise<Settings> {
-    const current = getSettings();
+    const current = await loadSettings();
     const updated = { ...current, ...partial };
     await saveSettings(updated);
     return updated;

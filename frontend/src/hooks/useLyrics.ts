@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { DownloadLyrics } from "../../wailsjs/go/main/App";
-import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
+import { getSettingsWithDefaults, parseTemplate, type TemplateData } from "@/lib/settings";
 import { joinPath, sanitizePath, getFirstArtist } from "@/lib/utils";
 import type { TrackMetadata } from "@/types/api";
 import { logger } from "@/lib/logger";
@@ -19,7 +19,7 @@ export const useLyrics = () => {
             return;
         }
         logger.info(`downloading lyrics: ${trackName} - ${artistName}`);
-        const settings = getSettings();
+        const settings = await getSettingsWithDefaults();
         setDownloadingLyricsTrack(spotifyId);
         try {
             const os = settings.operatingSystem;
@@ -102,7 +102,7 @@ export const useLyrics = () => {
             toast.error("No tracks with Spotify ID available for lyrics download");
             return;
         }
-        const settings = getSettings();
+        const settings = await getSettingsWithDefaults();
         setIsBulkDownloadingLyrics(true);
         setLyricsDownloadProgress(0);
         stopBulkDownloadRef.current = false;

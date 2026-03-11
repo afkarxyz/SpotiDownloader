@@ -21,7 +21,7 @@ interface ArtistInfoProps {
         header?: string;
         gallery?: string[];
         followers: number;
-        genres: string[];
+        genres?: string[];
         biography?: string;
         verified?: boolean;
         listeners?: number;
@@ -96,6 +96,7 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
     const [downloadingGalleryIndex, setDownloadingGalleryIndex] = useState<number | null>(null);
     const [downloadingAllGallery, setDownloadingAllGallery] = useState(false);
     const [activeTab, setActiveTab] = useState<"albums" | "tracks" | "gallery">("albums");
+    const artistGenres = artistInfo.genres ?? [];
     const filteredAlbumGroups = useMemo(() => {
         const albumTypeMap = new Map(albumList.map(a => [a.name, a.album_type]));
         const albumGroups = trackList.reduce((acc, track) => {
@@ -330,9 +331,9 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                       <span>{albumList.length} {albumList.length === 1 ? "album" : "albums"}</span>
                       <span>•</span>
                       <span>{trackList.length} {trackList.length === 1 ? "track" : "tracks"}</span>
-                      {artistInfo.genres.length > 0 && (<>
+                      {artistGenres.length > 0 && (<>
                           <span>•</span>
-                          <span>{artistInfo.genres.join(", ")}</span>
+                          <span>{artistGenres.join(", ")}</span>
                         </>)}
                     </div>
                   </div>
@@ -383,9 +384,9 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                 <span>{albumList.length} {albumList.length === 1 ? "album" : "albums"}</span>
                 <span>•</span>
                 <span>{trackList.length} {trackList.length === 1 ? "track" : "tracks"}</span>
-                {artistInfo.genres.length > 0 && (<>
+                {artistGenres.length > 0 && (<>
                     <span>•</span>
-                    <span>{artistInfo.genres.join(", ")}</span>
+                    <span>{artistGenres.join(", ")}</span>
                   </>)}
               </div>
             </div>

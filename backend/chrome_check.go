@@ -23,7 +23,6 @@ func IsChromeInstalled() (bool, string, error) {
 }
 
 func isChromeInstalledWindows() (bool, string, error) {
-
 	chromePaths := []string{
 		`C:\Program Files\Google\Chrome\Application\chrome.exe`,
 		`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
@@ -32,22 +31,58 @@ func isChromeInstalledWindows() (bool, string, error) {
 		filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Google", "Chrome", "Application", "chrome.exe"),
 	}
 
-	for _, path := range chromePaths {
-		if _, err := os.Stat(path); err == nil {
-			return true, path, nil
-		}
+	if path := findFirstExistingPath(chromePaths); path != "" {
+		return true, path, nil
 	}
 
-	cmd := exec.Command("where", "chrome.exe")
-	output, err := cmd.Output()
-	if err == nil {
-		path := strings.TrimSpace(string(output))
-		if path != "" && !strings.Contains(path, "INFO:") {
-			return true, path, nil
-		}
+	if path := findWithWhere("chrome.exe"); path != "" {
+		return true, path, nil
+	}
+
+	edgePaths := []string{
+		`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
+		`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
+		filepath.Join(os.Getenv("LOCALAPPDATA"), "Microsoft", "Edge", "Application", "msedge.exe"),
+		filepath.Join(os.Getenv("PROGRAMFILES"), "Microsoft", "Edge", "Application", "msedge.exe"),
+		filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Microsoft", "Edge", "Application", "msedge.exe"),
+	}
+
+	if path := findFirstExistingPath(edgePaths); path != "" {
+		return true, path, nil
+	}
+
+	if path := findWithWhere("msedge.exe"); path != "" {
+		return true, path, nil
 	}
 
 	return false, "", nil
+}
+
+func findFirstExistingPath(paths []string) string {
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+func findWithWhere(binaryName string) string {
+	cmd := exec.Command("where", binaryName)
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		candidate := strings.TrimSpace(line)
+		if candidate == "" || strings.Contains(candidate, "INFO:") {
+			continue
+		}
+		return candidate
+	}
+	return ""
 }
 
 func isChromeInstalledMacOS() (bool, string, error) {
@@ -89,7 +124,7 @@ func isChromeInstalledLinux() (bool, string, error) {
 func GetChromeInstallationMessage() string {
 	switch runtime.GOOS {
 	case "windows":
-		return "Chrome browser is required but not found. Please install Google Chrome from https://www.google.com/chrome/\n\nChromeDriver will be automatically managed."
+		return "Chrome or Microsoft Edge is required but not found. Please install Google Chrome from https://www.google.com/chrome/ or Microsoft Edge from https://www.microsoft.com/edge/\n\nChromeDriver will be automatically managed."
 	case "darwin":
 		return "ChromeDriver is required for token fetching. Please install:\n\nbrew install --cask chromedriver\n\nAfter installation, you may need to allow ChromeDriver in System Preferences > Security & Privacy."
 	case "linux":

@@ -20,6 +20,9 @@ frontend/wailsjs/
 go.work
 go.work.sum
 
+# Python
+.venv/
+
 # Node / Frontend
 node_modules/
 frontend/node_modules/
@@ -65,3 +68,5 @@ temp/
 # Build notes (optional - uncomment if you don't want to commit)
 # BUILD_NOTES.md
 push.bat
+build.ps1
+get_token.spec

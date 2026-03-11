@@ -78,6 +78,9 @@ func embedFlacMetadata(filePath string, metadata Metadata, coverPath string) err
 	}
 	if metadata.Date != "" {
 		_ = cmt.Add(flacvorbis.FIELD_DATE, metadata.Date)
+		if len(metadata.Date) >= 4 {
+			_ = cmt.Add("YEAR", metadata.Date[:4])
+		}
 	}
 	if metadata.TrackNumber > 0 {
 		_ = cmt.Add(flacvorbis.FIELD_TRACKNUMBER, strconv.Itoa(metadata.TrackNumber))
@@ -154,7 +157,11 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 		tag.AddTextFrame("TPE2", tag.DefaultEncoding(), metadata.AlbumArtist)
 	}
 	if metadata.Date != "" {
-		tag.SetYear(metadata.Date)
+		year := metadata.Date
+		if len(year) >= 4 {
+			year = year[:4]
+		}
+		tag.SetYear(year)
 	}
 	if metadata.TrackNumber > 0 {
 

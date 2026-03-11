@@ -248,11 +248,16 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	backend.StartDownloadItem(itemID)
 	defer backend.SetDownloading(false)
 
-	if req.SpotifyID != "" && (req.Copyright == "" || req.Publisher == "" || req.SpotifyTotalDiscs == 0 || req.ReleaseDate == "" || req.TotalTracks == 0 || req.AlbumTrackNumber == 0) {
+	metadataTrackID := req.SpotifyID
+	if metadataTrackID == "" {
+		metadataTrackID = req.TrackID
+	}
+
+	if metadataTrackID != "" && (req.Copyright == "" || req.Publisher == "" || req.SpotifyTotalDiscs == 0 || req.ReleaseDate == "" || req.TotalTracks == 0 || req.AlbumTrackNumber == 0) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		trackURL := fmt.Sprintf("https://open.spotify.com/track/%s", req.SpotifyID)
+		trackURL := fmt.Sprintf("https://open.spotify.com/track/%s", metadataTrackID)
 		trackData, err := backend.GetFilteredSpotifyData(ctx, trackURL, false, 0)
 		if err == nil {
 

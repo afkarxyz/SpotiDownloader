@@ -45,7 +45,7 @@ type CoverClient struct {
 
 func NewCoverClient() *CoverClient {
 	return &CoverClient{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: newHTTPClient(30 * time.Second),
 	}
 }
 

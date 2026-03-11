@@ -78,7 +78,7 @@ type LyricsClient struct {
 
 func NewLyricsClient() *LyricsClient {
 	return &LyricsClient{
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		httpClient: newHTTPClient(15 * time.Second),
 	}
 }
 

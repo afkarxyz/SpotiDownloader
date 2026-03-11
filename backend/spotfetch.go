@@ -34,7 +34,7 @@ type SpotifyClient struct {
 
 func NewSpotifyClient() *SpotifyClient {
 	return &SpotifyClient{
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  newHTTPClient(30 * time.Second),
 		cookies: make(map[string]string),
 	}
 }
@@ -336,12 +336,99 @@ func extractArtists(artistsData map[string]interface{}) []map[string]interface{}
 			continue
 		}
 		profile := getMap(itemMap, "profile")
+		name := getString(profile, "name")
+		if name == "" {
+			name = getString(itemMap, "name")
+		}
 		artistInfo := map[string]interface{}{
-			"name": getString(profile, "name"),
+			"name": name,
 		}
 		artists = append(artists, artistInfo)
 	}
 	return artists
+}
+
+func extractSpotifyIDFromArtistItem(item map[string]interface{}) string {
+	if len(item) == 0 {
+		return ""
+	}
+
+	candidates := []string{
+		getString(item, "uri"),
+		getString(item, "id"),
+		getString(getMap(item, "profile"), "uri"),
+		getString(getMap(item, "profile"), "externalUrl"),
+		getString(getMap(item, "data"), "uri"),
+		getString(getMap(item, "data"), "externalUrl"),
+		getString(item, "externalUrl"),
+	}
+
+	for _, candidate := range candidates {
+		id := extractSpotifyID(candidate)
+		if id != "" {
+			return id
+		}
+	}
+
+	return ""
+}
+
+func extractSpotifyID(input string) string {
+	value := strings.TrimSpace(input)
+	if value == "" {
+		return ""
+	}
+
+	// spotify:artist:<id>
+	if strings.HasPrefix(value, "spotify:") {
+		parts := strings.Split(value, ":")
+		if len(parts) >= 3 {
+			entityType := strings.TrimSpace(parts[len(parts)-2])
+			last := strings.TrimSpace(parts[len(parts)-1])
+			if strings.EqualFold(entityType, "artist") && isSpotifyID(last) {
+				return last
+			}
+		}
+	}
+
+	// https://open.spotify.com/artist/<id>
+	if strings.Contains(strings.ToLower(value), "spotify.com/") {
+		lower := strings.ToLower(value)
+		marker := "/artist/"
+		idx := strings.Index(lower, marker)
+		if idx != -1 {
+			candidate := value[idx+len(marker):]
+			if qIdx := strings.Index(candidate, "?"); qIdx != -1 {
+				candidate = candidate[:qIdx]
+			}
+			if slashIdx := strings.Index(candidate, "/"); slashIdx != -1 {
+				candidate = candidate[:slashIdx]
+			}
+			candidate = strings.TrimSpace(candidate)
+			if isSpotifyID(candidate) {
+				return candidate
+			}
+		}
+	}
+
+	if isSpotifyID(value) {
+		return value
+	}
+
+	return ""
+}
+
+func isSpotifyID(value string) bool {
+	if len(value) != 22 {
+		return false
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func extractCoverImage(coverData map[string]interface{}) map[string]interface{} {
@@ -861,15 +948,9 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 					if !ok {
 						continue
 					}
-					artistURI := getString(artistItemMap, "uri")
-					if artistURI != "" && strings.Contains(artistURI, ":") {
-						parts := strings.Split(artistURI, ":")
-						if len(parts) > 0 {
-							artistID := parts[len(parts)-1]
-							if artistID != "" {
-								artistIDs = append(artistIDs, artistID)
-							}
-						}
+					artistID := extractSpotifyIDFromArtistItem(artistItemMap)
+					if artistID != "" {
+						artistIDs = append(artistIDs, artistID)
 					}
 				}
 			}
@@ -1061,15 +1142,9 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 					if !ok {
 						continue
 					}
-					artistURI := getString(artistItemMap, "uri")
-					if artistURI != "" && strings.Contains(artistURI, ":") {
-						parts := strings.Split(artistURI, ":")
-						if len(parts) > 0 {
-							artistID := parts[len(parts)-1]
-							if artistID != "" {
-								artistIDs = append(artistIDs, artistID)
-							}
-						}
+					artistID := extractSpotifyIDFromArtistItem(artistItemMap)
+					if artistID != "" {
+						artistIDs = append(artistIDs, artistID)
 					}
 				}
 			}
