@@ -296,6 +296,12 @@ func (s *SpotiDownloader) DownloadTrack(
 		return "", fmt.Errorf("failed to download file: %v", err)
 	}
 
+	if fileExt == ".mp3" {
+		if err := NormalizeMP3(outputPath); err != nil {
+			fmt.Printf("Warning: MP3 normalization failed, continuing with original file: %v\n", err)
+		}
+	}
+
 	var coverPath string
 	if coverURL != "" {
 		coverPath, err = s.downloadCoverImage(coverURL, outputDir, embedMaxQualityCover)

@@ -191,9 +191,11 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 	}
 
 	if metadata.Description != "" {
-
-		descriptionText := "Description\x00" + metadata.Description
-		tag.AddTextFrame("TXXX", tag.DefaultEncoding(), descriptionText)
+		tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Description: "Description",
+			Value:       metadata.Description,
+		})
 	}
 
 	if coverPath != "" && fileExists(coverPath) {

@@ -496,6 +496,103 @@ func extractTarXz(tarXzPath, destDir string) error {
 	return nil
 }
 
+func DetectAudioCodec(filePath string) (string, error) {
+	ffprobePath, err := GetFFprobePath()
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command(ffprobePath,
+		"-v", "quiet",
+		"-select_streams", "a:0",
+		"-show_entries", "stream=codec_name",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		filePath,
+	)
+	setHideWindow(cmd)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("ffprobe failed: %w", err)
+	}
+
+	codec := strings.TrimSpace(string(output))
+	if codec == "" {
+		return "", fmt.Errorf("no audio stream found")
+	}
+	return codec, nil
+}
+
+func NormalizeMP3(filePath string) error {
+	ffmpegPath, err := GetFFmpegPath()
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found: %w", err)
+	}
+
+	codec, err := DetectAudioCodec(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to detect audio codec: %w", err)
+	}
+
+	tmpPath := filePath + ".tmp"
+	defer func() {
+		if _, err := os.Stat(tmpPath); err == nil {
+			os.Remove(tmpPath)
+		}
+	}()
+
+	isMP3 := codec == "mp3"
+	if isMP3 {
+		// doing ffmpeg copy to strip the headers and reapply them.
+		fmt.Printf("[FFmpeg] Audio codec is mp3, re-muxing to ensure valid headers\n")
+		cmd := exec.Command(ffmpegPath,
+			"-y",
+			"-i", filePath,
+			"-map", "0:a",
+			"-c:a", "copy",
+			"-map_metadata", "-1",
+			"-id3v2_version", "0",
+			"-f", "mp3",
+			tmpPath,
+		)
+		setHideWindow(cmd)
+
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("ffmpeg re-mux failed: %s - %w", string(output), err)
+		}
+	} else {
+		fmt.Printf("[FFmpeg] Audio codec is %s, re-encoding to mp3\n", codec)
+		cmd := exec.Command(ffmpegPath,
+			"-y",
+			"-i", filePath,
+			"-map", "0:a",
+			"-c:a", "libmp3lame",
+			"-q:a", "0",
+			"-map_metadata", "-1",
+			"-id3v2_version", "0",
+			"-f", "mp3",
+			tmpPath,
+		)
+		setHideWindow(cmd)
+
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("ffmpeg re-encode failed: %s - %w", string(output), err)
+		}
+	}
+
+	info, statErr := os.Stat(tmpPath)
+	if statErr != nil || info.Size() < 1024 {
+		return fmt.Errorf("normalized file is missing or too small")
+	}
+
+	os.Remove(filePath)
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		return fmt.Errorf("failed to replace original with normalized file: %w", err)
+	}
+
+	return nil
+}
+
 type ConvertAudioRequest struct {
 	InputFiles   []string `json:"input_files"`
 	OutputFormat string   `json:"output_format"`
