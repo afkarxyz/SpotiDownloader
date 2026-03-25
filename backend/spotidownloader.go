@@ -414,7 +414,7 @@ func fetchTrackTaggingMetadata(trackID string) (string, string, bool) {
 	defer cancel()
 
 	client := NewSpotifyMetadataClient()
-	data, err := client.GetFilteredData(ctx, fmt.Sprintf("https://open.spotify.com/track/%s", trackID), false, 0)
+	data, err := client.GetFilteredData(ctx, fmt.Sprintf("https://open.spotify.com/track/%s", trackID), false, 0, nil)
 	if err != nil {
 		return "", "", false
 	}

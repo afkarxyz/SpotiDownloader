@@ -50,12 +50,32 @@ func SelectFolderDialog(ctx context.Context, defaultPath string) (string, error)
 
 func SelectFileDialog(ctx context.Context) (string, error) {
 	options := wailsRuntime.OpenDialogOptions{
-		Title:            "Select FLAC File",
+		Title:            "Select Audio File for Analysis",
 		DefaultDirectory: GetDefaultMusicPath(),
 		Filters: []wailsRuntime.FileFilter{
 			{
-				DisplayName: "FLAC Files (*.flac)",
+				DisplayName: "Audio Files (*.flac;*.mp3;*.m4a;*.aac)",
+				Pattern:     "*.flac;*.mp3;*.m4a;*.aac",
+			},
+			{
+				DisplayName: "FLAC Audio Files (*.flac)",
 				Pattern:     "*.flac",
+			},
+			{
+				DisplayName: "MP3 Audio Files (*.mp3)",
+				Pattern:     "*.mp3",
+			},
+			{
+				DisplayName: "M4A Audio Files (*.m4a)",
+				Pattern:     "*.m4a",
+			},
+			{
+				DisplayName: "AAC Audio Files (*.aac)",
+				Pattern:     "*.aac",
+			},
+			{
+				DisplayName: "All Files (*.*)",
+				Pattern:     "*.*",
 			},
 		},
 	}

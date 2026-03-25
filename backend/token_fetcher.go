@@ -24,7 +24,7 @@ func FetchSessionToken() (string, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		fmt.Printf("[TokenFetcher] Attempt %d/%d (timeout: %ds)\n", attempt, maxAttempts, timeout)
 
-		req, err := http.NewRequest("GET", "https://spdl.afkarxyz.fun/token", nil)
+		req, err := http.NewRequest("GET", "https://spdl.afkarxyz.qzz.io/token", nil)
 		if err != nil {
 			lastErr = fmt.Errorf("failed to create request: %v", err)
 			continue

@@ -105,7 +105,7 @@ export const DEFAULT_SETTINGS: Settings = {
     embedMaxQualityCover: false,
     operatingSystem: detectOS(),
     useSpotFetchAPI: false,
-    spotFetchAPIUrl: "https://spotify.afkarxyz.fun/api",
+    spotFetchAPIUrl: "https://sp.afkarxyz.qzz.io/api",
     createPlaylistFolder: true,
     createM3u8File: false,
     useFirstArtistOnly: false,

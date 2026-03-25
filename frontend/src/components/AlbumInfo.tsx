@@ -152,7 +152,7 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Download All Covers</p>
+                      <p>Download All Separate Covers</p>
                     </TooltipContent>
                   </Tooltip>)}
                 {downloadedTracks.size > 0 && (<Button onClick={onOpenFolder} variant="outline">

@@ -35,7 +35,7 @@ export function Header({ version, hasUpdate, releaseDate }: HeaderProps) {
           </div>
         </div>
         <p className="text-muted-foreground">
-          Get Spotify tracks in MP3 and FLAC via spotidownloader.com
+          Get Spotify tracks, albums, playlists and discography in MP3 and FLAC.
         </p>
       </div>
     </div>);
