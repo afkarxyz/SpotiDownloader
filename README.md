@@ -8,7 +8,7 @@ Get Spotify tracks, albums, playlists and discography in MP3 and FLAC.
 
 ### [Download](https://github.com/afkarxyz/SpotiDownloader/releases)
 
-![Image](https://github.com/user-attachments/assets/32cb65ab-c13f-4de1-bbbc-fcd95820223c)
+![Image](https://github.com/user-attachments/assets/8a47f62c-3cc9-47d9-b1d0-1a877493bb3e)
 
 ## Other projects
 
