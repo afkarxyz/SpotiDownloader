@@ -159,11 +159,14 @@ export function useDownload() {
         artists: string;
     } | null>(null);
     const shouldStopDownloadRef = useRef(false);
-    const isUnauthorizedDownloadError = (error?: string) => {
+    const isRetryableError = (error?: string) => {
         const msg = (error || "").toLowerCase();
-        return msg.includes("unauthorized") || msg.includes("403") || msg.includes("401") || msg.includes("err_unauthorized");
+        const isUnauthorized = (msg.includes("unauthorized") || msg.includes("403") || msg.includes("401") || msg.includes("err_unauthorized"));
+        // Sometimes, the API returns 400 for expired tokens, worth retrying on this error too.
+        const isInvalidRequest = (msg.includes("err_request_invalid") || msg.includes("400"));
+        return isUnauthorized || isInvalidRequest;
     };
-    const downloadWithSpotiDownloader = async (track: TrackMetadata, settings: Settings, playlistName?: string, position?: number, retryCount: number = 0, isAlbum?: boolean, releaseYear?: string) => {
+    const downloadWithSpotiDownloader = async (track: TrackMetadata, settings: Settings, playlistName?: string, position?: number, isAlbum?: boolean, releaseYear?: string) => {
         const os = settings.operatingSystem;
         let outputDir = settings.downloadPath;
         let useAlbumTrackNumber = false;
@@ -262,10 +265,10 @@ export function useDownload() {
                 console.warn("File existence check failed:", err);
             }
         }
-        const sessionToken = await ensureValidToken();
+        let sessionToken = await ensureValidToken();
         const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
         const itemID = await AddToDownloadQueue(track.spotify_id || "", track.name || "", displayArtist || "", track.album_name || "");
-        const response = await downloadTrack({
+        let downloadRequest = {
             track_id: track.spotify_id || "",
             session_token: sessionToken,
             track_name: track.name,
@@ -293,16 +296,15 @@ export function useDownload() {
             item_id: itemID,
             use_single_genre: settings.useSingleGenre,
             embed_genre: settings.embedGenre,
-        });
-        if (!response.success && retryCount < 2) {
-            const errorMsg = response.error?.toLowerCase() || "";
-            if (errorMsg.includes("unauthorized") ||
-                errorMsg.includes("403") ||
-                errorMsg.includes("err_unauthorized")) {
-                await ensureValidToken(true);
-                return downloadWithSpotiDownloader(track, settings, playlistName, position, retryCount + 1, isAlbum, releaseYear);
-            }
+        };
+        let response = await downloadTrack(downloadRequest);
+        
+        if (!response.success && isRetryableError(response.error)) {
+            sessionToken = await ensureValidToken(true);
+            downloadRequest.session_token = sessionToken
+            response = await downloadTrack(downloadRequest);
         }
+
         if (!response.success && response.item_id) {
             const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
             await MarkDownloadItemFailed(response.item_id, response.error || "Download failed");
@@ -320,7 +322,7 @@ export function useDownload() {
         logger.info(`starting download: ${track.name} - ${displayArtist}`);
         setDownloadingTrack(id);
         try {
-            const response = await downloadWithSpotiDownloader(track, settings, playlistName, position, 0, isAlbum);
+            const response = await downloadWithSpotiDownloader(track, settings, playlistName, position, isAlbum);
             if (response.success) {
                 if (response.already_exists) {
                     logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
@@ -451,7 +453,7 @@ export function useDownload() {
             try {
                 const playlistIndex = selectedTracks.indexOf(id) + 1;
                 const pathInfo = buildBatchTrackPathInfo(track, settings, playlistName, isAlbum, playlistIndex);
-                let response = await downloadTrack({
+                let downloadRequest = {
                     track_id: id,
                     session_token: sessionToken,
                     track_name: track.name || "",
@@ -477,37 +479,15 @@ export function useDownload() {
                     use_first_artist_only: settings.useFirstArtistOnly,
                     use_single_genre: settings.useSingleGenre,
                     embed_genre: settings.embedGenre,
-                });
-                if (!response.success && isUnauthorizedDownloadError(response.error)) {
+                };
+                let response = await downloadTrack(downloadRequest);
+
+                if (!response.success && isRetryableError(response.error)) {
                     sessionToken = await ensureValidToken(true);
-                    response = await downloadTrack({
-                        track_id: id,
-                        session_token: sessionToken,
-                        track_name: track.name || "",
-                        artist_name: track.artists,
-                        album_name: track.album_name,
-                        album_artist: track.album_artist || track.artists,
-                        release_date: normalizeReleaseDate(track.release_date),
-                        cover_url: track.images,
-                        album_track_number: track.track_number,
-                        disc_number: track.disc_number,
-                        total_tracks: track.total_tracks,
-                        spotify_total_discs: track.total_discs,
-                        copyright: track.copyright,
-                        publisher: track.publisher,
-                        output_dir: pathInfo.targetOutputDir,
-                        audio_format: settings.audioFormat,
-                        filename_format: settings.filenameTemplate,
-                        track_number: settings.trackNumber,
-                        position: pathInfo.trackPosition,
-                        use_album_track_number: pathInfo.useAlbumTrackNumber,
-                        embed_lyrics: settings.embedLyrics,
-                        embed_max_quality_cover: settings.embedMaxQualityCover,
-                        use_first_artist_only: settings.useFirstArtistOnly,
-                        use_single_genre: settings.useSingleGenre,
-                        embed_genre: settings.embedGenre,
-                    });
+                    downloadRequest.session_token = sessionToken
+                    response = await downloadTrack(downloadRequest);
                 }
+
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;
@@ -682,7 +662,7 @@ export function useDownload() {
             try {
                 const playlistIndex = enrichedTracksWithId.findIndex((t) => t.spotify_id === id) + 1;
                 const pathInfo = buildBatchTrackPathInfo(track, settings, playlistName, isAlbum, playlistIndex);
-                let response = await downloadTrack({
+                let downloadRequest = {
                     track_id: id,
                     session_token: sessionToken,
                     track_name: track.name || "",
@@ -708,37 +688,15 @@ export function useDownload() {
                     use_first_artist_only: settings.useFirstArtistOnly,
                     use_single_genre: settings.useSingleGenre,
                     embed_genre: settings.embedGenre,
-                });
-                if (!response.success && isUnauthorizedDownloadError(response.error)) {
+                };
+                let response = await downloadTrack(downloadRequest);
+
+                if (!response.success && isRetryableError(response.error)) {
                     sessionToken = await ensureValidToken(true);
-                    response = await downloadTrack({
-                        track_id: id,
-                        session_token: sessionToken,
-                        track_name: track.name || "",
-                        artist_name: track.artists || "",
-                        album_name: track.album_name || "",
-                        album_artist: track.album_artist || track.artists || "",
-                        release_date: normalizeReleaseDate(track.release_date),
-                        cover_url: track.images || "",
-                        album_track_number: track.track_number || 0,
-                        disc_number: track.disc_number || 0,
-                        total_tracks: track.total_tracks || 0,
-                        spotify_total_discs: track.total_discs || 0,
-                        copyright: track.copyright || "",
-                        publisher: track.publisher || "",
-                        output_dir: pathInfo.targetOutputDir,
-                        audio_format: settings.audioFormat,
-                        filename_format: settings.filenameTemplate,
-                        track_number: settings.trackNumber,
-                        position: pathInfo.trackPosition,
-                        use_album_track_number: pathInfo.useAlbumTrackNumber,
-                        embed_lyrics: settings.embedLyrics,
-                        embed_max_quality_cover: settings.embedMaxQualityCover,
-                        use_first_artist_only: settings.useFirstArtistOnly,
-                        use_single_genre: settings.useSingleGenre,
-                        embed_genre: settings.embedGenre,
-                    });
+                    downloadRequest.session_token = sessionToken;
+                    response = await downloadTrack(downloadRequest);
                 }
+
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;
