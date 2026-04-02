@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -43,10 +44,14 @@ func (a *App) startup(ctx context.Context) {
 	if err := backend.InitHistoryDB("SpotiDownloader"); err != nil {
 		fmt.Printf("Failed to init history DB: %v\n", err)
 	}
+	if err := backend.InitISRCCacheDB(); err != nil {
+		fmt.Printf("Failed to init ISRC cache DB: %v\n", err)
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	backend.CloseHistoryDB()
+	backend.CloseISRCCacheDB()
 }
 
 type SpotifyMetadataRequest struct {
@@ -449,7 +454,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				Success: false,
 				Error:   errorMessage,
 				ItemID:  itemID,
-			}, fmt.Errorf(errorMessage)
+			}, errors.New(errorMessage)
 		}
 		if !validated {
 			fmt.Printf("[DownloadValidation] Skipped duration validation for %s (expected=%ds)\n", filename, req.Duration)
@@ -532,7 +537,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				DurationStr: durationStr,
 				CoverURL:    cover,
 				Quality:     quality,
-				Format:      format,
+				Format:      strings.ToUpper(strings.TrimSpace(format)),
 				Path:        fPath,
 			}
 			if item.Format == "" {
@@ -629,7 +634,7 @@ func (a *App) FetchSessionToken() (TokenResponse, error) {
 		return TokenResponse{}, fmt.Errorf("failed to fetch session token: %v", err)
 	}
 
-	expiresAt := time.Now().Add(3 * time.Minute).Unix()
+	expiresAt := time.Now().Add(60 * time.Second).Unix()
 
 	return TokenResponse{
 		Token:     token,
@@ -1105,6 +1110,14 @@ func (a *App) ReadFileAsBase64(filePath string) (string, error) {
 	}
 
 	return base64.StdEncoding.EncodeToString(content), nil
+}
+
+func (a *App) DecodeAudioForAnalysis(filePath string) (*backend.AnalysisDecodeResponse, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("file path is required")
+	}
+
+	return backend.DecodeAudioForAnalysis(filePath)
 }
 
 func (a *App) RenameFileTo(oldPath, newName string) error {

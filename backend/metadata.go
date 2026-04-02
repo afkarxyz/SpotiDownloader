@@ -28,6 +28,7 @@ type Metadata struct {
 	DiscNumber  int
 	TotalDiscs  int
 	URL         string
+	Comment     string
 	Copyright   string
 	Publisher   string
 	Lyrics      string
@@ -104,6 +105,9 @@ func embedFlacMetadata(filePath string, metadata Metadata, coverPath string) err
 	if metadata.Description != "" {
 		_ = cmt.Add("DESCRIPTION", metadata.Description)
 	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		_ = cmt.Add("COMMENT", comment)
+	}
 
 	if metadata.Lyrics != "" {
 		_ = cmt.Add("LYRICS", metadata.Lyrics)
@@ -158,11 +162,7 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 		tag.AddTextFrame("TPE2", tag.DefaultEncoding(), metadata.AlbumArtist)
 	}
 	if metadata.Date != "" {
-		year := metadata.Date
-		if len(year) >= 4 {
-			year = year[:4]
-		}
-		tag.SetYear(year)
+		setMP3DateFrames(tag, metadata.Date)
 	}
 	if metadata.TrackNumber > 0 {
 
@@ -196,6 +196,15 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 			Encoding:    id3v2.EncodingUTF8,
 			Description: "Description",
 			Value:       metadata.Description,
+		})
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		tag.DeleteFrames(tag.CommonID("Comments"))
+		tag.AddCommentFrame(id3v2.CommentFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Language:    "eng",
+			Description: "",
+			Text:        comment,
 		})
 	}
 
@@ -260,6 +269,47 @@ func embedCoverArt(f *flac.File, coverPath string) error {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func extractYear(releaseDate string) string {
+	if releaseDate == "" {
+		return ""
+	}
+
+	if len(releaseDate) >= 4 {
+		return releaseDate[:4]
+	}
+
+	return releaseDate
+}
+
+func resolveMetadataComment(metadata Metadata) string {
+	if comment := strings.TrimSpace(metadata.Comment); comment != "" {
+		return comment
+	}
+
+	return strings.TrimSpace(metadata.URL)
+}
+
+func setMP3DateFrames(tag *id3v2.Tag, date string) {
+	date = strings.TrimSpace(date)
+	if date == "" {
+		return
+	}
+
+	tag.DeleteFrames("TDRC")
+	tag.DeleteFrames("TYER")
+	tag.DeleteFrames("TDAT")
+
+	tag.AddTextFrame("TDRC", id3v2.EncodingUTF8, date)
+
+	if year := extractYear(date); year != "" {
+		tag.AddTextFrame("TYER", id3v2.EncodingUTF8, year)
+	}
+
+	if len(date) >= 10 && date[4] == '-' && date[7] == '-' {
+		tag.AddTextFrame("TDAT", id3v2.EncodingUTF8, date[8:10]+date[5:7])
+	}
 }
 
 func EmbedLyricsOnly(filepath string, lyrics string) error {
@@ -906,7 +956,11 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 			metadata.Publisher = value
 		case "url":
 			metadata.URL = value
-		case "description", "comment":
+		case "comment", "comments":
+			if metadata.Comment == "" {
+				metadata.Comment = value
+			}
+		case "description":
 			if metadata.Description == "" {
 				metadata.Description = value
 			}
@@ -952,11 +1006,7 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 		tag.SetAlbum(metadata.Album)
 	}
 	if metadata.Date != "" {
-		year := metadata.Date
-		if len(year) >= 4 {
-			year = year[:4]
-		}
-		tag.SetYear(year)
+		setMP3DateFrames(tag, metadata.Date)
 	}
 
 	if metadata.AlbumArtist != "" {
@@ -995,6 +1045,15 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 	if metadata.ISRC != "" {
 		tag.DeleteFrames("TSRC")
 		tag.AddTextFrame("TSRC", id3v2.EncodingUTF8, metadata.ISRC)
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		tag.DeleteFrames(tag.CommonID("Comments"))
+		tag.AddCommentFrame(id3v2.CommentFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Language:    "eng",
+			Description: "",
+			Text:        comment,
+		})
 	}
 
 	if coverPath != "" && fileExists(coverPath) {
@@ -1075,6 +1134,9 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	}
 	if metadata.ISRC != "" {
 		args = append(args, "-metadata", "isrc="+metadata.ISRC)
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		args = append(args, "-metadata", "comment="+comment)
 	}
 
 	tmpOutputFile := strings.TrimSuffix(filePath, pathfilepath.Ext(filePath)) + ".tmp" + pathfilepath.Ext(filePath)

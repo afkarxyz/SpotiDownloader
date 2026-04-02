@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -12,7 +13,25 @@ type TokenResponse struct {
 	Token string `json:"token"`
 }
 
+const sessionTokenCacheTTL = 60 * time.Second
+
+var (
+	sessionTokenCacheMu sync.Mutex
+	cachedSessionToken  string
+	cachedSessionAt     time.Time
+)
+
 func FetchSessionToken() (string, error) {
+	sessionTokenCacheMu.Lock()
+	defer sessionTokenCacheMu.Unlock()
+
+	if cachedSessionToken != "" && !cachedSessionAt.IsZero() {
+		if age := time.Since(cachedSessionAt); age < sessionTokenCacheTTL {
+			fmt.Printf("[TokenFetcher] Using cached token (age: %ds)\n", int(age.Seconds()))
+			return cachedSessionToken, nil
+		}
+	}
+
 	var lastErr error
 	maxAttempts := 3
 	timeout := 10
@@ -79,6 +98,8 @@ func FetchSessionToken() (string, error) {
 		}
 
 		fmt.Printf("[TokenFetcher] Token fetched successfully on attempt %d\n", attempt)
+		cachedSessionToken = tokenResp.Token
+		cachedSessionAt = time.Now()
 		return tokenResp.Token, nil
 	}
 

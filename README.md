@@ -14,7 +14,7 @@ Get Spotify tracks, albums, playlists and discography in MP3 and FLAC.
 
 ### [SpotiFLAC](https://github.com/afkarxyz/SpotiFLAC)
 
-Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account required.
+Get Spotify tracks in true Lossless from Tidal, Qobuz, Amazon Music, Deezer & Apple Music — no account required.
 
 ### [SpotiFLAC Next](https://github.com/spotiverse/SpotiFLAC-Next)
 
@@ -104,7 +104,7 @@ The software is provided "as is", without warranty of any kind. The author assum
 
 ## API Credits
 
-[MusicBrainz](https://musicbrainz.org) · [SpotiDownloader](https://spotidownloader.com) · [LRCLIB](https://lrclib.net) · [Chosic](https://www.chosic.com)
+[MusicBrainz](https://musicbrainz.org) · [SpotiDownloader](https://spotidownloader.com) · [LRCLIB](https://lrclib.net)
 
 > [!TIP]
 >

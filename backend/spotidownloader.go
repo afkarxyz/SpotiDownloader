@@ -22,16 +22,9 @@ type SpotiDownloader struct {
 	httpClient   *http.Client
 }
 
-type FlacAvailableRequest struct {
-	ID string `json:"id"`
-}
-
-type FlacAvailableResponse struct {
-	Available bool `json:"available"`
-}
-
 type DownloadRequest struct {
-	ID string `json:"id"`
+	ID   string `json:"id"`
+	Flac bool   `json:"flac,omitempty"`
 }
 
 type DownloadResponse struct {
@@ -47,58 +40,8 @@ func NewSpotiDownloader(sessionToken string) *SpotiDownloader {
 	}
 }
 
-func (s *SpotiDownloader) IsFlacAvailable(trackID string) (bool, error) {
-	reqBody := FlacAvailableRequest{ID: trackID}
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return false, err
-	}
-
-	req, err := http.NewRequest("POST", spotidownloaderAPIBase+"/isFlacAvailable", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return false, err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+s.sessionToken)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://spotidownloader.com")
-	req.Header.Set("Referer", "https://spotidownloader.com/")
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return false, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if len(body) == 0 {
-		return false, fmt.Errorf("API returned empty response")
-	}
-
-	var result FlacAvailableResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-
-		bodyStr := string(body)
-		if len(bodyStr) > 200 {
-			bodyStr = bodyStr[:200] + "..."
-		}
-		return false, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
-	}
-
-	return result.Available, nil
-}
-
-func (s *SpotiDownloader) GetDownloadLink(trackID string) (*DownloadResponse, error) {
-	reqBody := DownloadRequest{ID: trackID}
+func (s *SpotiDownloader) GetDownloadLink(trackID string, flac bool) (*DownloadResponse, error) {
+	reqBody := DownloadRequest{ID: trackID, Flac: flac}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, err
@@ -224,7 +167,8 @@ func (s *SpotiDownloader) DownloadTrack(
 
 	outputDir = NormalizePath(outputDir)
 
-	downloadResp, err := s.GetDownloadLink(trackID)
+	requestFlac := audioFormat == "flac"
+	downloadResp, err := s.GetDownloadLink(trackID, requestFlac)
 	if err != nil {
 		return "", fmt.Errorf("failed to get download link: %v", err)
 	}
@@ -232,8 +176,12 @@ func (s *SpotiDownloader) DownloadTrack(
 	var downloadURL string
 	var fileExt string
 
-	if audioFormat == "flac" && downloadResp.LinkFlac != "" {
-		downloadURL = downloadResp.LinkFlac
+	if requestFlac {
+		if downloadResp.Link != "" {
+			downloadURL = downloadResp.Link
+		} else {
+			downloadURL = downloadResp.LinkFlac
+		}
 		fileExt = ".flac"
 	} else {
 		downloadURL = downloadResp.Link
@@ -271,7 +219,7 @@ func (s *SpotiDownloader) DownloadTrack(
 		go func() {
 			client := NewSongLinkClient()
 			res := mbResult{}
-			if val, err := client.GetISRC(trackID); err == nil {
+			if val, err := client.GetISRCDirect(trackID); err == nil {
 				res.ISRC = val
 				if val != "" {
 					fmt.Println("Fetching MusicBrainz metadata...")
@@ -318,23 +266,9 @@ func (s *SpotiDownloader) DownloadTrack(
 	resolvedGenre := strings.TrimSpace(mbMeta.Genre)
 
 	if resolvedReleaseDate == "" {
-		spotifyReleaseDate, _, _ := fetchTrackTaggingMetadata(trackID)
+		spotifyReleaseDate := fetchTrackTaggingMetadata(trackID)
 		if resolvedReleaseDate == "" && spotifyReleaseDate != "" {
 			resolvedReleaseDate = spotifyReleaseDate
-		}
-	}
-	if embedGenre && resolvedGenre == "" {
-		if chosicGenres, err := fetchGenresFromChosic(trackID); err == nil && len(chosicGenres) > 0 {
-			if useSingleGenre {
-				resolvedGenre = strings.TrimSpace(chosicGenres[0])
-			} else {
-				resolvedGenre = strings.Join(chosicGenres, ", ")
-			}
-		}
-	}
-	if embedGenre && resolvedGenre == "" {
-		if deezerGenre, err := fetchGenreFromDeezer(trackID); err == nil && deezerGenre != "" {
-			resolvedGenre = deezerGenre
 		}
 	}
 
@@ -342,6 +276,7 @@ func (s *SpotiDownloader) DownloadTrack(
 		fmt.Printf("Found ISRC: %s\n", isrc)
 	}
 
+	spotifyTrackURL := fmt.Sprintf("https://open.spotify.com/track/%s", trackID)
 	metadata := Metadata{
 		Title:       trackName,
 		Artist:      artistName,
@@ -352,7 +287,8 @@ func (s *SpotiDownloader) DownloadTrack(
 		TotalTracks: totalTracks,
 		DiscNumber:  discNumber,
 		TotalDiscs:  totalDiscs,
-		URL:         fmt.Sprintf("https://open.spotify.com/track/%s", trackID),
+		URL:         spotifyTrackURL,
+		Comment:     spotifyTrackURL,
 		Copyright:   copyright,
 		Publisher:   publisher,
 		Description: "https://github.com/afkarxyz/SpotiDownloader",
@@ -405,9 +341,9 @@ func (s *SpotiDownloader) downloadCoverImage(coverURL, outputDir string, embedMa
 	return coverPath, nil
 }
 
-func fetchTrackTaggingMetadata(trackID string) (string, string, bool) {
+func fetchTrackTaggingMetadata(trackID string) string {
 	if strings.TrimSpace(trackID) == "" {
-		return "", "", false
+		return ""
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -416,29 +352,17 @@ func fetchTrackTaggingMetadata(trackID string) (string, string, bool) {
 	client := NewSpotifyMetadataClient()
 	data, err := client.GetFilteredData(ctx, fmt.Sprintf("https://open.spotify.com/track/%s", trackID), false, 0, nil)
 	if err != nil {
-		return "", "", false
+		return ""
 	}
 
 	switch resp := data.(type) {
 	case TrackResponse:
-		return strings.TrimSpace(resp.Track.ReleaseDate), "", false
+		return strings.TrimSpace(resp.Track.ReleaseDate)
 	case *TrackResponse:
 		if resp != nil {
-			return strings.TrimSpace(resp.Track.ReleaseDate), "", false
+			return strings.TrimSpace(resp.Track.ReleaseDate)
 		}
 	}
 
-	return "", "", false
-}
-
-func fetchGenreFromDeezer(trackID string) (string, error) {
-	if strings.TrimSpace(trackID) == "" {
-		return "", fmt.Errorf("empty track ID")
-	}
-	client := NewSongLinkClient()
-	genre, err := client.GetGenre(trackID)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(genre), nil
+	return ""
 }

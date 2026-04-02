@@ -363,5 +363,5 @@ export function isTokenExpired(settings: Settings): boolean {
         return true;
     }
     const now = Math.floor(Date.now() / 1000);
-    return settings.sessionTokenExpiry - now < 30;
+    return settings.sessionTokenExpiry <= now;
 }

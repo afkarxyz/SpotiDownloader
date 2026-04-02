@@ -33,6 +33,7 @@ import { useLyrics } from "@/hooks/useLyrics";
 import { useCover } from "@/hooks/useCover";
 import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 import { useDownloadProgress } from "@/hooks/useDownloadProgress";
+import { ensureValidToken } from "@/lib/token-manager";
 const HISTORY_KEY = "spotidownloader_fetch_history";
 const MAX_HISTORY = 5;
 function extractSpotifyEntityFromURL(url: string): {
@@ -150,7 +151,16 @@ function App() {
                 await saveSettings(settingsWithDefaults);
             }
         };
+        const prefetchSessionToken = async () => {
+            try {
+                await ensureValidToken(true);
+            }
+            catch (error) {
+                console.error("Failed to prefetch session token on launch:", error);
+            }
+        };
         initSettings();
+        void prefetchSessionToken();
         const checkFFmpeg = async () => {
             try {
                 const installed = await CheckFFmpegInstalled();

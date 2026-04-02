@@ -20,6 +20,14 @@ const formatDate = (timestamp: number) => {
     const seconds = String(date.getSeconds()).padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
+const normalizeHistoryFormat = (value: string) => value.toUpperCase();
+const getHistoryQualityLabel = (format: string, quality: string) => {
+    const normalizedFormat = normalizeHistoryFormat(format || "");
+    if (normalizedFormat === "FLAC") {
+        return "16-bit/44.1kHz";
+    }
+    return quality?.replace(/^MP3\s+/i, "") || "";
+};
 interface DownloadHistoryItem {
     id: string;
     spotify_id: string;
@@ -300,8 +308,8 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
                                         </td>
                                          <td className="p-3 align-middle text-left hidden lg:table-cell">
                                             <div className="flex flex-col items-start gap-1">
-                                                <span className="text-xs font-bold text-foreground">{item.format}</span>
-                                                {(item.quality || item.format === 'FLAC') && <span className="text-[11px] text-muted-foreground leading-none whitespace-nowrap">{item.format === 'FLAC' ? '16-bit/44.1kHz' : item.quality?.replace(/^MP3\s+/, '')}</span>}
+                                                <span className="text-xs font-bold text-foreground">{normalizeHistoryFormat(item.format || "")}</span>
+                                                {(item.quality || normalizeHistoryFormat(item.format || "") === 'FLAC') && <span className="text-[11px] text-muted-foreground leading-none whitespace-nowrap">{getHistoryQualityLabel(item.format || "", item.quality || "")}</span>}
                                             </div>
                                         </td>
                                         <td className="p-3 align-middle text-sm text-muted-foreground text-left hidden xl:table-cell font-mono">

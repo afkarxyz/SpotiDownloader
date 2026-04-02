@@ -71,6 +71,19 @@ func GetFFmpegDir() (string, error) {
 	return filepath.Join(homeDir, ".spotidownloader"), nil
 }
 
+func EnsureAppDir() (string, error) {
+	appDir, err := GetFFmpegDir()
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create app directory: %w", err)
+	}
+
+	return appDir, nil
+}
+
 func GetFFmpegPath() (string, error) {
 	ffmpegDir, err := GetFFmpegDir()
 	if err != nil {
