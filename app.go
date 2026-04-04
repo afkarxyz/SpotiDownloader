@@ -238,14 +238,14 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		return DownloadResponse{
 			Success: false,
 			Error:   "track ID or Spotify ID is required",
-		}, fmt.Errorf("track ID or Spotify ID is required")
+		}, nil
 	}
 
 	if req.SessionToken == "" {
 		return DownloadResponse{
 			Success: false,
 			Error:   "session token is required",
-		}, fmt.Errorf("session token is required")
+		}, nil
 	}
 
 	if req.OutputDir == "" {
@@ -435,7 +435,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			Success: false,
 			Error:   fmt.Sprintf("Download failed: %v", err),
 			ItemID:  itemID,
-		}, err
+		}, nil
 	}
 
 	alreadyExists := false
