@@ -105,7 +105,7 @@ export const DEFAULT_SETTINGS: Settings = {
     embedMaxQualityCover: false,
     operatingSystem: detectOS(),
     useSpotFetchAPI: false,
-    spotFetchAPIUrl: "https://spotify.afkarxyz.fun/api",
+    spotFetchAPIUrl: "https://sp.afkarxyz.qzz.io/api",
     createPlaylistFolder: true,
     createM3u8File: false,
     useFirstArtistOnly: false,
@@ -363,5 +363,5 @@ export function isTokenExpired(settings: Settings): boolean {
         return true;
     }
     const now = Math.floor(Date.now() / 1000);
-    return settings.sessionTokenExpiry - now < 30;
+    return settings.sessionTokenExpiry <= now;
 }

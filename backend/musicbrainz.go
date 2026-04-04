@@ -187,7 +187,7 @@ func queryMusicBrainzRecordings(client *http.Client, query string) (*MusicBrainz
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", fmt.Sprintf("SpotiDownloader/%s ( support@exyezed.cc )", AppVersion))
+	req.Header.Set("User-Agent", fmt.Sprintf("SpotiDownloader/%s ( hi@afkarxyz.qzz.io )", AppVersion))
 
 	var resp *http.Response
 	var lastErr error

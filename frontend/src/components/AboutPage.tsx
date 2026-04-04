@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { openExternal } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Star, GitFork, Clock, Download, Blocks, Heart, Copy, CircleCheck } from "lucide-react";
+import { Star, GitFork, Clock, Download, Blocks, Heart, Copy, CircleCheck, Info } from "lucide-react";
 import AudioTTSProIcon from "@/assets/audiotts-pro.webp";
 import ChatGPTTTSIcon from "@/assets/chatgpt-tts.webp";
+import XIcon from "@/assets/x.webp";
 import XProIcon from "@/assets/x-pro.webp";
 import SpotubeDLIcon from "@/assets/icons/spotubedl.svg";
 import SpotiFLACIcon from "@/assets/icons/spotiflac.svg";
@@ -14,13 +15,20 @@ import KofiLogo from "@/assets/ko-fi.gif";
 import KofiSvg from "@/assets/kofi_symbol.svg";
 import UsdtBarcode from "@/assets/usdt.jpg";
 import { langColors } from "@/assets/github-lang-colors";
+const browserExtensionItems = [
+    { icon: AudioTTSProIcon, label: "AudioTTS Pro", alt: "AudioTTS Pro" },
+    { icon: ChatGPTTTSIcon, label: "ChatGPT TTS", alt: "ChatGPT TTS" },
+    { icon: XIcon, label: "Twitter/X Media Batch Downloader", alt: "Twitter/X Media Batch Downloader" },
+    { icon: XProIcon, label: "Twitter/X Media Batch Downloader Pro", alt: "Twitter/X Media Batch Downloader Pro" },
+];
+const projectCardClass = "cursor-pointer transition-colors hover:bg-muted/50 dark:hover:bg-accent/50";
 export function AboutPage() {
     const [activeTab, setActiveTab] = useState<"projects" | "support">("projects");
     const [repoStats, setRepoStats] = useState<Record<string, any>>({});
     const [copiedUsdt, setCopiedUsdt] = useState(false);
     useEffect(() => {
         const fetchRepoStats = async () => {
-            const CACHE_KEY = 'github_repo_stats_spotidownloader';
+            const CACHE_KEY = 'github_repo_stats_spotidownloader_v3';
             const CACHE_DURATION = 1000 * 60 * 60;
             const cached = localStorage.getItem(CACHE_KEY);
             if (cached) {
@@ -55,15 +63,17 @@ export function AboutPage() {
                         }
                         return;
                     }
-                    if (repoRes.ok && releasesRes.ok && langsRes.ok) {
+                    if (repoRes.ok) {
                         const repoData = await repoRes.json();
-                        const releases = await releasesRes.json();
-                        const languages = await langsRes.json();
+                        const releases = releasesRes.ok ? await releasesRes.json() : [];
+                        const languages = langsRes.ok ? await langsRes.json() : {};
                         let totalDownloads = 0;
                         let latestDownloads = 0;
                         let latestVersion = "";
+                        let latestReleaseAt = "";
                         if (releases.length > 0) {
                             latestVersion = releases[0].tag_name || "";
+                            latestReleaseAt = releases[0].published_at || releases[0].created_at || "";
                             latestDownloads = releases[0].assets?.reduce((sum: number, asset: any) => sum + (asset.download_count || 0), 0) || 0;
                             totalDownloads = releases.reduce((sum: number, release: any) => {
                                 return sum + (release.assets?.reduce((s: number, a: any) => s + (a.download_count || 0), 0) || 0);
@@ -77,9 +87,11 @@ export function AboutPage() {
                             stars: repoData.stargazers_count,
                             forks: repoData.forks_count,
                             createdAt: repoData.created_at,
+                            description: repoData.description,
                             totalDownloads,
                             latestDownloads,
                             latestVersion,
+                            latestReleaseAt,
                             languages: topLangs
                         };
                     }
@@ -117,6 +129,44 @@ export function AboutPage() {
         const diffYears = Math.floor(diffMonths / 12);
         return `${diffYears}y`;
     };
+    const formatReleaseTimeAgo = (dateString: string): string => {
+        if (!dateString) {
+            return "";
+        }
+        const now = Date.now();
+        const releasedAt = new Date(dateString).getTime();
+        if (Number.isNaN(releasedAt)) {
+            return "";
+        }
+        const diffMs = Math.max(0, now - releasedAt);
+        const totalMinutes = Math.floor(diffMs / (1000 * 60));
+        const totalHours = Math.floor(totalMinutes / 60);
+        const totalDays = Math.floor(totalHours / 24);
+        const totalMonths = Math.floor(totalDays / 30);
+        const totalYears = Math.floor(totalMonths / 12);
+
+        if (totalYears > 0) {
+            const remainingMonths = totalMonths % 12;
+            return remainingMonths > 0 ? `${totalYears}y ${remainingMonths}m ago` : `${totalYears}y ago`;
+        }
+
+        if (totalMonths > 0) {
+            const remainingDays = totalDays % 30;
+            return remainingDays > 0 ? `${totalMonths}m ${remainingDays}d ago` : `${totalMonths}m ago`;
+        }
+
+        if (totalDays > 0) {
+            const remainingHours = totalHours % 24;
+            return remainingHours > 0 ? `${totalDays}d ${remainingHours}h ago` : `${totalDays}d ago`;
+        }
+
+        if (totalHours > 0) {
+            const remainingMinutes = totalMinutes % 60;
+            return `${totalHours}h ${remainingMinutes}m ago`;
+        }
+
+        return `${totalMinutes}m ago`;
+    };
     const formatNumber = (num: number): string => {
         if (num >= 1000) {
             return num.toLocaleString();
@@ -125,6 +175,9 @@ export function AboutPage() {
     };
     const getLangColor = (lang: string): string => {
         return langColors[lang] || '#858585';
+    };
+    const getRepoDescription = (repoName: string): string => {
+        return repoStats[repoName]?.description || "";
     };
     return (<div className="flex flex-col space-y-4">
         <div className="flex items-center justify-between shrink-0">
@@ -145,34 +198,21 @@ export function AboutPage() {
         <div className="flex-1 min-h-0">
             {activeTab === "projects" && (<div className="p-1 pr-2">
                     <div className="grid gap-2 grid-cols-4">
-                            <div className="flex flex-col gap-2 h-full">
-                                <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer flex-1" onClick={() => openExternal("https://exyezed.cc/")}>
-                                    <CardHeader>
-                                        <CardTitle>Browser Extensions & Scripts</CardTitle>
-                                        <CardDescription className="flex gap-3 pt-2">
-                                            <img src={AudioTTSProIcon} className="h-8 w-8 rounded-md shadow-sm" alt="AudioTTS Pro"/>
-                                            <img src={ChatGPTTTSIcon} className="h-8 w-8 rounded-md shadow-sm" alt="ChatGPT TTS"/>
-                                            <img src={XProIcon} className="h-8 w-8 rounded-md shadow-sm" alt="X Pro"/>
-                                        </CardDescription>
-                                    </CardHeader>
-                                </Card>
-                                <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer flex-1" onClick={() => openExternal("https://spotubedl.com/")}>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2"><img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/> SpotubeDL</CardTitle>
-                                        <CardDescription>Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.</CardDescription>
-                                    </CardHeader>
-                                </Card>
-                            </div>
-                            <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC")}>
+                            <Card className={projectCardClass} onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC")}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start mb-2">
                                         <img src={SpotiFLACIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC"/>
-                                        {repoStats['SpotiFLAC']?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
-                                                {repoStats['SpotiFLAC'].latestVersion}
-                                            </span>)}
+                                        <div className="flex items-center gap-2">
+                                            {repoStats['SpotiFLAC']?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                                    {formatReleaseTimeAgo(repoStats['SpotiFLAC'].latestReleaseAt)}
+                                                </span>)}
+                                            {repoStats['SpotiFLAC']?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                                                    {repoStats['SpotiFLAC'].latestVersion}
+                                                </span>)}
+                                        </div>
                                     </div>
                                     <CardTitle className="leading-tight">SpotiFLAC</CardTitle>
-                                    <CardDescription>Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account required.</CardDescription>
+                                    <CardDescription>{getRepoDescription('SpotiFLAC')}</CardDescription>
                                 </CardHeader>
                                 {repoStats['SpotiFLAC'] && (<CardContent className="space-y-3">
                                     <div className="flex flex-wrap gap-2 text-xs">
@@ -189,42 +229,57 @@ export function AboutPage() {
                                     </div>
                                 </CardContent>)}
                             </Card>
-                            <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
+                            <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start mb-2">
                                         <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
-                                        {repoStats['SpotiFLAC-Next']?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
-                                                {repoStats['SpotiFLAC-Next'].latestVersion}
-                                            </span>)}
+                                        <div className="flex items-center gap-2">
+                                            {repoStats['SpotiFLAC-Next']?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                                    {formatReleaseTimeAgo(repoStats['SpotiFLAC-Next'].latestReleaseAt)}
+                                                </span>)}
+                                            {repoStats['SpotiFLAC-Next']?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                                                    {repoStats['SpotiFLAC-Next'].latestVersion}
+                                                </span>)}
+                                        </div>
                                     </div>
                                     <CardTitle className="leading-tight">SpotiFLAC Next</CardTitle>
-                                    <CardDescription>Get Spotify tracks in true FLAC from Tidal, Qobuz, Amazon Music & Deezer — no account required.</CardDescription>
+                                    <CardDescription>{getRepoDescription('SpotiFLAC-Next')}</CardDescription>
                                 </CardHeader>
-                                {repoStats['SpotiFLAC-Next'] && (<CardContent className="space-y-3">
-                                    <div className="flex flex-wrap gap-2 text-xs">
-                                        {repoStats['SpotiFLAC-Next'].languages?.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: getLangColor(lang) + '20', color: getLangColor(lang) }}>{lang}</span>))}
-                                    </div>
+                                {repoStats['SpotiFLAC-Next'] && (<CardContent className="space-y-2">
+                                    {repoStats['SpotiFLAC-Next'].languages?.length > 0 && (<div className="flex flex-wrap gap-2 text-xs">
+                                        {repoStats['SpotiFLAC-Next'].languages.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: getLangColor(lang) + '20', color: getLangColor(lang) }}>{lang}</span>))}
+                                    </div>)}
                                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500"/> {formatNumber(repoStats['SpotiFLAC-Next'].stars)}</span>
                                         <span className="flex items-center gap-1"><GitFork className="h-3.5 w-3.5"/> {repoStats['SpotiFLAC-Next'].forks}</span>
                                         <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5"/> {formatTimeAgo(repoStats['SpotiFLAC-Next'].createdAt)}</span>
                                     </div>
-                                    <div className="flex flex-col gap-1 text-xs text-muted-foreground items-start">
-                                        <span className="flex items-center gap-1"><Download className="h-3.5 w-3.5"/> TOTAL: {formatNumber(repoStats['SpotiFLAC-Next'].totalDownloads)}</span>
-                                        <span className="flex items-center gap-1 text-green-600 dark:text-green-400"><Download className="h-3.5 w-3.5"/> LATEST: {formatNumber(repoStats['SpotiFLAC-Next'].latestDownloads)}</span>
+                                    <div className="rounded-md border border-sky-500/25 bg-sky-500/8 px-3 py-2">
+                                        <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                                            <Info className="h-3.5 w-3.5"/>
+                                            Note
+                                        </div>
+                                        <p className="text-xs leading-relaxed text-sky-700 dark:text-sky-300">
+                                            This project was created as a thank-you to everyone who has supported SpotiFLAC on Ko-fi.
+                                        </p>
                                     </div>
                                 </CardContent>)}
                             </Card>
-                            <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/afkarxyz/Twitter-X-Media-Batch-Downloader")}>
+                            <Card className={projectCardClass} onClick={() => openExternal("https://github.com/afkarxyz/Twitter-X-Media-Batch-Downloader")}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start mb-2">
                                         <img src={XBatchDLIcon} className="h-6 w-6 shrink-0" alt="Twitter/X Media Batch Downloader"/>
-                                        {repoStats['Twitter-X-Media-Batch-Downloader']?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
-                                                {repoStats['Twitter-X-Media-Batch-Downloader'].latestVersion}
-                                            </span>)}
+                                        <div className="flex items-center gap-2">
+                                            {repoStats['Twitter-X-Media-Batch-Downloader']?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                                    {formatReleaseTimeAgo(repoStats['Twitter-X-Media-Batch-Downloader'].latestReleaseAt)}
+                                                </span>)}
+                                            {repoStats['Twitter-X-Media-Batch-Downloader']?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                                                    {repoStats['Twitter-X-Media-Batch-Downloader'].latestVersion}
+                                                </span>)}
+                                        </div>
                                     </div>
                                     <CardTitle className="leading-tight">Twitter/X Media Batch Downloader</CardTitle>
-                                    <CardDescription>A GUI tool to download original-quality images and videos from Twitter/X accounts, powered by gallery-dl by @mikf</CardDescription>
+                                    <CardDescription>{getRepoDescription('Twitter-X-Media-Batch-Downloader')}</CardDescription>
                                 </CardHeader>
                                 {repoStats['Twitter-X-Media-Batch-Downloader'] && (<CardContent className="space-y-3">
                                     <div className="flex flex-wrap gap-2 text-xs">
@@ -241,6 +296,27 @@ export function AboutPage() {
                                     </div>
                                 </CardContent>)}
                             </Card>
+                            <div className="flex flex-col gap-2 h-full">
+                                <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://exyezed.qzz.io/")}>
+                                    <CardHeader>
+                                        <CardTitle>Browser Extensions & Scripts</CardTitle>
+                                        <CardDescription className="flex flex-col gap-2 pt-2">
+                                            {browserExtensionItems.map((item) => (<div key={item.alt} className="flex items-center gap-2">
+                                                    <img src={item.icon} className="h-[22px] w-[22px] rounded-sm shadow-sm" alt={item.alt}/>
+                                                    <span className="text-[11px] leading-tight text-muted-foreground">
+                                                        {item.label}
+                                                    </span>
+                                                </div>))}
+                                        </CardDescription>
+                                    </CardHeader>
+                                </Card>
+                                <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://spotubedl.com/")}>
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2"><img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/> SpotubeDL</CardTitle>
+                                        <CardDescription>Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.</CardDescription>
+                                    </CardHeader>
+                                </Card>
+                            </div>
                         </div>
                     </div>)}
 
@@ -260,7 +336,7 @@ export function AboutPage() {
                         </div>
                         <Button className="h-10 w-full text-sm font-semibold text-white gap-2 group bg-[#72a4f2] hover:bg-[#5f8cd6]" onClick={() => openExternal("https://ko-fi.com/afkarxyz")}>
                             <img src={KofiSvg} className="w-5 h-5 shrink-0" alt="" aria-hidden="true"/>
-                            Support on Ko-fi
+                            Support me on Ko-fi
                         </Button>
                     </div>
 

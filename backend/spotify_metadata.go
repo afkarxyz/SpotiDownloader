@@ -18,13 +18,17 @@ var (
 	errInvalidSpotifyURL = errors.New("invalid or unsupported Spotify URL")
 )
 
+type MetadataCallback func(data interface{})
+
 type SpotifyMetadataClient struct {
 	httpClient *http.Client
+	Separator  string
 }
 
 func NewSpotifyMetadataClient() *SpotifyMetadataClient {
 	return &SpotifyMetadataClient{
 		httpClient: newHTTPClient(30 * time.Second),
+		Separator:  ", ",
 	}
 }
 
@@ -340,54 +344,57 @@ type SearchResponse struct {
 	Playlists []SearchResult `json:"playlists"`
 }
 
-func GetFilteredSpotifyData(ctx context.Context, spotifyURL string, batch bool, delay time.Duration) (interface{}, error) {
+func GetFilteredSpotifyData(ctx context.Context, spotifyURL string, batch bool, delay time.Duration, separator string, callback MetadataCallback) (interface{}, error) {
 	client := NewSpotifyMetadataClient()
-	return client.GetFilteredData(ctx, spotifyURL, batch, delay)
+	if separator != "" {
+		client.Separator = separator
+	}
+	return client.GetFilteredData(ctx, spotifyURL, batch, delay, callback)
 }
 
-func (c *SpotifyMetadataClient) GetFilteredData(ctx context.Context, spotifyURL string, batch bool, delay time.Duration) (interface{}, error) {
+func (c *SpotifyMetadataClient) GetFilteredData(ctx context.Context, spotifyURL string, batch bool, delay time.Duration, callback MetadataCallback) (interface{}, error) {
 	parsed, err := parseSpotifyURI(spotifyURL)
 	if err != nil {
 		return nil, err
 	}
 
-	raw, err := c.getRawSpotifyData(ctx, parsed, batch, delay)
+	raw, err := c.getRawSpotifyData(ctx, parsed, batch, delay, callback)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.processSpotifyData(ctx, raw)
+	return c.processSpotifyData(ctx, raw, callback)
 }
 
-func (c *SpotifyMetadataClient) getRawSpotifyData(ctx context.Context, parsed spotifyURI, batch bool, delay time.Duration) (interface{}, error) {
+func (c *SpotifyMetadataClient) getRawSpotifyData(ctx context.Context, parsed spotifyURI, batch bool, delay time.Duration, callback MetadataCallback) (interface{}, error) {
 	switch parsed.Type {
 	case "playlist":
-		return c.fetchPlaylist(ctx, parsed.ID)
+		return c.fetchPlaylist(ctx, parsed.ID, callback)
 	case "album":
-		return c.fetchAlbum(ctx, parsed.ID)
+		return c.fetchAlbum(ctx, parsed.ID, callback)
 	case "track":
 		return c.fetchTrack(ctx, parsed.ID)
 	case "artist_discography":
-		return c.fetchArtistDiscography(ctx, parsed)
+		return c.fetchArtistDiscography(ctx, parsed, callback)
 	case "artist":
 
 		discographyParsed := spotifyURI{Type: "artist_discography", ID: parsed.ID, DiscographyGroup: "all"}
-		return c.fetchArtistDiscography(ctx, discographyParsed)
+		return c.fetchArtistDiscography(ctx, discographyParsed, callback)
 	default:
 		return nil, fmt.Errorf("unsupported Spotify type: %s", parsed.Type)
 	}
 }
 
-func (c *SpotifyMetadataClient) processSpotifyData(ctx context.Context, raw interface{}) (interface{}, error) {
+func (c *SpotifyMetadataClient) processSpotifyData(ctx context.Context, raw interface{}, callback MetadataCallback) (interface{}, error) {
 	switch payload := raw.(type) {
 	case *apiPlaylistResponse:
-		return c.formatPlaylistData(payload), nil
+		return c.formatPlaylistData(payload, callback), nil
 	case *apiAlbumResponse:
-		return c.formatAlbumData(payload)
+		return c.formatAlbumData(payload, callback)
 	case *apiTrackResponse:
 		return c.formatTrackData(payload), nil
 	case *apiArtistResponse:
-		return c.formatArtistDiscographyData(ctx, payload)
+		return c.formatArtistDiscographyData(ctx, payload, callback)
 	default:
 		return nil, errors.New("unknown raw payload type")
 	}
@@ -435,7 +442,7 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 
 				if albumID != "" {
 
-					albumResponse, err := c.fetchAlbumWithClient(ctx, client, albumID)
+					albumResponse, err := c.fetchAlbumWithClient(ctx, client, albumID, nil)
 					if err == nil && albumResponse != nil {
 
 						albumJSON, _ := json.Marshal(albumResponse)
@@ -480,7 +487,7 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 		}
 	}
 
-	filteredData := FilterTrack(data, albumFetchData)
+	filteredData := FilterTrack(data, c.Separator, albumFetchData)
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {
@@ -495,15 +502,15 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 	return &result, nil
 }
 
-func (c *SpotifyMetadataClient) fetchAlbum(ctx context.Context, albumID string) (*apiAlbumResponse, error) {
+func (c *SpotifyMetadataClient) fetchAlbum(ctx context.Context, albumID string, callback MetadataCallback) (*apiAlbumResponse, error) {
 	client := NewSpotifyClient()
 	if err := client.Initialize(); err != nil {
 		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
 	}
-	return c.fetchAlbumWithClient(ctx, client, albumID)
+	return c.fetchAlbumWithClient(ctx, client, albumID, callback)
 }
 
-func (c *SpotifyMetadataClient) fetchAlbumWithClient(ctx context.Context, client *SpotifyClient, albumID string) (*apiAlbumResponse, error) {
+func (c *SpotifyMetadataClient) fetchAlbumWithClient(ctx context.Context, client *SpotifyClient, albumID string, callback MetadataCallback) (*apiAlbumResponse, error) {
 
 	allItems := []interface{}{}
 	offset := 0
@@ -535,6 +542,15 @@ func (c *SpotifyMetadataClient) fetchAlbumWithClient(ctx context.Context, client
 
 		if data == nil {
 			data = response
+			if callback != nil {
+				filtered := FilterAlbum(data, c.Separator)
+				jsonData, _ := json.Marshal(filtered)
+				var result apiAlbumResponse
+				if json.Unmarshal(jsonData, &result) == nil {
+					formatted, _ := c.formatAlbumData(&result, nil)
+					callback(formatted)
+				}
+			}
 		}
 
 		albumData := getMap(getMap(response, "data"), "albumUnion")
@@ -577,7 +593,7 @@ func (c *SpotifyMetadataClient) fetchAlbumWithClient(ctx context.Context, client
 		tracksV2["totalCount"] = len(allItems)
 	}
 
-	filteredData := FilterAlbum(data)
+	filteredData := FilterAlbum(data, c.Separator)
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {
@@ -592,7 +608,7 @@ func (c *SpotifyMetadataClient) fetchAlbumWithClient(ctx context.Context, client
 	return &result, nil
 }
 
-func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID string) (*apiPlaylistResponse, error) {
+func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID string, callback MetadataCallback) (*apiPlaylistResponse, error) {
 	client := NewSpotifyClient()
 	if err := client.Initialize(); err != nil {
 		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
@@ -628,6 +644,15 @@ func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID st
 
 		if data == nil {
 			data = response
+			if callback != nil {
+				filtered := FilterPlaylist(data, c.Separator)
+				jsonData, _ := json.Marshal(filtered)
+				var result apiPlaylistResponse
+				if json.Unmarshal(jsonData, &result) == nil {
+					formatted := c.formatPlaylistData(&result, nil)
+					callback(formatted)
+				}
+			}
 		}
 
 		playlistData := getMap(getMap(response, "data"), "playlistV2")
@@ -670,7 +695,7 @@ func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID st
 		content["totalCount"] = len(allItems)
 	}
 
-	filteredData := FilterPlaylist(data)
+	filteredData := FilterPlaylist(data, c.Separator)
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {
@@ -685,7 +710,7 @@ func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID st
 	return &result, nil
 }
 
-func (c *SpotifyMetadataClient) fetchArtistDiscography(ctx context.Context, parsed spotifyURI) (*apiArtistResponse, error) {
+func (c *SpotifyMetadataClient) fetchArtistDiscography(ctx context.Context, parsed spotifyURI, callback MetadataCallback) (*apiArtistResponse, error) {
 	client := NewSpotifyClient()
 	if err := client.Initialize(); err != nil {
 		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
@@ -708,6 +733,16 @@ func (c *SpotifyMetadataClient) fetchArtistDiscography(ctx context.Context, pars
 	data, err := client.Query(overviewPayload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query artist overview: %w", err)
+	}
+
+	if callback != nil {
+		filtered := FilterArtist(data, c.Separator)
+		jsonData, _ := json.Marshal(filtered)
+		var result apiArtistResponse
+		if json.Unmarshal(jsonData, &result) == nil {
+			formatted, _ := c.formatArtistDiscographyData(ctx, &result, nil)
+			callback(formatted)
+		}
 	}
 
 	allDiscographyItems := []interface{}{}
@@ -839,7 +874,7 @@ func (c *SpotifyMetadataClient) fetchArtistDiscography(ctx context.Context, pars
 		}
 	}
 
-	filteredData := FilterArtist(data)
+	filteredData := FilterArtist(data, c.Separator)
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {
@@ -896,7 +931,7 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 	}
 }
 
-func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumResponsePayload, error) {
+func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse, callback MetadataCallback) (*AlbumResponsePayload, error) {
 	albumArtistID := ""
 	albumArtistURL := ""
 	for _, item := range raw.Tracks {
@@ -920,6 +955,13 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 		Images:      raw.Cover,
 		ArtistID:    albumArtistID,
 		ArtistURL:   albumArtistURL,
+	}
+
+	if callback != nil {
+		callback(AlbumResponsePayload{
+			AlbumInfo: info,
+			TrackList: []AlbumTrackMetadata{},
+		})
 	}
 
 	tracks := make([]AlbumTrackMetadata, 0, len(raw.Tracks))
@@ -966,13 +1008,17 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 		})
 	}
 
+	if callback != nil {
+		callback(tracks)
+	}
+
 	return &AlbumResponsePayload{
 		AlbumInfo: info,
 		TrackList: tracks,
 	}, nil
 }
 
-func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse) PlaylistResponsePayload {
+func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse, callback MetadataCallback) PlaylistResponsePayload {
 	var info PlaylistInfoMetadata
 	info.Tracks.Total = raw.Count
 	info.Followers.Total = raw.Followers
@@ -981,6 +1027,13 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse) Pla
 	info.Owner.Images = raw.Owner.Avatar
 	info.Cover = raw.Cover
 	info.Description = raw.Description
+
+	if callback != nil {
+		callback(PlaylistResponsePayload{
+			PlaylistInfo: info,
+			TrackList:    []AlbumTrackMetadata{},
+		})
+	}
 
 	tracks := make([]AlbumTrackMetadata, 0, len(raw.Tracks))
 	for _, item := range raw.Tracks {
@@ -1026,13 +1079,17 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse) Pla
 		})
 	}
 
+	if callback != nil {
+		callback(tracks)
+	}
+
 	return PlaylistResponsePayload{
 		PlaylistInfo: info,
 		TrackList:    tracks,
 	}
 }
 
-func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context, raw *apiArtistResponse) (*ArtistDiscographyPayload, error) {
+func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context, raw *apiArtistResponse, callback MetadataCallback) (*ArtistDiscographyPayload, error) {
 	discType := "all"
 
 	info := ArtistInfoMetadata{
@@ -1077,7 +1134,17 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 			Images:      alb.Cover,
 			ExternalURL: fmt.Sprintf("https://open.spotify.com/album/%s", alb.ID),
 		})
+	}
 
+	if callback != nil {
+		callback(ArtistDiscographyPayload{
+			ArtistInfo: info,
+			AlbumList:  albumList,
+			TrackList:  []AlbumTrackMetadata{},
+		})
+	}
+
+	for _, alb := range raw.Discography.All {
 		go func(albumID string, albumName string) {
 			sem <- struct{}{}
 
@@ -1091,7 +1158,7 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 			default:
 			}
 
-			albumData, err := c.fetchAlbumWithClient(ctx, sharedClient, albumID)
+			albumData, err := c.fetchAlbumWithClient(ctx, sharedClient, albumID, nil)
 			if err != nil {
 				fmt.Printf("Error getting tracks for album %s: %v\n", albumName, err)
 				resultsChan <- fetchResult{tracks: []AlbumTrackMetadata{}}
@@ -1140,6 +1207,9 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 					Plays:       tr.Plays,
 					IsExplicit:  tr.IsExplicit,
 				})
+			}
+			if callback != nil {
+				callback(tracks)
 			}
 			resultsChan <- fetchResult{tracks: tracks}
 		}(alb.ID, alb.Name)
@@ -1300,7 +1370,7 @@ func (c *SpotifyMetadataClient) Search(ctx context.Context, query string, limit 
 		return nil, fmt.Errorf("failed to query search: %w", err)
 	}
 
-	filteredData := FilterSearch(data)
+	filteredData := FilterSearch(data, c.Separator)
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {
@@ -1417,7 +1487,7 @@ func (c *SpotifyMetadataClient) SearchByType(ctx context.Context, query string, 
 		return nil, fmt.Errorf("failed to query search: %w", err)
 	}
 
-	filteredData := FilterSearch(data)
+	filteredData := FilterSearch(data, c.Separator)
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {

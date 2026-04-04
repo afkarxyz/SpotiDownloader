@@ -13,6 +13,7 @@ import (
 	"github.com/go-flac/flacpicture"
 	"github.com/go-flac/flacvorbis"
 	"github.com/go-flac/go-flac"
+	"golang.org/x/text/unicode/norm"
 )
 
 type Metadata struct {
@@ -27,6 +28,7 @@ type Metadata struct {
 	DiscNumber  int
 	TotalDiscs  int
 	URL         string
+	Comment     string
 	Copyright   string
 	Publisher   string
 	Lyrics      string
@@ -103,6 +105,9 @@ func embedFlacMetadata(filePath string, metadata Metadata, coverPath string) err
 	if metadata.Description != "" {
 		_ = cmt.Add("DESCRIPTION", metadata.Description)
 	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		_ = cmt.Add("COMMENT", comment)
+	}
 
 	if metadata.Lyrics != "" {
 		_ = cmt.Add("LYRICS", metadata.Lyrics)
@@ -157,11 +162,7 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 		tag.AddTextFrame("TPE2", tag.DefaultEncoding(), metadata.AlbumArtist)
 	}
 	if metadata.Date != "" {
-		year := metadata.Date
-		if len(year) >= 4 {
-			year = year[:4]
-		}
-		tag.SetYear(year)
+		setMP3DateFrames(tag, metadata.Date)
 	}
 	if metadata.TrackNumber > 0 {
 
@@ -191,9 +192,20 @@ func embedMp3Metadata(filePath string, metadata Metadata, coverPath string) erro
 	}
 
 	if metadata.Description != "" {
-
-		descriptionText := "Description\x00" + metadata.Description
-		tag.AddTextFrame("TXXX", tag.DefaultEncoding(), descriptionText)
+		tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Description: "Description",
+			Value:       metadata.Description,
+		})
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		tag.DeleteFrames(tag.CommonID("Comments"))
+		tag.AddCommentFrame(id3v2.CommentFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Language:    "eng",
+			Description: "",
+			Text:        comment,
+		})
 	}
 
 	if coverPath != "" && fileExists(coverPath) {
@@ -257,6 +269,47 @@ func embedCoverArt(f *flac.File, coverPath string) error {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func extractYear(releaseDate string) string {
+	if releaseDate == "" {
+		return ""
+	}
+
+	if len(releaseDate) >= 4 {
+		return releaseDate[:4]
+	}
+
+	return releaseDate
+}
+
+func resolveMetadataComment(metadata Metadata) string {
+	if comment := strings.TrimSpace(metadata.Comment); comment != "" {
+		return comment
+	}
+
+	return strings.TrimSpace(metadata.URL)
+}
+
+func setMP3DateFrames(tag *id3v2.Tag, date string) {
+	date = strings.TrimSpace(date)
+	if date == "" {
+		return
+	}
+
+	tag.DeleteFrames("TDRC")
+	tag.DeleteFrames("TYER")
+	tag.DeleteFrames("TDAT")
+
+	tag.AddTextFrame("TDRC", id3v2.EncodingUTF8, date)
+
+	if year := extractYear(date); year != "" {
+		tag.AddTextFrame("TYER", id3v2.EncodingUTF8, year)
+	}
+
+	if len(date) >= 10 && date[4] == '-' && date[7] == '-' {
+		tag.AddTextFrame("TDAT", id3v2.EncodingUTF8, date[8:10]+date[5:7])
+	}
 }
 
 func EmbedLyricsOnly(filepath string, lyrics string) error {
@@ -401,16 +454,68 @@ func embedLyricsToM4A(filepath string, lyrics string) error {
 }
 
 func ExtractCoverArt(filePath string) (string, error) {
+	filePath = norm.NFC.String(filePath)
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
+
+	var coverPath string
+	var err error
 
 	switch ext {
 	case ".mp3":
-		return extractCoverFromMp3(filePath)
+		coverPath, err = extractCoverFromMp3(filePath)
 	case ".m4a", ".flac":
-		return extractCoverFromM4AOrFlac(filePath)
+		coverPath, err = extractCoverFromM4AOrFlac(filePath)
 	default:
 		return "", fmt.Errorf("unsupported file format: %s", ext)
 	}
+
+	if err != nil || coverPath == "" {
+		fmt.Printf("[ExtractCoverArt] Library extraction failed for %s, trying FFmpeg fallback...\n", filePath)
+		ffmpegCover, ffmpegErr := extractCoverWithFFmpeg(filePath)
+		if ffmpegErr == nil {
+			return ffmpegCover, nil
+		}
+		return coverPath, err
+	}
+
+	return coverPath, nil
+}
+
+func extractCoverWithFFmpeg(filePath string) (string, error) {
+	ffmpegPath, err := GetFFmpegPath()
+	if err != nil {
+		return "", err
+	}
+
+	tmpFile, err := os.CreateTemp("", "cover-*.jpg")
+	if err != nil {
+		return "", err
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+
+	cmd := exec.Command(ffmpegPath,
+		"-i", filePath,
+		"-an",
+		"-vframes", "1",
+		"-f", "image2",
+		"-update", "1",
+		"-y",
+		tmpPath,
+	)
+
+	setHideWindow(cmd)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("ffmpeg cover extraction failed: %v, output: %s", err, string(output))
+	}
+
+	if info, err := os.Stat(tmpPath); err != nil || info.Size() == 0 {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("ffmpeg produced empty cover file")
+	}
+
+	return tmpPath, nil
 }
 
 func extractCoverFromMp3(filePath string) (string, error) {
@@ -481,19 +586,71 @@ func extractCoverFromM4AOrFlac(filePath string) (string, error) {
 }
 
 func ExtractLyrics(filePath string) (string, error) {
+	filePath = norm.NFC.String(filePath)
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
+
+	var lyrics string
+	var err error
 
 	switch ext {
 	case ".mp3":
-		return extractLyricsFromMp3(filePath)
+		lyrics, err = extractLyricsFromMp3(filePath)
 	case ".flac":
-		return extractLyricsFromFlac(filePath)
+		lyrics, err = extractLyricsFromFlac(filePath)
 	case ".m4a":
-
 		return "", nil
 	default:
 		return "", fmt.Errorf("unsupported file format: %s", ext)
 	}
+
+	if (err != nil || lyrics == "") && ext != ".m4a" {
+		fmt.Printf("[ExtractLyrics] Library extraction failed for %s, trying ffprobe fallback...\n", filePath)
+		ffprobeLyrics, ffprobeErr := extractLyricsWithFFprobe(filePath)
+		if ffprobeErr == nil && ffprobeLyrics != "" {
+			return ffprobeLyrics, nil
+		}
+	}
+
+	return lyrics, err
+}
+
+func extractLyricsWithFFprobe(filePath string) (string, error) {
+	ffprobePath, err := GetFFprobePath()
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command(ffprobePath,
+		"-v", "quiet",
+		"-show_entries", "format_tags=lyrics:format_tags=unsyncedlyrics:format_tags=lyric",
+		"-of", "json",
+		filePath,
+	)
+
+	setHideWindow(cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		Format struct {
+			Tags map[string]string `json:"tags"`
+		} `json:"format"`
+	}
+
+	if err := json.Unmarshal(output, &result); err != nil {
+		return "", err
+	}
+
+	tags := result.Format.Tags
+	for _, key := range []string{"lyrics", "unsyncedlyrics", "lyric", "LYRICS", "UNSYNCEDLYRICS", "LYRIC"} {
+		if val, ok := tags[key]; ok && val != "" {
+			return val, nil
+		}
+	}
+
+	return "", nil
 }
 
 func extractLyricsFromMp3(filePath string) (string, error) {
@@ -705,6 +862,7 @@ func parseLRCTimestamp(timestamp string) int64 {
 }
 
 func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
+	filePath = norm.NFC.String(filePath)
 	var metadata Metadata
 
 	ffprobePath, err := GetFFprobePath()
@@ -798,7 +956,11 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 			metadata.Publisher = value
 		case "url":
 			metadata.URL = value
-		case "description", "comment":
+		case "comment", "comments":
+			if metadata.Comment == "" {
+				metadata.Comment = value
+			}
+		case "description":
 			if metadata.Description == "" {
 				metadata.Description = value
 			}
@@ -809,6 +971,7 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 }
 
 func EmbedMetadataToConvertedFile(filePath string, metadata Metadata, coverPath string) error {
+	filePath = norm.NFC.String(filePath)
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
 
 	switch ext {
@@ -843,11 +1006,7 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 		tag.SetAlbum(metadata.Album)
 	}
 	if metadata.Date != "" {
-		year := metadata.Date
-		if len(year) >= 4 {
-			year = year[:4]
-		}
-		tag.SetYear(year)
+		setMP3DateFrames(tag, metadata.Date)
 	}
 
 	if metadata.AlbumArtist != "" {
@@ -886,6 +1045,15 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 	if metadata.ISRC != "" {
 		tag.DeleteFrames("TSRC")
 		tag.AddTextFrame("TSRC", id3v2.EncodingUTF8, metadata.ISRC)
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		tag.DeleteFrames(tag.CommonID("Comments"))
+		tag.AddCommentFrame(id3v2.CommentFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Language:    "eng",
+			Description: "",
+			Text:        comment,
+		})
 	}
 
 	if coverPath != "" && fileExists(coverPath) {
@@ -966,6 +1134,9 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	}
 	if metadata.ISRC != "" {
 		args = append(args, "-metadata", "isrc="+metadata.ISRC)
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		args = append(args, "-metadata", "comment="+comment)
 	}
 
 	tmpOutputFile := strings.TrimSuffix(filePath, pathfilepath.Ext(filePath)) + ".tmp" + pathfilepath.Ext(filePath)

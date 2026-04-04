@@ -33,8 +33,75 @@ import { useLyrics } from "@/hooks/useLyrics";
 import { useCover } from "@/hooks/useCover";
 import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 import { useDownloadProgress } from "@/hooks/useDownloadProgress";
+import { ensureValidToken } from "@/lib/token-manager";
 const HISTORY_KEY = "spotidownloader_fetch_history";
 const MAX_HISTORY = 5;
+function extractSpotifyEntityFromURL(url: string): {
+    type: string;
+    id: string;
+} | null {
+    const trimmed = url.trim();
+    if (!trimmed) {
+        return null;
+    }
+    const spotifyUriMatch = trimmed.match(/^spotify:(track|album|playlist|artist):([A-Za-z0-9]+)$/i);
+    if (spotifyUriMatch) {
+        return {
+            type: spotifyUriMatch[1].toLowerCase(),
+            id: spotifyUriMatch[2],
+        };
+    }
+    try {
+        const parsed = new URL(trimmed);
+        const segments = parsed.pathname.split("/").filter(Boolean);
+        const supportedTypes = new Set(["track", "album", "playlist", "artist"]);
+        for (let i = 0; i < segments.length - 1; i++) {
+            const segment = segments[i].toLowerCase();
+            if (!supportedTypes.has(segment)) {
+                continue;
+            }
+            const id = segments[i + 1];
+            if (id) {
+                return { type: segment, id };
+            }
+        }
+    }
+    catch {
+    }
+    return null;
+}
+function normalizeHistoryURL(url: string): string {
+    const trimmed = url.trim();
+    if (!trimmed)
+        return trimmed;
+    const withoutQuery = trimmed.split("?")[0].replace(/\/+$/, "");
+    const spotifyEntity = extractSpotifyEntityFromURL(withoutQuery);
+    if (spotifyEntity) {
+        return `https://open.spotify.com/${spotifyEntity.type}/${spotifyEntity.id}`;
+    }
+    return withoutQuery.replace(/(\/artist\/[A-Za-z0-9]+)\/discography\/all$/i, "$1");
+}
+function getHistoryIdentityKey(type: HistoryItem["type"], url: string): string {
+    const normalizedUrl = normalizeHistoryURL(url);
+    const spotifyEntity = extractSpotifyEntityFromURL(normalizedUrl);
+    if (spotifyEntity) {
+        return `${type}:${spotifyEntity.id}`;
+    }
+    return `${type}:${normalizedUrl}`;
+}
+function dedupeHistoryItems(items: HistoryItem[]): HistoryItem[] {
+    const seen = new Set<string>();
+    const deduped: HistoryItem[] = [];
+    for (const item of items) {
+        const normalizedUrl = normalizeHistoryURL(item.url);
+        const key = getHistoryIdentityKey(item.type, normalizedUrl);
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        deduped.push({ ...item, url: normalizedUrl });
+    }
+    return deduped;
+}
 function App() {
     const [currentPage, setCurrentPage] = useState<PageType>("main");
     const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -84,7 +151,16 @@ function App() {
                 await saveSettings(settingsWithDefaults);
             }
         };
+        const prefetchSessionToken = async () => {
+            try {
+                await ensureValidToken(true);
+            }
+            catch (error) {
+                console.error("Failed to prefetch session token on launch:", error);
+            }
+        };
         initSettings();
+        void prefetchSessionToken();
         const checkFFmpeg = async () => {
             try {
                 const installed = await CheckFFmpegInstalled();
@@ -168,7 +244,9 @@ function App() {
         try {
             const saved = localStorage.getItem(HISTORY_KEY);
             if (saved) {
-                setFetchHistory(JSON.parse(saved));
+                const deduped = dedupeHistoryItems(JSON.parse(saved));
+                setFetchHistory(deduped);
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(deduped));
             }
         }
         catch (err) {
@@ -223,9 +301,12 @@ function App() {
     };
     const addToHistory = (item: Omit<HistoryItem, "id" | "timestamp">) => {
         setFetchHistory((prev) => {
-            const filtered = prev.filter((h) => h.url !== item.url);
+            const normalizedUrl = normalizeHistoryURL(item.url);
+            const identityKey = getHistoryIdentityKey(item.type, normalizedUrl);
+            const filtered = prev.filter((h) => getHistoryIdentityKey(h.type, h.url) !== identityKey);
             const newItem: HistoryItem = {
                 ...item,
+                url: normalizedUrl,
                 id: crypto.randomUUID(),
                 timestamp: Date.now(),
             };
@@ -466,6 +547,10 @@ function App() {
                                     Cancel
                                 </Button>
                                 <Button onClick={async () => {
+                        const pendingAlbumUrl = metadata.selectedAlbum?.external_urls;
+                        if (pendingAlbumUrl) {
+                            setSpotifyUrl(pendingAlbumUrl);
+                        }
                         const albumUrl = await metadata.handleConfirmAlbumFetch();
                         if (albumUrl) {
                             setSpotifyUrl(albumUrl);

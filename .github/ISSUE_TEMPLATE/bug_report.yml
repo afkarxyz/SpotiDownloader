@@ -1,0 +1,77 @@
+name: Bug Report
+description: Bug Report
+title: "[Bug Report] "
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **WARNING: Issues that do not follow this template will be deleted without review.**
+        >
+        > **Please keep `[Bug Report]` in the issue title and only continue after it.**
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      placeholder: e.g. Downloading a playlist stops after the first track with no error message.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      description: Select the Spotify item type related to this bug.
+      options:
+        - Track
+        - Album
+        - Playlist
+        - Artist
+    validations:
+      required: true
+
+  - type: input
+    id: spotify-url
+    attributes:
+      label: Spotify URL
+      placeholder: e.g. https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      placeholder: e.g. Happens every time on this link. Screenshot or recording attached.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "### Environment"
+
+  - type: input
+    id: version
+    attributes:
+      label: SpotiDownloader Version
+      placeholder: e.g. v7.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: e.g. Windows 11 23H2
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      placeholder: e.g. Indonesia
+    validations:
+      required: true

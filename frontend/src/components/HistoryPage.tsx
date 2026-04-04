@@ -9,6 +9,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { GetDownloadHistory, ClearDownloadHistory, GetPreviewURL, GetFetchHistory, DeleteDownloadHistoryItem, DeleteFetchHistoryItem, ClearFetchHistoryByType } from "../../wailsjs/go/main/App";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { openExternal } from "@/lib/utils";
+import { SPOTIFY_PREVIEW_VOLUME } from "@/lib/preview";
 const formatDate = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
     const year = date.getFullYear();
@@ -18,6 +19,14 @@ const formatDate = (timestamp: number) => {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = String(date.getSeconds()).padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+const normalizeHistoryFormat = (value: string) => value.toUpperCase();
+const getHistoryQualityLabel = (format: string, quality: string) => {
+    const normalizedFormat = normalizeHistoryFormat(format || "");
+    if (normalizedFormat === "FLAC") {
+        return "16-bit/44.1kHz";
+    }
+    return quality?.replace(/^MP3\s+/i, "") || "";
 };
 interface DownloadHistoryItem {
     id: string;
@@ -162,7 +171,7 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
             if (url) {
                 const audio = new Audio(url);
                 audioRef.current = audio;
-                audio.volume = 0.5;
+                audio.volume = SPOTIFY_PREVIEW_VOLUME;
                 audio.onended = () => setPlayingPreviewId(null);
                 audio.play();
                 setPlayingPreviewId(id);
@@ -299,8 +308,8 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
                                         </td>
                                          <td className="p-3 align-middle text-left hidden lg:table-cell">
                                             <div className="flex flex-col items-start gap-1">
-                                                <span className="text-xs font-bold text-foreground">{item.format}</span>
-                                                {(item.quality || item.format === 'FLAC') && <span className="text-[11px] text-muted-foreground leading-none whitespace-nowrap">{item.format === 'FLAC' ? '16-bit/44.1kHz' : item.quality?.replace(/^MP3\s+/, '')}</span>}
+                                                <span className="text-xs font-bold text-foreground">{normalizeHistoryFormat(item.format || "")}</span>
+                                                {(item.quality || normalizeHistoryFormat(item.format || "") === 'FLAC') && <span className="text-[11px] text-muted-foreground leading-none whitespace-nowrap">{getHistoryQualityLabel(item.format || "", item.quality || "")}</span>}
                                             </div>
                                         </td>
                                         <td className="p-3 align-middle text-sm text-muted-foreground text-left hidden xl:table-cell font-mono">

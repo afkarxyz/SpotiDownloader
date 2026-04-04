@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSettings } from "@/lib/settings";
 import { fetchSpotifyMetadata } from "@/lib/api";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { logger } from "@/lib/logger";
-import { extractArtistID } from "@/lib/spotify-url";
 import { AddFetchHistory } from "../../wailsjs/go/main/App";
+import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type { SpotifyMetadataResponse } from "@/types/api";
 export function useMetadata() {
     const [loading, setLoading] = useState(false);
     const [metadata, setMetadata] = useState<SpotifyMetadataResponse | null>(null);
+    const loadingToastId = useRef<string | number | null>(null);
+    const fetchedCount = useRef(0);
+    const currentName = useRef("");
     const [showApiModal, setShowApiModal] = useState(false);
     const [showAlbumDialog, setShowAlbumDialog] = useState(false);
     const [selectedAlbum, setSelectedAlbum] = useState<{
@@ -16,6 +19,74 @@ export function useMetadata() {
         name: string;
         external_urls: string;
     } | null>(null);
+    const [pendingArtistName, setPendingArtistName] = useState<string | null>(null);
+    useEffect(() => {
+        if (loading) {
+            fetchedCount.current = 0;
+            currentName.current = "";
+            loadingToastId.current = toast.silentInfo("fetching metadata...", {
+                duration: Infinity,
+                description: "please wait while we retrieve the information"
+            });
+            return;
+        }
+        if (loadingToastId.current) {
+            toast.dismiss(loadingToastId.current);
+            loadingToastId.current = null;
+        }
+    }, [loading]);
+    useEffect(() => {
+        const handler = (data: any) => {
+            if (!data) {
+                return;
+            }
+            if (Array.isArray(data)) {
+                fetchedCount.current += data.length;
+                if (loadingToastId.current && currentName.current) {
+                    toast.silentInfo(`fetching tracks for ${currentName.current.toLowerCase()}...`, {
+                        id: loadingToastId.current,
+                        description: `${fetchedCount.current.toLocaleString()} tracks fetched`
+                    });
+                }
+            }
+            else {
+                const baseInfo = data;
+                const name = "artist_info" in baseInfo ? baseInfo.artist_info.name :
+                    "album_info" in baseInfo ? baseInfo.album_info.name :
+                        "playlist_info" in baseInfo ? (baseInfo.playlist_info.name || baseInfo.playlist_info.owner.name) : "";
+                if (name) {
+                    currentName.current = name;
+                    if (loadingToastId.current) {
+                        toast.silentInfo(`fetching tracks for ${name.toLowerCase()}...`, {
+                            id: loadingToastId.current,
+                            description: `${fetchedCount.current.toLocaleString()} tracks fetched`
+                        });
+                    }
+                }
+            }
+            setMetadata(prev => {
+                if (Array.isArray(data)) {
+                    if (!prev || !("track_list" in prev)) {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        track_list: [...prev.track_list, ...data]
+                    };
+                }
+                if (prev && "track_list" in prev && prev.track_list.length > 0) {
+                    return prev;
+                }
+                const baseInfo = data;
+                if (!("track_list" in baseInfo)) {
+                    baseInfo.track_list = [];
+                }
+                return baseInfo;
+            });
+        };
+        EventsOn("metadata-stream", handler);
+        return () => EventsOff("metadata-stream");
+    }, []);
     const getUrlType = (url: string): string => {
         if (url.includes("/track/"))
             return "track";
@@ -26,12 +97,6 @@ export function useMetadata() {
         if (url.includes("/artist/"))
             return "artist";
         return "unknown";
-    };
-    const isKnownMetadataResponse = (data: SpotifyMetadataResponse): boolean => {
-        return ("track" in data) ||
-            ("album_info" in data) ||
-            ("playlist_info" in data) ||
-            ("artist_info" in data);
     };
     const saveToHistory = async (url: string, data: SpotifyMetadataResponse) => {
         try {
@@ -89,21 +154,18 @@ export function useMetadata() {
         logger.info(`fetching ${urlType} metadata...`);
         logger.debug(`url: ${url}`);
         setLoading(true);
+        setMetadata(null);
         try {
             const startTime = Date.now();
             const timeout = urlType === "artist" ? 60 : 300;
             const data = await fetchSpotifyMetadata(url, true, 1.0, timeout);
-            if (!isKnownMetadataResponse(data)) {
-                logger.error(`unknown metadata payload for url: ${url}`);
-                toast.error("Failed to parse metadata response");
-                return;
-            }
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
             if ("playlist_info" in data) {
                 const playlistInfo = data.playlist_info;
                 if (!playlistInfo.owner.name && playlistInfo.tracks.total === 0 && data.track_list.length === 0) {
                     logger.warning("playlist appears to be empty or private");
                     toast.error("Playlist not found or may be private");
+                    setMetadata(null);
                     return;
                 }
             }
@@ -169,19 +231,14 @@ export function useMetadata() {
             return;
         }
         let urlToFetch = url.trim();
-        const isArtistUrl = urlToFetch.includes("/artist/") || urlToFetch.startsWith("spotify:artist:");
-        if (isArtistUrl) {
-            const artistID = extractArtistID(urlToFetch);
-            if (!artistID) {
-                logger.error(`invalid artist url: ${urlToFetch}`);
-                toast.error("Invalid artist URL");
-                return;
-            }
-            urlToFetch = `https://open.spotify.com/artist/${artistID}/discography/all`;
-            logger.debug("normalized artist url to discography");
+        const isArtistUrl = urlToFetch.includes("/artist/");
+        if (isArtistUrl && !urlToFetch.includes("/discography")) {
+            urlToFetch = urlToFetch.replace(/\/$/, "") + "/discography/all";
+            logger.debug("converted to discography url");
         }
         if (isArtistUrl) {
             logger.info("artist url detected");
+            setPendingArtistName(null);
             await fetchMetadataDirectly(urlToFetch);
         }
         else {
@@ -197,6 +254,17 @@ export function useMetadata() {
         logger.debug(`album clicked: ${album.name}`);
         setSelectedAlbum(album);
         setShowAlbumDialog(true);
+    };
+    const handleArtistClick = async (artist: {
+        id: string;
+        name: string;
+        external_urls: string;
+    }) => {
+        logger.debug(`artist clicked: ${artist.name}`);
+        const artistUrl = artist.external_urls.replace(/\/$/, "") + "/discography/all";
+        setPendingArtistName(artist.name);
+        await fetchMetadataDirectly(artistUrl);
+        return artistUrl;
     };
     const handleConfirmAlbumFetch = async () => {
         if (!selectedAlbum)
@@ -253,9 +321,11 @@ export function useMetadata() {
         showAlbumDialog,
         setShowAlbumDialog,
         selectedAlbum,
+        pendingArtistName,
         handleFetchMetadata,
         handleAlbumClick,
         handleConfirmAlbumFetch,
+        handleArtistClick,
         loadFromCache,
         showApiModal,
         setShowApiModal,
