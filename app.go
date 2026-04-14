@@ -6,10 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/afkarxyz/SpotiDownloader/backend"
@@ -21,8 +25,294 @@ type App struct {
 	ctx context.Context
 }
 
+type CurrentIPInfo struct {
+	IP          string `json:"ip"`
+	Country     string `json:"country"`
+	CountryCode string `json:"country_code,omitempty"`
+	Source      string `json:"source,omitempty"`
+}
+
+const checkOperationTimeout = 10 * time.Second
+const unifiedStatusAPIURL = "https://api-status.afkarxyz.qzz.io/api/status/spotidownloader/"
+const unifiedStatusCacheTTL = 5 * time.Second
+
+var apiStatusProbeTrackIDs = []string{
+	"4cOdK2wGLETKBW3PvgPWqT",
+	"3n3Ppam7vgaVa1iaRUc9Lp",
+	"7qiZfU4dY1lWllzX7mPBI3",
+}
+
+var (
+	unifiedStatusCacheMu     sync.Mutex
+	unifiedStatusCacheBody   string
+	unifiedStatusCacheExpiry time.Time
+)
+
 func NewApp() *App {
 	return &App{}
+}
+
+type timedResult[T any] struct {
+	value T
+	err   error
+}
+
+func runWithTimeout[T any](timeout time.Duration, fn func() (T, error)) (T, error) {
+	resultCh := make(chan timedResult[T], 1)
+
+	go func() {
+		value, err := fn()
+		resultCh <- timedResult[T]{value: value, err: err}
+	}()
+
+	select {
+	case result := <-resultCh:
+		return result.value, result.err
+	case <-time.After(timeout):
+		var zero T
+		return zero, fmt.Errorf("operation timed out after %s", timeout)
+	}
+}
+
+func previewResponseBody(body []byte, maxLen int) string {
+	preview := strings.TrimSpace(string(body))
+	if maxLen > 0 && len(preview) > maxLen {
+		return preview[:maxLen] + "..."
+	}
+	return preview
+}
+
+func fetchUnifiedStatusPayload(forceRefresh bool, endpoint string) (string, error) {
+	unifiedStatusCacheMu.Lock()
+	defer unifiedStatusCacheMu.Unlock()
+
+	if !forceRefresh && unifiedStatusCacheBody != "" && time.Now().Before(unifiedStatusCacheExpiry) {
+		return unifiedStatusCacheBody, nil
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	maxRetries := 3
+	var lastErr error
+
+	for i := 0; i < maxRetries; i++ {
+		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create unified status request: %w", err)
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := client.Do(req)
+		if err == nil {
+			body, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if readErr != nil {
+				lastErr = fmt.Errorf("attempt %d: failed reading response: %w", i+1, readErr)
+			} else if resp.StatusCode != http.StatusOK {
+				lastErr = fmt.Errorf("attempt %d: returned status %d (%s)", i+1, resp.StatusCode, previewResponseBody(body, 200))
+			} else {
+				payload := strings.TrimSpace(string(body))
+				if payload == "" {
+					lastErr = fmt.Errorf("attempt %d: empty response body", i+1)
+				} else {
+					unifiedStatusCacheBody = payload
+					unifiedStatusCacheExpiry = time.Now().Add(unifiedStatusCacheTTL)
+					return payload, nil
+				}
+			}
+		} else {
+			lastErr = fmt.Errorf("attempt %d: connection failed: %w", i+1, err)
+		}
+
+		if i < maxRetries-1 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("unknown error")
+	}
+
+	return "", fmt.Errorf("unified status API failed after %d retries: %w", maxRetries, lastErr)
+}
+
+func containsLRCLIBResults(body []byte) bool {
+	trimmedBody := strings.TrimSpace(string(body))
+	if trimmedBody == "" {
+		return false
+	}
+
+	var searchResults []map[string]interface{}
+	if err := json.Unmarshal(body, &searchResults); err == nil {
+		return len(searchResults) > 0
+	}
+
+	var exactResult map[string]interface{}
+	if err := json.Unmarshal(body, &exactResult); err == nil {
+		return len(exactResult) > 0
+	}
+
+	return false
+}
+
+func containsMusicBrainzResults(body []byte) bool {
+	trimmedBody := strings.TrimSpace(string(body))
+	if trimmedBody == "" {
+		return false
+	}
+
+	var payload struct {
+		Count      int               `json:"count"`
+		Recordings []json.RawMessage `json:"recordings"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return false
+	}
+
+	return payload.Count > 0 || len(payload.Recordings) > 0
+}
+
+func checkExternalAPIStatus(apiName string, checkURL string, userAgent string, validator func([]byte) bool) (bool, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, checkURL, nil)
+	if err != nil {
+		return false, err
+	}
+
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("%s returned status %d: %s", apiName, resp.StatusCode, previewResponseBody(body, 200))
+	}
+
+	if validator != nil && !validator(body) {
+		return false, fmt.Errorf("%s returned unexpected response", apiName)
+	}
+
+	return true, nil
+}
+
+func fetchCurrentIPInfo() (CurrentIPInfo, error) {
+	type ipwhoisResponse struct {
+		Success     bool   `json:"success"`
+		IP          string `json:"ip"`
+		Country     string `json:"country"`
+		CountryCode string `json:"country_code"`
+		Message     string `json:"message"`
+	}
+	type ipapiResponse struct {
+		IP          string `json:"ip"`
+		Country     string `json:"country_name"`
+		CountryCode string `json:"country_code"`
+		Error       bool   `json:"error"`
+		Reason      string `json:"reason"`
+	}
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	tryFetch := func(source, reqURL string, parse func(body []byte) (CurrentIPInfo, error)) (CurrentIPInfo, error) {
+		req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+		if err != nil {
+			return CurrentIPInfo{}, err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return CurrentIPInfo{}, err
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return CurrentIPInfo{}, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return CurrentIPInfo{}, fmt.Errorf("%s returned status %d: %s", source, resp.StatusCode, previewResponseBody(body, 200))
+		}
+
+		info, err := parse(body)
+		if err != nil {
+			return CurrentIPInfo{}, err
+		}
+		info.Source = source
+		return info, nil
+	}
+
+	info, err := tryFetch("ipwho.is", "https://ipwho.is/", func(body []byte) (CurrentIPInfo, error) {
+		var payload ipwhoisResponse
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return CurrentIPInfo{}, err
+		}
+		if !payload.Success {
+			return CurrentIPInfo{}, fmt.Errorf("ipwho.is lookup failed: %s", strings.TrimSpace(payload.Message))
+		}
+		if strings.TrimSpace(payload.IP) == "" || strings.TrimSpace(payload.Country) == "" {
+			return CurrentIPInfo{}, fmt.Errorf("ipwho.is returned incomplete IP data")
+		}
+		return CurrentIPInfo{
+			IP:          strings.TrimSpace(payload.IP),
+			Country:     strings.TrimSpace(payload.Country),
+			CountryCode: strings.TrimSpace(payload.CountryCode),
+		}, nil
+	})
+	if err == nil {
+		return info, nil
+	}
+	firstErr := err
+
+	info, err = tryFetch("ipapi.co", "https://ipapi.co/json/", func(body []byte) (CurrentIPInfo, error) {
+		var payload ipapiResponse
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return CurrentIPInfo{}, err
+		}
+		if payload.Error {
+			return CurrentIPInfo{}, fmt.Errorf("ipapi.co lookup failed: %s", strings.TrimSpace(payload.Reason))
+		}
+		if strings.TrimSpace(payload.IP) == "" || strings.TrimSpace(payload.Country) == "" {
+			return CurrentIPInfo{}, fmt.Errorf("ipapi.co returned incomplete IP data")
+		}
+		return CurrentIPInfo{
+			IP:          strings.TrimSpace(payload.IP),
+			Country:     strings.TrimSpace(payload.Country),
+			CountryCode: strings.TrimSpace(payload.CountryCode),
+		}, nil
+	})
+	if err == nil {
+		return info, nil
+	}
+
+	return CurrentIPInfo{}, fmt.Errorf("failed to detect public IP: %v; fallback failed: %v", firstErr, err)
+}
+
+func (a *App) GetCurrentIPInfo() (string, error) {
+	info, err := fetchCurrentIPInfo()
+	if err != nil {
+		return "", err
+	}
+
+	payload, err := json.Marshal(info)
+	if err != nil {
+		return "", err
+	}
+
+	return string(payload), nil
+}
+
+func (a *App) FetchUnifiedAPIStatus(forceRefresh bool) (string, error) {
+	return fetchUnifiedStatusPayload(forceRefresh, unifiedStatusAPIURL)
 }
 
 func (a *App) getFirstArtist(artistString string) string {
@@ -75,8 +365,10 @@ type DownloadRequest struct {
 	DiscNumber          int    `json:"disc_number,omitempty"`
 	TotalTracks         int    `json:"total_tracks,omitempty"`
 	SpotifyTotalDiscs   int    `json:"spotify_total_discs,omitempty"`
+	ISRC                string `json:"isrc,omitempty"`
 	Copyright           string `json:"copyright,omitempty"`
 	Publisher           string `json:"publisher,omitempty"`
+	Composer            string `json:"composer,omitempty"`
 	OutputDir           string `json:"output_dir,omitempty"`
 	AudioFormat         string `json:"audio_format,omitempty"`
 	FilenameFormat      string `json:"filename_format,omitempty"`
@@ -151,27 +443,6 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 			}
 		}
 	}
-	if err == nil && settings != nil {
-		if useAPI, ok := settings["useSpotFetchAPI"].(bool); ok && useAPI {
-			if apiURL, ok := settings["spotFetchAPIUrl"].(string); ok && apiURL != "" {
-
-				data, err := backend.GetSpotifyDataWithAPI(ctx, req.URL, true, apiURL, req.Batch, time.Duration(req.Delay*float64(time.Second)), separator, func(tracks interface{}) {
-					runtime.EventsEmit(a.ctx, "metadata-stream", tracks)
-				})
-				if err != nil {
-					return "", fmt.Errorf("failed to fetch metadata from API: %v", err)
-				}
-
-				jsonData, err := json.MarshalIndent(data, "", "  ")
-				if err != nil {
-					return "", fmt.Errorf("failed to encode response: %v", err)
-				}
-
-				return string(jsonData), nil
-			}
-		}
-	}
-
 	data, err := backend.GetFilteredSpotifyData(ctx, req.URL, req.Batch, time.Duration(req.Delay*float64(time.Second)), separator, func(tracks interface{}) {
 		runtime.EventsEmit(a.ctx, "metadata-stream", tracks)
 	})
@@ -267,6 +538,15 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	if req.FilenameFormat == "" {
 		req.FilenameFormat = "title-artist"
 	}
+	if req.ISRC == "" && strings.Contains(req.FilenameFormat, "{isrc}") {
+		lookupTrackID := req.TrackID
+		if lookupTrackID == "" {
+			lookupTrackID = req.SpotifyID
+		}
+		if lookupTrackID != "" {
+			req.ISRC = backend.ResolveTrackISRC(lookupTrackID)
+		}
+	}
 
 	itemID := req.ItemID
 	if itemID == "" {
@@ -293,25 +573,26 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		metadataTrackID = req.TrackID
 	}
 
-	if metadataTrackID != "" && (req.Copyright == "" || req.Publisher == "" || req.SpotifyTotalDiscs == 0 || req.ReleaseDate == "" || req.TotalTracks == 0 || req.AlbumTrackNumber == 0) {
+	metadataSeparator := req.Separator
+	if metadataSeparator == "" {
+		metadataSeparator = ", "
+		metadataSettings, _ := a.LoadSettings()
+		if metadataSettings != nil {
+			if sep, ok := metadataSettings["separator"].(string); ok {
+				if sep == "semicolon" {
+					metadataSeparator = "; "
+				} else if sep == "comma" {
+					metadataSeparator = ", "
+				}
+			}
+		}
+	}
+
+	if metadataTrackID != "" && (req.Copyright == "" || req.Publisher == "" || req.Composer == "" || req.SpotifyTotalDiscs == 0 || req.ReleaseDate == "" || req.TotalTracks == 0 || req.AlbumTrackNumber == 0) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		trackURL := fmt.Sprintf("https://open.spotify.com/track/%s", metadataTrackID)
-		metadataSeparator := req.Separator
-		if metadataSeparator == "" {
-			metadataSeparator = ", "
-			metadataSettings, _ := a.LoadSettings()
-			if metadataSettings != nil {
-				if sep, ok := metadataSettings["separator"].(string); ok {
-					if sep == "semicolon" {
-						metadataSeparator = "; "
-					} else if sep == "comma" {
-						metadataSeparator = ", "
-					}
-				}
-			}
-		}
 		trackData, err := backend.GetFilteredSpotifyData(ctx, trackURL, false, 0, metadataSeparator, nil)
 		if err == nil {
 
@@ -319,6 +600,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				Track struct {
 					Copyright   string `json:"copyright"`
 					Publisher   string `json:"publisher"`
+					Composer    string `json:"composer"`
 					TotalDiscs  int    `json:"total_discs"`
 					TotalTracks int    `json:"total_tracks"`
 					TrackNumber int    `json:"track_number"`
@@ -333,6 +615,9 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 					}
 					if req.Publisher == "" && trackResp.Track.Publisher != "" {
 						req.Publisher = trackResp.Track.Publisher
+					}
+					if req.Composer == "" && trackResp.Track.Composer != "" {
+						req.Composer = trackResp.Track.Composer
 					}
 					if req.SpotifyTotalDiscs == 0 && trackResp.Track.TotalDiscs > 0 {
 						req.SpotifyTotalDiscs = trackResp.Track.TotalDiscs
@@ -356,19 +641,21 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		if req.AudioFormat == "flac" {
 			fileExt = ".flac"
 		}
-		expectedFilename := backend.BuildFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.DiscNumber, req.FilenameFormat, req.TrackNumber, req.Position, req.UseAlbumTrackNumber, req.PlaylistName, req.PlaylistOwner)
+		expectedFilename := backend.BuildFilenameWithISRC(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.DiscNumber, req.FilenameFormat, req.TrackNumber, req.Position, req.UseAlbumTrackNumber, req.PlaylistName, req.PlaylistOwner, req.ISRC)
 		expectedFilename = backend.SanitizeFilename(expectedFilename) + fileExt
 		expectedPath := filepath.Join(req.OutputDir, expectedFilename)
 
-		if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 0 {
-			backend.SkipDownloadItem(itemID, expectedPath)
-			return DownloadResponse{
-				Success:       true,
-				Message:       "File already exists",
-				File:          expectedPath,
-				AlreadyExists: true,
-				ItemID:        itemID,
-			}, nil
+		if !backend.GetRedownloadWithSuffixSetting() {
+			if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 0 {
+				backend.SkipDownloadItem(itemID, expectedPath)
+				return DownloadResponse{
+					Success:       true,
+					Message:       "File already exists",
+					File:          expectedPath,
+					AlreadyExists: true,
+					ItemID:        itemID,
+				}, nil
+			}
 		}
 	}
 
@@ -422,6 +709,9 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.SpotifyTotalDiscs,
 		req.Copyright,
 		req.Publisher,
+		req.Composer,
+		metadataSeparator,
+		req.ISRC,
 		req.PlaylistName,
 		req.PlaylistOwner,
 		req.UseFirstArtistOnly,
@@ -642,6 +932,103 @@ func (a *App) FetchSessionToken() (TokenResponse, error) {
 	}, nil
 }
 
+func hasAPIStatusDownloadLink(resp *backend.DownloadResponse, audioFormat string) bool {
+	if resp == nil || !resp.Success {
+		return false
+	}
+
+	if audioFormat == "flac" {
+		return strings.TrimSpace(resp.Link) != "" || strings.TrimSpace(resp.LinkFlac) != ""
+	}
+
+	return strings.TrimSpace(resp.Link) != ""
+}
+
+func checkDownloaderFormatStatus(audioFormat string) (bool, error) {
+	token, err := backend.FetchSessionToken()
+	if err != nil {
+		return false, err
+	}
+
+	downloader := backend.NewSpotiDownloader(token)
+	requestFlac := audioFormat == "flac"
+	var lastErr error
+
+	for _, trackID := range apiStatusProbeTrackIDs {
+		resp, err := downloader.GetDownloadLink(trackID, requestFlac)
+		if err == nil && hasAPIStatusDownloadLink(resp, audioFormat) {
+			return true, nil
+		}
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		lastErr = fmt.Errorf("download API returned no %s link", strings.ToUpper(audioFormat))
+	}
+
+	if lastErr != nil {
+		return false, lastErr
+	}
+
+	return false, nil
+}
+
+func (a *App) CheckAPIStatus(statusType string) bool {
+	statusType = strings.ToLower(strings.TrimSpace(statusType))
+	if statusType == "" {
+		statusType = "app"
+	}
+
+	isOnline, err := runWithTimeout(checkOperationTimeout, func() (bool, error) {
+		switch statusType {
+		case "app":
+			mp3Online, err := checkDownloaderFormatStatus("mp3")
+			if err != nil {
+				return false, err
+			}
+			flacOnline, err := checkDownloaderFormatStatus("flac")
+			if err != nil {
+				return false, err
+			}
+			return mp3Online && flacOnline, nil
+		case "lrclib":
+			return checkExternalAPIStatus(
+				"LRCLIB",
+				"https://lrclib.net/api/search?artist_name=Adele&track_name=Hello",
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+				containsLRCLIBResults,
+			)
+		case "musicbrainz":
+			checkURL := fmt.Sprintf(
+				"https://musicbrainz.org/ws/2/recording?query=%s&fmt=json&limit=1",
+				url.QueryEscape(`recording:"Hello" AND artist:"Adele"`),
+			)
+			return checkExternalAPIStatus(
+				"MusicBrainz",
+				checkURL,
+				fmt.Sprintf("SpotiDownloader/%s ( hi@afkarxyz.qzz.io )", backend.AppVersion),
+				containsMusicBrainzResults,
+			)
+		}
+
+		return false, fmt.Errorf("unsupported status type: %s", statusType)
+	})
+	if err != nil {
+		if statusType == "musicbrainz" {
+			backend.SetMusicBrainzStatusCheckResult(false)
+		}
+		fmt.Printf("CheckAPIStatus timeout/error for %s: %v\n", statusType, err)
+		return false
+	}
+
+	if statusType == "musicbrainz" {
+		backend.SetMusicBrainzStatusCheckResult(isOnline)
+	}
+
+	return isOnline
+}
+
 func (a *App) GetDownloadQueue() backend.DownloadQueueInfo {
 	return backend.GetDownloadQueue()
 }
@@ -775,6 +1162,34 @@ func (a *App) ClearFetchHistoryByType(itemType string) error {
 	return backend.ClearFetchHistoryByType(itemType, "SpotiDownloader")
 }
 
+func (a *App) GetRecentFetches() (string, error) {
+	items, err := backend.LoadRecentFetches()
+	if err != nil {
+		return "", err
+	}
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func (a *App) SaveRecentFetches(payload string) error {
+	payload = strings.TrimSpace(payload)
+	if payload == "" {
+		payload = "[]"
+	}
+
+	var items []backend.RecentFetchItem
+	if err := json.Unmarshal([]byte(payload), &items); err != nil {
+		return err
+	}
+
+	return backend.SaveRecentFetches(items)
+}
+
 type LyricsDownloadRequest struct {
 	SpotifyID           string `json:"spotify_id"`
 	TrackName           string `json:"track_name"`
@@ -782,6 +1197,7 @@ type LyricsDownloadRequest struct {
 	AlbumName           string `json:"album_name"`
 	AlbumArtist         string `json:"album_artist"`
 	ReleaseDate         string `json:"release_date"`
+	ISRC                string `json:"isrc,omitempty"`
 	OutputDir           string `json:"output_dir"`
 	FilenameFormat      string `json:"filename_format"`
 	TrackNumber         bool   `json:"track_number"`
@@ -806,6 +1222,7 @@ func (a *App) DownloadLyrics(req LyricsDownloadRequest) (backend.LyricsDownloadR
 		AlbumName:           req.AlbumName,
 		AlbumArtist:         req.AlbumArtist,
 		ReleaseDate:         req.ReleaseDate,
+		ISRC:                req.ISRC,
 		OutputDir:           req.OutputDir,
 		FilenameFormat:      req.FilenameFormat,
 		TrackNumber:         req.TrackNumber,
@@ -1159,6 +1576,7 @@ type CheckFileExistenceRequest struct {
 	AlbumName           string `json:"album_name,omitempty"`
 	AlbumArtist         string `json:"album_artist,omitempty"`
 	ReleaseDate         string `json:"release_date,omitempty"`
+	ISRC                string `json:"isrc,omitempty"`
 	TrackNumber         int    `json:"track_number,omitempty"`
 	DiscNumber          int    `json:"disc_number,omitempty"`
 	Position            int    `json:"position,omitempty"`
@@ -1188,6 +1606,7 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, audioFormat 
 	}
 
 	defaultFilenameFormat := "title-artist"
+	redownloadWithSuffix := backend.GetRedownloadWithSuffixSetting()
 
 	type result struct {
 		index  int
@@ -1238,6 +1657,10 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, audioFormat 
 			if filenameFormat == "" {
 				filenameFormat = defaultFilenameFormat
 			}
+			isrc := strings.TrimSpace(t.ISRC)
+			if isrc == "" && strings.Contains(filenameFormat, "{isrc}") && t.SpotifyID != "" {
+				isrc = backend.ResolveTrackISRC(t.SpotifyID)
+			}
 
 			trackNumber := t.Position
 			if t.UseAlbumTrackNumber && t.TrackNumber > 0 {
@@ -1249,7 +1672,7 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, audioFormat 
 				fileExt = ".flac"
 			}
 
-			expectedFilename := backend.BuildFilename(
+			expectedFilename := backend.BuildFilenameWithISRC(
 				t.TrackName,
 				t.ArtistName,
 				t.AlbumName,
@@ -1262,6 +1685,7 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, audioFormat 
 				t.UseAlbumTrackNumber,
 				"",
 				"",
+				isrc,
 			)
 			expectedFilename = backend.SanitizeFilename(expectedFilename) + fileExt
 
@@ -1271,12 +1695,16 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, audioFormat 
 			}
 
 			expectedPath := filepath.Join(targetDir, expectedFilename)
-
-			if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 100*1024 {
-				res.Exists = true
-				res.FilePath = expectedPath
+			if redownloadWithSuffix {
+				expectedPath, _ = backend.ResolveOutputPathForDownload(expectedPath, true)
+				res.FilePath = filepath.Base(expectedPath)
 			} else {
-				res.FilePath = expectedFilename
+				if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 100*1024 {
+					res.Exists = true
+					res.FilePath = expectedPath
+				} else {
+					res.FilePath = expectedFilename
+				}
 			}
 
 			resultsChan <- result{index: idx, result: res}
@@ -1323,6 +1751,10 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, audioFormat 
 
 func (a *App) GetPreviewURL(trackID string) (string, error) {
 	return backend.GetPreviewURL(trackID)
+}
+
+func (a *App) GetTrackISRC(spotifyTrackID string) string {
+	return backend.ResolveTrackISRC(spotifyTrackID)
 }
 
 func (a *App) GetConfigPath() (string, error) {

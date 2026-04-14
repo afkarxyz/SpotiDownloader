@@ -144,27 +144,22 @@ export function AboutPage() {
         const totalDays = Math.floor(totalHours / 24);
         const totalMonths = Math.floor(totalDays / 30);
         const totalYears = Math.floor(totalMonths / 12);
-
         if (totalYears > 0) {
             const remainingMonths = totalMonths % 12;
             return remainingMonths > 0 ? `${totalYears}y ${remainingMonths}m ago` : `${totalYears}y ago`;
         }
-
         if (totalMonths > 0) {
             const remainingDays = totalDays % 30;
             return remainingDays > 0 ? `${totalMonths}m ${remainingDays}d ago` : `${totalMonths}m ago`;
         }
-
         if (totalDays > 0) {
             const remainingHours = totalHours % 24;
             return remainingHours > 0 ? `${totalDays}d ${remainingHours}h ago` : `${totalDays}d ago`;
         }
-
         if (totalHours > 0) {
             const remainingMinutes = totalMinutes % 60;
             return `${totalHours}h ${remainingMinutes}m ago`;
         }
-
         return `${totalMinutes}m ago`;
     };
     const formatNumber = (num: number): string => {
@@ -198,7 +193,7 @@ export function AboutPage() {
         <div className="flex-1 min-h-0">
             {activeTab === "projects" && (<div className="p-1 pr-2">
                     <div className="grid gap-2 grid-cols-4">
-                            <Card className={projectCardClass} onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC")}>
+                            <Card className={projectCardClass} onClick={() => openExternal("https://github.com/spotbye/SpotiFLAC")}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start mb-2">
                                         <img src={SpotiFLACIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC"/>
@@ -229,7 +224,7 @@ export function AboutPage() {
                                     </div>
                                 </CardContent>)}
                             </Card>
-                            <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
+                            <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotbye/SpotiFLAC-Next")}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start mb-2">
                                         <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
@@ -312,8 +307,8 @@ export function AboutPage() {
                                 </Card>
                                 <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://spotubedl.com/")}>
                                     <CardHeader>
-                                        <CardTitle className="flex items-center gap-2"><img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/> SpotubeDL</CardTitle>
-                                        <CardDescription>Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.</CardDescription>
+                                        <CardTitle className="flex items-center gap-2"><img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/> SpotubeDL.com</CardTitle>
+                                        <CardDescription>Download Spotify Tracks, Albums, Playlists & Discography as MP3/OGG/Opus.</CardDescription>
                                     </CardHeader>
                                 </Card>
                             </div>

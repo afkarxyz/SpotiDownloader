@@ -44,6 +44,7 @@ type LyricsDownloadRequest struct {
 	AlbumName           string `json:"album_name"`
 	AlbumArtist         string `json:"album_artist"`
 	ReleaseDate         string `json:"release_date"`
+	ISRC                string `json:"isrc"`
 	OutputDir           string `json:"output_dir"`
 	FilenameFormat      string `json:"filename_format"`
 	TrackNumber         bool   `json:"track_number"`
@@ -346,11 +347,12 @@ func msToLRCTimestamp(msStr string) string {
 	return fmt.Sprintf("[%02d:%02d.%02d]", minutes, seconds, centiseconds)
 }
 
-func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat string, includeTrackNumber bool, position, discNumber int) string {
+func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat, isrc string, includeTrackNumber bool, position, discNumber int) string {
 	safeTitle := SanitizeFilename(trackName)
 	safeArtist := SanitizeFilename(artistName)
 	safeAlbum := SanitizeFilename(albumName)
 	safeAlbumArtist := SanitizeFilename(albumArtist)
+	safeISRC := SanitizeOptionalFilename(isrc)
 
 	year := ""
 	if len(releaseDate) >= 4 {
@@ -367,6 +369,7 @@ func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseD
 		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
 		filename = strings.ReplaceAll(filename, "{year}", year)
 		filename = strings.ReplaceAll(filename, "{date}", SanitizeFilename(releaseDate))
+		filename = strings.ReplaceAll(filename, "{isrc}", safeISRC)
 
 		if discNumber > 0 {
 			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
@@ -465,10 +468,15 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 	if filenameFormat == "" {
 		filenameFormat = "title-artist"
 	}
-	filename := buildLyricsFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, filenameFormat, req.TrackNumber, req.Position, req.DiscNumber)
+	resolvedISRC := strings.TrimSpace(req.ISRC)
+	if resolvedISRC == "" && strings.Contains(filenameFormat, "{isrc}") {
+		resolvedISRC = ResolveTrackISRC(req.SpotifyID)
+	}
+	filename := buildLyricsFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, filenameFormat, resolvedISRC, req.TrackNumber, req.Position, req.DiscNumber)
 	filePath := filepath.Join(outputDir, filename)
 
-	if fileInfo, err := os.Stat(filePath); err == nil && fileInfo.Size() > 0 {
+	filePath, alreadyExists := ResolveOutputPathForDownload(filePath, GetRedownloadWithSuffixSetting())
+	if alreadyExists {
 		return &LyricsDownloadResponse{
 			Success:       true,
 			Message:       "Lyrics file already exists",

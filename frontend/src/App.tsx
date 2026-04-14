@@ -3,9 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Search, X, ArrowUp } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getSettings, getSettingsWithDefaults, loadSettings, saveSettings, applyThemeMode, applyFont, updateSettings } from "@/lib/settings";
+import { getSettings, getSettingsWithDefaults, loadSettings, saveSettings, applyThemeMode, applyFont } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
-import { OpenFolder, CheckFFmpegInstalled, DownloadFFmpeg } from "../wailsjs/go/main/App";
+import { OpenFolder, CheckFFmpegInstalled, DownloadFFmpeg, GetRecentFetches, SaveRecentFetches } from "../wailsjs/go/main/App";
 import { EventsOn, EventsOff, Quit } from "../wailsjs/runtime/runtime";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { extractArtistID } from "@/lib/spotify-url";
@@ -33,7 +33,9 @@ import { useLyrics } from "@/hooks/useLyrics";
 import { useCover } from "@/hooks/useCover";
 import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 import { useDownloadProgress } from "@/hooks/useDownloadProgress";
+import { ensureApiStatusCheckStarted } from "@/lib/api-status";
 import { ensureValidToken } from "@/lib/token-manager";
+import { buildPlaylistFolderName } from "@/lib/playlist";
 const HISTORY_KEY = "spotidownloader_fetch_history";
 const MAX_HISTORY = 5;
 function extractSpotifyEntityFromURL(url: string): {
@@ -102,6 +104,25 @@ function dedupeHistoryItems(items: HistoryItem[]): HistoryItem[] {
     }
     return deduped;
 }
+function sortHistoryItems(items: HistoryItem[]): HistoryItem[] {
+    return [...items].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+}
+function normalizeHistoryItems(items: HistoryItem[]): HistoryItem[] {
+    return dedupeHistoryItems(sortHistoryItems(items)).slice(0, MAX_HISTORY);
+}
+function parseStoredHistory(value: string | null): HistoryItem[] {
+    if (!value) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    }
+    catch (err) {
+        console.error("Failed to parse stored history:", err);
+        return [];
+    }
+}
 function App() {
     const [currentPage, setCurrentPage] = useState<PageType>("main");
     const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -159,8 +180,19 @@ function App() {
                 console.error("Failed to prefetch session token on launch:", error);
             }
         };
+        const refreshSessionToken = async () => {
+            try {
+                await ensureValidToken(true);
+            }
+            catch (error) {
+                console.error("Failed to refresh session token:", error);
+            }
+        };
         initSettings();
         void prefetchSessionToken();
+        const sessionTokenRefreshInterval = window.setInterval(() => {
+            void refreshSessionToken();
+        }, 60000);
         const checkFFmpeg = async () => {
             try {
                 const installed = await CheckFFmpegInstalled();
@@ -182,7 +214,8 @@ function App() {
         };
         mediaQuery.addEventListener("change", handleChange);
         checkForUpdates();
-        loadHistory();
+        ensureApiStatusCheckStarted();
+        void loadHistory();
         const handleScroll = () => {
             setShowScrollTop(window.scrollY > 300);
         };
@@ -196,22 +229,12 @@ function App() {
         };
         window.addEventListener("chromeNotInstalled", handleChromeNotInstalled);
         return () => {
+            window.clearInterval(sessionTokenRefreshInterval);
             mediaQuery.removeEventListener("change", handleChange);
             window.removeEventListener("scroll", handleScroll);
             window.removeEventListener("chromeNotInstalled", handleChromeNotInstalled);
         };
     }, []);
-    const handleEnableSpotFetchApi = async () => {
-        try {
-            await updateSettings({ useSpotFetchAPI: true });
-            metadata.setShowApiModal(false);
-            toast.success("SpotFetch API enabled! You can now try fetching again.");
-        }
-        catch (err) {
-            console.error("Failed to enable SpotFetch API:", err);
-            toast.error("Failed to update settings");
-        }
-    };
     const scrollToTop = useCallback(() => {
         window.scrollTo({ top: 0, behavior: "smooth" });
     }, []);
@@ -240,19 +263,29 @@ function App() {
             console.error("Failed to check for updates:", err);
         }
     };
-    const loadHistory = () => {
+    const persistRecentHistory = useCallback(async (history: HistoryItem[]) => {
         try {
-            const saved = localStorage.getItem(HISTORY_KEY);
-            if (saved) {
-                const deduped = dedupeHistoryItems(JSON.parse(saved));
-                setFetchHistory(deduped);
-                localStorage.setItem(HISTORY_KEY, JSON.stringify(deduped));
-            }
+            await SaveRecentFetches(JSON.stringify(history));
+        }
+        catch (err) {
+            console.error("Failed to save recent fetches:", err);
+        }
+    }, []);
+    const loadHistory = useCallback(async () => {
+        try {
+            const saved = parseStoredHistory(localStorage.getItem(HISTORY_KEY));
+            const persisted = parseStoredHistory(await GetRecentFetches());
+            const normalized = normalizeHistoryItems([...persisted, ...saved]);
+            setFetchHistory(normalized);
+            await persistRecentHistory(normalized);
         }
         catch (err) {
             console.error("Failed to load history:", err);
         }
-    };
+        finally {
+            localStorage.removeItem(HISTORY_KEY);
+        }
+    }, [persistRecentHistory]);
     const handleInstallFFmpeg = async () => {
         setIsInstallingFFmpeg(true);
         setFfmpegInstallProgress(0);
@@ -291,14 +324,6 @@ function App() {
             setFfmpegInstallStatus("");
         }
     };
-    const saveHistory = (history: HistoryItem[]) => {
-        try {
-            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-        }
-        catch (err) {
-            console.error("Failed to save history:", err);
-        }
-    };
     const addToHistory = (item: Omit<HistoryItem, "id" | "timestamp">) => {
         setFetchHistory((prev) => {
             const normalizedUrl = normalizeHistoryURL(item.url);
@@ -310,15 +335,17 @@ function App() {
                 id: crypto.randomUUID(),
                 timestamp: Date.now(),
             };
-            const updated = [newItem, ...filtered].slice(0, MAX_HISTORY);
-            saveHistory(updated);
+            const updated = normalizeHistoryItems([newItem, ...filtered]);
+            void persistRecentHistory(updated);
             return updated;
         });
     };
     const removeFromHistory = (id: string) => {
         setFetchHistory((prev) => {
+            if (!prev.some((h) => h.id === id))
+                return prev;
             const updated = prev.filter((h) => h.id !== id);
-            saveHistory(updated);
+            void persistRecentHistory(updated);
             return updated;
         });
     };
@@ -445,11 +472,16 @@ function App() {
         if ("track" in metadata.metadata) {
             const { track } = metadata.metadata;
             const trackId = track.spotify_id || "";
-            return (<TrackInfo track={track} isDownloading={download.isDownloading} downloadingTrack={download.downloadingTrack} isDownloaded={download.downloadedTracks.has(trackId)} isFailed={download.failedTracks.has(trackId)} isSkipped={download.skippedTracks.has(trackId)} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingCover={cover.downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)} downloadedCover={cover.downloadedCovers.has(track.spotify_id || "")} failedCover={cover.failedCovers.has(track.spotify_id || "")} skippedCover={cover.skippedCovers.has(track.spotify_id || "")} onDownload={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, undefined, undefined, undefined, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _isArtistDiscography, _position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, undefined, undefined, undefined, trackId, albumArtist, releaseDate, discNumber)} onOpenFolder={handleOpenFolder} onBack={metadata.resetMetadata}/>);
+            return (<TrackInfo track={track} isDownloading={download.isDownloading} downloadingTrack={download.downloadingTrack} isDownloaded={download.downloadedTracks.has(trackId)} isFailed={download.failedTracks.has(trackId)} isSkipped={download.skippedTracks.has(trackId)} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingCover={cover.downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)} downloadedCover={cover.downloadedCovers.has(track.spotify_id || "")} failedCover={cover.failedCovers.has(track.spotify_id || "")} skippedCover={cover.skippedCovers.has(track.spotify_id || "")} onDownload={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, undefined, undefined, undefined, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _isArtistDiscography, _position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, undefined, undefined, undefined, trackId, albumArtist, releaseDate, discNumber)} onOpenFolder={handleOpenFolder} onAlbumClick={metadata.handleAlbumClick} onArtistClick={async (artist) => {
+                    const artistUrl = await metadata.handleArtistClick(artist);
+                    if (artistUrl) {
+                        setSpotifyUrl(artistUrl);
+                    }
+                }} onBack={metadata.resetMetadata}/>);
         }
         if ("album_info" in metadata.metadata) {
             const { album_info, track_list } = metadata.metadata;
-            return (<AlbumInfo albumInfo={album_info} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, false, position, albumArtist, releaseDate, discNumber, true)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, false, position, trackId, albumArtist, releaseDate, discNumber, true)} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, album_info.name, undefined, true)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name, undefined, true)} onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name, true)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, album_info.name, true)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onPageChange={setCurrentListPage} onBack={metadata.resetMetadata} onArtistClick={handleArtistNavigation} onTrackClick={async (track) => {
+            return (<AlbumInfo albumInfo={album_info} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isMetadataLoading={metadata.loading} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, false, position, albumArtist, releaseDate, discNumber, true)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, false, position, trackId, albumArtist, releaseDate, discNumber, true)} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, album_info.name, undefined, true)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name, undefined, true)} onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name, true)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, album_info.name, true)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onPageChange={setCurrentListPage} onBack={metadata.resetMetadata} onArtistClick={handleArtistNavigation} onTrackClick={async (track) => {
                     if (track.external_urls) {
                         setSpotifyUrl(track.external_urls);
                         await metadata.handleFetchMetadata(track.external_urls);
@@ -458,7 +490,9 @@ function App() {
         }
         if ("playlist_info" in metadata.metadata) {
             const { playlist_info, track_list } = metadata.metadata;
-            return (<PlaylistInfo playlistInfo={playlist_info} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name, false, position, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlist_info.owner.name, false, position, trackId, albumArtist, releaseDate, discNumber)} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, playlist_info.owner.name)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlist_info.owner.name)} onDownloadAll={() => download.handleDownloadAll(track_list, playlist_info.owner.name)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, playlist_info.owner.name)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onPageChange={setCurrentListPage} onBack={metadata.resetMetadata} onAlbumClick={metadata.handleAlbumClick} onArtistClick={handleArtistNavigation} onTrackClick={async (track) => {
+            const settings = getSettings();
+            const playlistFolderName = buildPlaylistFolderName(playlist_info.owner.name, playlist_info.owner.display_name, settings.playlistOwnerFolderName);
+            return (<PlaylistInfo playlistInfo={playlist_info} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} isMetadataLoading={metadata.loading} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlistFolderName, false, position, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlistFolderName, false, position, trackId, albumArtist, releaseDate, discNumber)} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, playlistFolderName)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlistFolderName)} onDownloadAll={() => download.handleDownloadAll(track_list, playlistFolderName)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, playlistFolderName)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onPageChange={setCurrentListPage} onBack={metadata.resetMetadata} onAlbumClick={metadata.handleAlbumClick} onArtistClick={handleArtistNavigation} onTrackClick={async (track) => {
                     if (track.external_urls) {
                         setSpotifyUrl(track.external_urls);
                         await metadata.handleFetchMetadata(track.external_urls);
@@ -467,7 +501,7 @@ function App() {
         }
         if ("artist_info" in metadata.metadata) {
             const { artist_info, album_list, track_list } = metadata.metadata;
-            return (<ArtistInfo artistInfo={artist_info} albumList={album_list} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography, position, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber)} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, artist_info.name, true)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, artist_info.name, true)} onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name, true)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, artist_info.name, true)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onAlbumClick={metadata.handleAlbumClick} onArtistClick={handleArtistNavigation} onPageChange={setCurrentListPage} onBack={metadata.resetMetadata} onTrackClick={async (track) => {
+            return (<ArtistInfo artistInfo={artist_info} albumList={album_list} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} isMetadataLoading={metadata.loading} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography, position, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber)} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, artist_info.name, true)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, artist_info.name, true)} onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name, true)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, artist_info.name, true)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onAlbumClick={metadata.handleAlbumClick} onArtistClick={handleArtistNavigation} onPageChange={setCurrentListPage} onBack={metadata.resetMetadata} onTrackClick={async (track) => {
                     if (track.external_urls) {
                         setSpotifyUrl(track.external_urls);
                         await metadata.handleFetchMetadata(track.external_urls);
@@ -642,8 +676,9 @@ function App() {
                             FFmpeg Required
                         </DialogTitle>
                         <DialogDescription className="text-sm text-foreground/70 leading-relaxed font-normal">
-                            FFmpeg is essential for SpotiDownloader to function properly.
-                            This setup will download about <span className="text-foreground font-semibold">100-200MB</span> of data.
+                            SpotiDownloader checks your system for FFmpeg and FFprobe first.
+                            If they are not available, the required binaries will be downloaded from GitHub.
+                            This setup downloads about <span className="text-foreground font-semibold">30-40MB</span> of data.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -682,20 +717,29 @@ function App() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={metadata.showApiModal} onOpenChange={metadata.setShowApiModal}>
-                <DialogContent className="sm:max-w-[425px]">
+            <Dialog open={metadata.showVpnAdviceDialog} onOpenChange={metadata.setShowVpnAdviceDialog}>
+                <DialogContent className="max-w-md [&>button]:hidden">
                     <DialogHeader>
-                        <DialogTitle>SpotFetch API Recommended</DialogTitle>
-                        <DialogDescription>
-                            Direct fetch failed. This usually happens when your <span className="text-foreground font-bold">country is blocked</span> by Spotify or your IP is restricted. Would you like to enable the <span className="text-foreground font-bold">SpotFetch API</span> to bypass this?
+                        <DialogTitle>Fetch Failed</DialogTitle>
+                        <DialogDescription className="space-y-3">
+                            <span className="block">
+                                Metadata fetch failed. Try using a high-quality VPN such as
+                                Surfshark, ExpressVPN, Proton VPN, or a similar service.
+                            </span>
+                            <span className="block">
+                                Choose a location that is not blocked by Spotify or the
+                                related service, such as the USA, UK, Germany, Netherlands,
+                                or Singapore.
+                            </span>
+                            <span className="block">
+                                If you are already using a VPN, try switching to another
+                                server and fetch again.
+                            </span>
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => metadata.setShowApiModal(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleEnableSpotFetchApi}>
-                            Enable SpotFetch API
+                        <Button onClick={() => metadata.setShowVpnAdviceDialog(false)}>
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>

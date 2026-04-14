@@ -38,7 +38,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         }
     };
     const handleOpenIssues = () => {
-        openExternal("https://github.com/afkarxyz/SpotiDownloader/issues");
+        openExternal("https://github.com/spotbye/SpotiDownloader/issues");
         handleIssuesDialogChange(false);
     };
     const getAnimatedItemHandlers = <T extends AnimatedIconHandle>(iconRef: RefObject<T | null>) => ({

@@ -11,10 +11,15 @@ import (
 )
 
 func BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate string, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool, playlistName, playlistOwner string) string {
+	return buildFormattedFilenameBase(trackName, artistName, albumName, albumArtist, releaseDate, discNumber, format, includeTrackNumber, position, useAlbumTrackNumber, playlistName, playlistOwner, "")
+}
+
+func buildFormattedFilenameBase(trackName, artistName, albumName, albumArtist, releaseDate string, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool, playlistName, playlistOwner string, isrc string) string {
 	safeTitle := SanitizeFilename(trackName)
 	safeArtist := SanitizeFilename(artistName)
 	safeAlbum := SanitizeFilename(albumName)
 	safeAlbumArtist := SanitizeFilename(albumArtist)
+	safeISRC := SanitizeOptionalFilename(isrc)
 
 	safePlaylist := SanitizeFilename(playlistName)
 	safeCreator := SanitizeFilename(playlistOwner)
@@ -36,6 +41,7 @@ func BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate st
 		filename = strings.ReplaceAll(filename, "{date}", SanitizeFilename(releaseDate))
 		filename = strings.ReplaceAll(filename, "{playlist}", safePlaylist)
 		filename = strings.ReplaceAll(filename, "{creator}", safeCreator)
+		filename = strings.ReplaceAll(filename, "{isrc}", safeISRC)
 
 		if discNumber > 0 {
 			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
@@ -68,6 +74,41 @@ func BuildFilename(trackName, artistName, albumName, albumArtist, releaseDate st
 	}
 
 	return filename
+}
+
+func BuildFilenameWithISRC(trackName, artistName, albumName, albumArtist, releaseDate string, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool, playlistName, playlistOwner, isrc string) string {
+	return buildFormattedFilenameBase(trackName, artistName, albumName, albumArtist, releaseDate, discNumber, format, includeTrackNumber, position, useAlbumTrackNumber, playlistName, playlistOwner, isrc)
+}
+
+func ResolveOutputPathForDownload(path string, redownloadWithSuffix bool) (string, bool) {
+	if !redownloadWithSuffix {
+		if info, err := os.Stat(path); err == nil && info.Size() > 0 {
+			return path, true
+		}
+		return path, false
+	}
+
+	if info, err := os.Stat(path); err != nil || info.Size() == 0 {
+		return path, false
+	}
+
+	ext := filepath.Ext(path)
+	base := strings.TrimSuffix(path, ext)
+
+	for i := 1; ; i++ {
+		candidate := fmt.Sprintf("%s_%02d%s", base, i, ext)
+		if info, err := os.Stat(candidate); err != nil || info.Size() == 0 {
+			return candidate, false
+		}
+	}
+}
+
+func mustFileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 func SanitizeFilename(filename string) string {
@@ -190,6 +231,14 @@ func SanitizeFolderPath(folderPath string) string {
 }
 
 func sanitizeFolderName(name string) string {
+
+	return SanitizeFilename(name)
+}
+
+func SanitizeOptionalFilename(name string) string {
+	if strings.TrimSpace(name) == "" {
+		return ""
+	}
 
 	return SanitizeFilename(name)
 }

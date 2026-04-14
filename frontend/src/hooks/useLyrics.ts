@@ -5,6 +5,26 @@ import { getSettingsWithDefaults, parseTemplate, type TemplateData } from "@/lib
 import { joinPath, sanitizePath, getFirstArtist } from "@/lib/utils";
 import type { TrackMetadata } from "@/types/api";
 import { logger } from "@/lib/logger";
+const GetTrackISRC = (spotifyId: string): Promise<string> => (window as any)["go"]["main"]["App"]["GetTrackISRC"](spotifyId);
+async function resolveTemplateISRC(settings: {
+    folderTemplate?: string;
+    filenameTemplate?: string;
+}, spotifyId?: string): Promise<string> {
+    if (!spotifyId) {
+        return "";
+    }
+    const folderTemplate = settings.folderTemplate || "";
+    const filenameTemplate = settings.filenameTemplate || "";
+    if (!folderTemplate.includes("{isrc}") && !filenameTemplate.includes("{isrc}")) {
+        return "";
+    }
+    try {
+        return await GetTrackISRC(spotifyId);
+    }
+    catch {
+        return "";
+    }
+}
 export const useLyrics = () => {
     const [downloadingLyricsTrack, setDownloadingLyricsTrack] = useState<string | null>(null);
     const [downloadedLyrics, setDownloadedLyrics] = useState<Set<string>>(new Set());
@@ -28,11 +48,13 @@ export const useLyrics = () => {
             const yearValue = releaseDate?.substring(0, 4);
             const displayArtist = settings.useFirstArtistOnly && artistName ? getFirstArtist(artistName) : artistName;
             const displayAlbumArtist = settings.useFirstArtistOnly && albumArtist ? getFirstArtist(albumArtist) : albumArtist;
+            const resolvedTemplateISRC = await resolveTemplateISRC(settings, spotifyId);
             const templateData: TemplateData = {
                 artist: displayArtist?.replace(/\//g, placeholder),
                 album: albumName?.replace(/\//g, placeholder),
                 album_artist: displayAlbumArtist?.replace(/\//g, placeholder) || displayArtist?.replace(/\//g, placeholder),
                 title: trackName?.replace(/\//g, placeholder),
+                isrc: resolvedTemplateISRC?.replace(/\//g, placeholder),
                 track: position,
                 year: yearValue,
                 date: releaseDate,
@@ -61,6 +83,7 @@ export const useLyrics = () => {
                 album_name: albumName || "",
                 album_artist: displayAlbumArtist || "",
                 release_date: releaseDate || "",
+                isrc: resolvedTemplateISRC || undefined,
                 output_dir: outputDir,
                 filename_format: settings.filenameTemplate || "{title}",
                 track_number: settings.trackNumber,
@@ -129,11 +152,13 @@ export const useLyrics = () => {
                 const yearValue = track.release_date?.substring(0, 4);
                 const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
                 const displayAlbumArtist = settings.useFirstArtistOnly && track.album_artist ? getFirstArtist(track.album_artist) : track.album_artist;
+                const resolvedTemplateISRC = await resolveTemplateISRC(settings, id);
                 const templateData: TemplateData = {
                     artist: displayArtist?.replace(/\//g, placeholder),
                     album: track.album_name?.replace(/\//g, placeholder),
                     album_artist: displayAlbumArtist?.replace(/\//g, placeholder) || displayArtist?.replace(/\//g, placeholder),
                     title: track.name?.replace(/\//g, placeholder),
+                    isrc: resolvedTemplateISRC?.replace(/\//g, placeholder),
                     track: trackPosition,
                     year: yearValue,
                     date: track.release_date,
@@ -161,6 +186,7 @@ export const useLyrics = () => {
                     album_name: track.album_name || "",
                     album_artist: displayAlbumArtist || "",
                     release_date: track.release_date || "",
+                    isrc: resolvedTemplateISRC || undefined,
                     output_dir: outputDir,
                     filename_format: settings.filenameTemplate || "{title}",
                     track_number: settings.trackNumber,

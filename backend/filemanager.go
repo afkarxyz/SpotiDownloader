@@ -30,6 +30,8 @@ type AudioMetadata struct {
 	TrackNumber int    `json:"track_number"`
 	DiscNumber  int    `json:"disc_number"`
 	Year        string `json:"year"`
+	ISRC        string `json:"isrc"`
+	UPC         string `json:"upc"`
 }
 
 type RenamePreview struct {
@@ -175,6 +177,12 @@ func readFlacMetadata(filePath string) (*AudioMetadata, error) {
 					}
 				case "DATE", "YEAR":
 					metadata.Year = value
+				case "ISRC", "TSRC":
+					metadata.ISRC = value
+				case "UPC":
+					assignPreferredUPC(&metadata.UPC, value, true)
+				case "BARCODE":
+					assignPreferredUPC(&metadata.UPC, value, false)
 				}
 			}
 		}
@@ -217,6 +225,28 @@ func readMp3Metadata(filePath string) (*AudioMetadata, error) {
 			discStr := strings.Split(textFrame.Text, "/")[0]
 			if num, err := strconv.Atoi(discStr); err == nil {
 				metadata.DiscNumber = num
+			}
+		}
+	}
+
+	if frames := tag.GetFrames("TSRC"); len(frames) > 0 {
+		if textFrame, ok := frames[0].(id3v2.TextFrame); ok {
+			metadata.ISRC = textFrame.Text
+		}
+	}
+	if frames := tag.GetFrames("TXXX"); len(frames) > 0 {
+		for _, frame := range frames {
+			userTextFrame, ok := frame.(id3v2.UserDefinedTextFrame)
+			if !ok {
+				continue
+			}
+			matched, preferred := classifyUPCDescription(userTextFrame.Description)
+			if !matched {
+				continue
+			}
+			assignPreferredUPC(&metadata.UPC, userTextFrame.Value, preferred)
+			if preferred && strings.TrimSpace(metadata.UPC) != "" {
+				break
 			}
 		}
 	}
@@ -297,8 +327,12 @@ func readMetadataWithFFprobe(filePath string) (*AudioMetadata, error) {
 			if metadata.Year == "" || len(value) > len(metadata.Year) {
 				metadata.Year = value
 			}
+		case "isrc", "tsrc":
+			metadata.ISRC = value
 		}
 	}
+
+	metadata.UPC = firstPreferredFFprobeUPCValue(allTags)
 
 	return metadata, nil
 }
@@ -329,6 +363,7 @@ func GenerateFilename(metadata *AudioMetadata, format string, ext string) string
 	result = strings.ReplaceAll(result, "{album_artist}", sanitizeFilename(metadata.AlbumArtist))
 	result = strings.ReplaceAll(result, "{year}", sanitizeFilename(year))
 	result = strings.ReplaceAll(result, "{date}", sanitizeFilename(metadata.Year))
+	result = strings.ReplaceAll(result, "{isrc}", sanitizeFilename(metadata.ISRC))
 
 	if metadata.TrackNumber > 0 {
 		result = strings.ReplaceAll(result, "{track}", fmt.Sprintf("%02d", metadata.TrackNumber))

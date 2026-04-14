@@ -158,6 +158,9 @@ func (s *SpotiDownloader) DownloadTrack(
 	totalDiscs int,
 	copyright string,
 	publisher string,
+	composer string,
+	metadataSeparator string,
+	isrcOverride string,
 	playlistName string,
 	playlistOwner string,
 	useFirstArtistOnly bool,
@@ -199,13 +202,14 @@ func (s *SpotiDownloader) DownloadTrack(
 		filenameAlbumArtist = GetFirstArtist(albumArtist)
 	}
 
-	filename := BuildFilename(trackName, filenameArtist, albumName, filenameAlbumArtist, releaseDate, discNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber, playlistName, playlistOwner)
+	filename := BuildFilenameWithISRC(trackName, filenameArtist, albumName, filenameAlbumArtist, releaseDate, discNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber, playlistName, playlistOwner, isrcOverride)
 	filename = SanitizeFilename(filename) + fileExt
 
 	outputPath := filepath.Join(outputDir, filename)
 
-	if fileInfo, err := os.Stat(outputPath); err == nil && fileInfo.Size() > 0 {
-		fmt.Printf("File already exists: %s (%.2f MB)\n", outputPath, float64(fileInfo.Size())/(1024*1024))
+	outputPath, alreadyExists := ResolveOutputPathForDownload(outputPath, GetRedownloadWithSuffixSetting())
+	if alreadyExists {
+		fmt.Printf("File already exists: %s (%.2f MB)\n", outputPath, float64(mustFileSize(outputPath))/(1024*1024))
 		return "EXISTS:" + outputPath, nil
 	}
 
@@ -222,13 +226,17 @@ func (s *SpotiDownloader) DownloadTrack(
 			if val, err := client.GetISRCDirect(trackID); err == nil {
 				res.ISRC = val
 				if val != "" {
-					fmt.Println("Fetching MusicBrainz metadata...")
-
-					if fetchedMeta, err := FetchMusicBrainzMetadata(val, trackName, artistName, albumName, useSingleGenre, embedGenre); err == nil {
-						res.Metadata = fetchedMeta
-						fmt.Println("✓ MusicBrainz metadata fetched")
+					if ShouldSkipMusicBrainzMetadataFetch() {
+						fmt.Println("Skipping MusicBrainz metadata fetch because status check is offline.")
 					} else {
-						fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+						fmt.Println("Fetching MusicBrainz metadata...")
+
+						if fetchedMeta, err := FetchMusicBrainzMetadata(val, trackName, artistName, albumName, useSingleGenre, embedGenre); err == nil {
+							res.Metadata = fetchedMeta
+							fmt.Println("✓ MusicBrainz metadata fetched")
+						} else {
+							fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+						}
 					}
 				}
 			} else {
@@ -260,7 +268,10 @@ func (s *SpotiDownloader) DownloadTrack(
 	}
 
 	result := <-metaChan
-	isrc := result.ISRC
+	isrc := strings.TrimSpace(isrcOverride)
+	if isrc == "" {
+		isrc = result.ISRC
+	}
 	mbMeta := result.Metadata
 	resolvedReleaseDate := strings.TrimSpace(releaseDate)
 	resolvedGenre := strings.TrimSpace(mbMeta.Genre)
@@ -274,6 +285,14 @@ func (s *SpotiDownloader) DownloadTrack(
 
 	if isrc != "" {
 		fmt.Printf("Found ISRC: %s\n", isrc)
+	}
+
+	upc := ""
+	if identifiers, err := GetSpotifyTrackIdentifiersDirect(trackID); err == nil || identifiers.ISRC != "" || identifiers.UPC != "" {
+		if strings.TrimSpace(isrc) == "" && strings.TrimSpace(identifiers.ISRC) != "" {
+			isrc = strings.TrimSpace(identifiers.ISRC)
+		}
+		upc = strings.TrimSpace(identifiers.UPC)
 	}
 
 	spotifyTrackURL := fmt.Sprintf("https://open.spotify.com/track/%s", trackID)
@@ -291,8 +310,11 @@ func (s *SpotiDownloader) DownloadTrack(
 		Comment:     spotifyTrackURL,
 		Copyright:   copyright,
 		Publisher:   publisher,
-		Description: "https://github.com/afkarxyz/SpotiDownloader",
+		Composer:    composer,
+		Separator:   metadataSeparator,
+		Description: "https://github.com/spotbye/SpotiDownloader",
 		ISRC:        isrc,
+		UPC:         upc,
 		Genre:       resolvedGenre,
 	}
 

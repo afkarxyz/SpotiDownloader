@@ -2,16 +2,77 @@ package backend
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
 var AppVersion = "Unknown"
 
-const musicBrainzAPIBase = "https://musicbrainz.org/ws/2"
+const (
+	musicBrainzAPIBase               = "https://musicbrainz.org/ws/2"
+	musicBrainzRequestTimeout        = 10 * time.Second
+	musicBrainzRequestRetries        = 3
+	musicBrainzRequestRetryWait      = 3 * time.Second
+	musicBrainzMinRequestInterval    = 1100 * time.Millisecond
+	musicBrainzThrottleCooldownOn503 = 5 * time.Second
+	musicBrainzStatusCheckSkipWindow = 5 * time.Minute
+)
+
+type musicBrainzStatusError struct {
+	StatusCode int
+}
+
+func (e *musicBrainzStatusError) Error() string {
+	return fmt.Sprintf("MusicBrainz API returned status: %d", e.StatusCode)
+}
+
+type musicBrainzInflightCall struct {
+	done   chan struct{}
+	result Metadata
+	err    error
+}
+
+var (
+	musicBrainzCache      sync.Map
+	musicBrainzInflightMu sync.Mutex
+	musicBrainzInflight   = make(map[string]*musicBrainzInflightCall)
+
+	musicBrainzThrottleMu  sync.Mutex
+	musicBrainzNextRequest time.Time
+	musicBrainzBlockedTill time.Time
+
+	musicBrainzStatusMu          sync.RWMutex
+	musicBrainzLastCheckedAt     time.Time
+	musicBrainzLastCheckedOnline bool
+)
+
+func SetMusicBrainzStatusCheckResult(online bool) {
+	musicBrainzStatusMu.Lock()
+	defer musicBrainzStatusMu.Unlock()
+
+	musicBrainzLastCheckedAt = time.Now()
+	musicBrainzLastCheckedOnline = online
+}
+
+func ShouldSkipMusicBrainzMetadataFetch() bool {
+	musicBrainzStatusMu.RLock()
+	defer musicBrainzStatusMu.RUnlock()
+
+	if musicBrainzLastCheckedAt.IsZero() {
+		return false
+	}
+
+	if musicBrainzLastCheckedOnline {
+		return false
+	}
+
+	return time.Since(musicBrainzLastCheckedAt) <= musicBrainzStatusCheckSkipWindow
+}
 
 type MusicBrainzRecordingResponse struct {
 	Recordings []struct {
@@ -51,6 +112,68 @@ type MusicBrainzRecordingResponse struct {
 	} `json:"recordings"`
 }
 
+func musicBrainzCacheKey(isrc, title, artist string, useSingleGenre bool) string {
+	separator := strings.TrimSpace(GetSeparator())
+	if separator == "" {
+		separator = ";"
+	}
+
+	if normalizedISRC := strings.ToUpper(strings.TrimSpace(isrc)); normalizedISRC != "" {
+		return "isrc:" + normalizedISRC + "|" + fmt.Sprintf("%t", useSingleGenre) + "|" + separator
+	}
+
+	return "title:" + strings.ToLower(strings.TrimSpace(title)) + "|artist:" + strings.ToLower(strings.TrimSpace(artist)) + "|" + fmt.Sprintf("%t", useSingleGenre) + "|" + separator
+}
+
+func waitForMusicBrainzRequestSlot() {
+	musicBrainzThrottleMu.Lock()
+
+	readyAt := musicBrainzNextRequest
+	if musicBrainzBlockedTill.After(readyAt) {
+		readyAt = musicBrainzBlockedTill
+	}
+
+	now := time.Now()
+	if readyAt.Before(now) {
+		readyAt = now
+	}
+
+	musicBrainzNextRequest = readyAt.Add(musicBrainzMinRequestInterval)
+	waitDuration := time.Until(readyAt)
+
+	musicBrainzThrottleMu.Unlock()
+
+	if waitDuration > 0 {
+		time.Sleep(waitDuration)
+	}
+}
+
+func noteMusicBrainzThrottle() {
+	musicBrainzThrottleMu.Lock()
+	defer musicBrainzThrottleMu.Unlock()
+
+	cooldownUntil := time.Now().Add(musicBrainzThrottleCooldownOn503)
+	if cooldownUntil.After(musicBrainzBlockedTill) {
+		musicBrainzBlockedTill = cooldownUntil
+	}
+	if musicBrainzNextRequest.Before(musicBrainzBlockedTill) {
+		musicBrainzNextRequest = musicBrainzBlockedTill
+	}
+}
+
+func shouldRetryMusicBrainzRequest(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var statusErr *musicBrainzStatusError
+	if !errors.As(err, &statusErr) {
+		return true
+	}
+
+	return statusErr.StatusCode == http.StatusServiceUnavailable || statusErr.StatusCode >= http.StatusInternalServerError
+}
+
 func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre bool, embedGenre bool) (Metadata, error) {
 	var meta Metadata
 
@@ -58,7 +181,38 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 		return meta, nil
 	}
 
-	client := newHTTPClient(10 * time.Second)
+	cacheKey := musicBrainzCacheKey(isrc, title, artist, useSingleGenre)
+	if cached, ok := musicBrainzCache.Load(cacheKey); ok {
+		return cached.(Metadata), nil
+	}
+
+	if ShouldSkipMusicBrainzMetadataFetch() {
+		return meta, fmt.Errorf("skipping MusicBrainz lookup because the latest status check reported offline")
+	}
+
+	musicBrainzInflightMu.Lock()
+	if call, ok := musicBrainzInflight[cacheKey]; ok {
+		musicBrainzInflightMu.Unlock()
+		<-call.done
+		return call.result, call.err
+	}
+
+	call := &musicBrainzInflightCall{done: make(chan struct{})}
+	musicBrainzInflight[cacheKey] = call
+	musicBrainzInflightMu.Unlock()
+
+	var resultErr error
+	defer func() {
+		call.result = meta
+		call.err = resultErr
+
+		musicBrainzInflightMu.Lock()
+		delete(musicBrainzInflight, cacheKey)
+		close(call.done)
+		musicBrainzInflightMu.Unlock()
+	}()
+
+	client := newHTTPClient(musicBrainzRequestTimeout)
 
 	queries := make([]string, 0, 2)
 	if strings.TrimSpace(isrc) != "" {
@@ -73,7 +227,8 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 	}
 
 	if len(queries) == 0 {
-		return meta, fmt.Errorf("no query source available for genre lookup")
+		resultErr = fmt.Errorf("no query source available for genre lookup")
+		return meta, resultErr
 	}
 
 	var recording *struct {
@@ -111,11 +266,13 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 			Name  string `json:"name"`
 		} `json:"tags"`
 	}
+	var lastLookupErr error
 
 	for _, query := range queries {
 		mbResp, err := queryMusicBrainzRecordings(client, query)
 		if err != nil {
-			continue
+			lastLookupErr = err
+			break
 		}
 		if len(mbResp.Recordings) == 0 {
 			continue
@@ -139,7 +296,18 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 	}
 
 	if recording == nil {
-		return meta, fmt.Errorf("no recordings found for provided query")
+		if lastLookupErr != nil {
+			resultErr = lastLookupErr
+			return meta, resultErr
+		}
+
+		resultErr = fmt.Errorf("no recordings found for provided query")
+		return meta, resultErr
+	}
+
+	if lastLookupErr != nil && len(recording.Tags) == 0 {
+		resultErr = lastLookupErr
+		return meta, resultErr
 	}
 
 	var genres []string
@@ -170,8 +338,11 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 	}
 
 	if meta.Genre == "" {
-		return meta, fmt.Errorf("no genre tags found in MusicBrainz")
+		resultErr = fmt.Errorf("no genre tags found in MusicBrainz")
+		return meta, resultErr
 	}
+
+	musicBrainzCache.Store(cacheKey, meta)
 
 	return meta, nil
 }
@@ -183,44 +354,51 @@ func escapeMusicBrainzQuery(s string) string {
 func queryMusicBrainzRecordings(client *http.Client, query string) (*MusicBrainzRecordingResponse, error) {
 	reqURL := fmt.Sprintf("%s/recording?query=%s&fmt=json&inc=releases+artist-credits+tags+media+release-groups+labels", musicBrainzAPIBase, url.QueryEscape(query))
 
-	req, err := http.NewRequest("GET", reqURL, nil)
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", fmt.Sprintf("SpotiDownloader/%s ( hi@afkarxyz.qzz.io )", AppVersion))
+	req.Header.Set("Accept", "application/json")
 
-	var resp *http.Response
 	var lastErr error
-	for i := 0; i < 3; i++ {
-		resp, lastErr = client.Do(req)
-		if lastErr == nil && resp.StatusCode == http.StatusOK {
-			break
+	for attempt := 0; attempt < musicBrainzRequestRetries; attempt++ {
+		waitForMusicBrainzRequestSlot()
+
+		resp, err := client.Do(req)
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+
+			var mbResp MusicBrainzRecordingResponse
+			if decodeErr := json.NewDecoder(resp.Body).Decode(&mbResp); decodeErr != nil {
+				return nil, decodeErr
+			}
+			return &mbResp, nil
 		}
 
-		if resp != nil {
+		if err != nil {
+			lastErr = err
+		} else if resp == nil {
+			lastErr = fmt.Errorf("empty response from MusicBrainz")
+		} else {
+			if resp.StatusCode == http.StatusServiceUnavailable {
+				noteMusicBrainzThrottle()
+			}
+			lastErr = &musicBrainzStatusError{StatusCode: resp.StatusCode}
 			resp.Body.Close()
 		}
 
-		if i < 2 {
-			time.Sleep(2 * time.Second)
+		if attempt < musicBrainzRequestRetries-1 && shouldRetryMusicBrainzRequest(lastErr) {
+			time.Sleep(musicBrainzRequestRetryWait)
+			continue
 		}
+
+		break
 	}
 
-	if lastErr != nil {
-		return nil, lastErr
-	}
-	if resp == nil {
-		return nil, fmt.Errorf("empty response from MusicBrainz")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("MusicBrainz API returned status: %d", resp.StatusCode)
+	if lastErr == nil {
+		lastErr = fmt.Errorf("empty response from MusicBrainz")
 	}
 
-	var mbResp MusicBrainzRecordingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&mbResp); err != nil {
-		return nil, err
-	}
-	return &mbResp, nil
+	return nil, lastErr
 }

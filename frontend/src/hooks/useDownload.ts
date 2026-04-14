@@ -14,6 +14,7 @@ interface CheckFileExistenceRequest {
     album_name?: string;
     album_artist?: string;
     release_date?: string;
+    isrc?: string;
     track_number?: number;
     disc_number?: number;
     position?: number;
@@ -46,6 +47,32 @@ function normalizeReleaseDate(releaseDate?: string): string {
 function getReleaseYear(releaseDate?: string): string {
     const normalizedReleaseDate = normalizeReleaseDate(releaseDate);
     return normalizedReleaseDate.length >= 4 ? normalizedReleaseDate.slice(0, 4) : "";
+}
+const GetTrackISRC = (spotifyId: string): Promise<string> => (window as any)["go"]["main"]["App"]["GetTrackISRC"](spotifyId);
+function templateNeedsISRC(settings: Settings): boolean {
+    const folderTemplate = settings.folderTemplate || "";
+    const filenameTemplate = settings.filenameTemplate || "";
+    return folderTemplate.includes("{isrc}") || filenameTemplate.includes("{isrc}");
+}
+async function enrichTrackISRC(track: TrackMetadata, settings: Settings): Promise<TrackMetadata> {
+    if (!templateNeedsISRC(settings) || track.isrc || !track.spotify_id) {
+        return track;
+    }
+    try {
+        const isrc = await GetTrackISRC(track.spotify_id);
+        if (isrc) {
+            return { ...track, isrc };
+        }
+    }
+    catch {
+    }
+    return track;
+}
+async function enrichTracksISRC(tracks: TrackMetadata[], settings: Settings): Promise<TrackMetadata[]> {
+    if (!templateNeedsISRC(settings)) {
+        return tracks;
+    }
+    return await Promise.all(tracks.map((track) => enrichTrackISRC(track, settings)));
 }
 function folderTemplateNeedsReleaseDate(settings: Settings): boolean {
     const folderTemplate = settings.folderTemplate || "";
@@ -105,6 +132,7 @@ function buildBatchTrackPathInfo(track: TrackMetadata, settings: Settings, playl
         album: (track.album_name || "").replace(/\//g, placeholder),
         album_artist: displayAlbumArtist.replace(/\//g, placeholder),
         title: (track.name || "").replace(/\//g, placeholder),
+        isrc: track.isrc?.replace(/\//g, placeholder),
         track: trackPosition,
         disc: track.disc_number,
         year: getReleaseYear(track.release_date),
@@ -164,15 +192,16 @@ export function useDownload() {
         return msg.includes("unauthorized") || msg.includes("403") || msg.includes("401") || msg.includes("err_unauthorized");
     };
     const downloadWithSpotiDownloader = async (track: TrackMetadata, settings: Settings, playlistName?: string, position?: number, retryCount: number = 0, isAlbum?: boolean, releaseYear?: string) => {
+        const enrichedTrack = await enrichTrackISRC(track, settings);
         const os = settings.operatingSystem;
         let outputDir = settings.downloadPath;
         let useAlbumTrackNumber = false;
         const placeholder = "__SLASH_PLACEHOLDER__";
-        let finalReleaseDate = normalizeReleaseDate(track.release_date);
-        let finalTrackNumber = track.track_number;
-        if (track.spotify_id) {
+        let finalReleaseDate = normalizeReleaseDate(enrichedTrack.release_date);
+        let finalTrackNumber = enrichedTrack.track_number;
+        if (enrichedTrack.spotify_id) {
             try {
-                const trackURL = `https://open.spotify.com/track/${track.spotify_id}`;
+                const trackURL = `https://open.spotify.com/track/${enrichedTrack.spotify_id}`;
                 const trackMetadata = await fetchSpotifyMetadata(trackURL, false, 0, 10);
                 if ("track" in trackMetadata && trackMetadata.track) {
                     if (trackMetadata.track.release_date) {
@@ -186,28 +215,29 @@ export function useDownload() {
             catch {
             }
         }
-        const resolvedReleaseDate = finalReleaseDate || normalizeReleaseDate(track.release_date);
+        const resolvedReleaseDate = finalReleaseDate || normalizeReleaseDate(enrichedTrack.release_date);
         const yearValue = releaseYear || getReleaseYear(resolvedReleaseDate);
         const hasSubfolder = settings.folderTemplate && settings.folderTemplate.trim() !== "";
         const trackNumberForTemplate = hasSubfolder && finalTrackNumber > 0 ? finalTrackNumber : position || 0;
         if (hasSubfolder) {
             useAlbumTrackNumber = true;
         }
-        const displayArtist = settings.useFirstArtistOnly && track.artists
-            ? getFirstArtist(track.artists)
-            : track.artists;
-        const displayAlbumArtist = settings.useFirstArtistOnly && track.album_artist
-            ? getFirstArtist(track.album_artist)
-            : track.album_artist;
+        const displayArtist = settings.useFirstArtistOnly && enrichedTrack.artists
+            ? getFirstArtist(enrichedTrack.artists)
+            : enrichedTrack.artists;
+        const displayAlbumArtist = settings.useFirstArtistOnly && enrichedTrack.album_artist
+            ? getFirstArtist(enrichedTrack.album_artist)
+            : enrichedTrack.album_artist;
         const templateData: TemplateData = {
             artist: displayArtist?.replace(/\//g, placeholder) || undefined,
-            album: track.album_name?.replace(/\//g, placeholder) || undefined,
+            album: enrichedTrack.album_name?.replace(/\//g, placeholder) || undefined,
             album_artist: displayAlbumArtist?.replace(/\//g, placeholder) ||
                 displayArtist?.replace(/\//g, placeholder) ||
                 undefined,
-            title: track.name?.replace(/\//g, placeholder) || undefined,
+            title: enrichedTrack.name?.replace(/\//g, placeholder) || undefined,
+            isrc: enrichedTrack.isrc?.replace(/\//g, placeholder) || undefined,
             track: trackNumberForTemplate,
-            disc: track.disc_number,
+            disc: enrichedTrack.disc_number,
             year: yearValue,
             date: resolvedReleaseDate || undefined,
             playlist: playlistName?.replace(/\//g, placeholder) || undefined,
@@ -231,17 +261,18 @@ export function useDownload() {
                 }
             }
         }
-        if (track.name && track.artists) {
+        if (enrichedTrack.name && enrichedTrack.artists) {
             try {
                 const checkRequest: CheckFileExistenceRequest = {
-                    spotify_id: track.spotify_id || "",
-                    track_name: track.name,
+                    spotify_id: enrichedTrack.spotify_id || "",
+                    track_name: enrichedTrack.name,
                     artist_name: displayArtist || "",
-                    album_name: track.album_name,
+                    album_name: enrichedTrack.album_name,
                     album_artist: displayAlbumArtist,
                     release_date: resolvedReleaseDate || "",
+                    isrc: enrichedTrack.isrc,
                     track_number: finalTrackNumber || 0,
-                    disc_number: track.disc_number || 0,
+                    disc_number: enrichedTrack.disc_number || 0,
                     position: trackNumberForTemplate,
                     use_album_track_number: useAlbumTrackNumber,
                     filename_format: settings.filenameTemplate || "",
@@ -264,22 +295,23 @@ export function useDownload() {
         }
         const sessionToken = await ensureValidToken();
         const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
-        const itemID = await AddToDownloadQueue(track.spotify_id || "", track.name || "", displayArtist || "", track.album_name || "");
+        const itemID = await AddToDownloadQueue(enrichedTrack.spotify_id || "", enrichedTrack.name || "", displayArtist || "", enrichedTrack.album_name || "");
         const response = await downloadTrack({
-            track_id: track.spotify_id || "",
+            track_id: enrichedTrack.spotify_id || "",
             session_token: sessionToken,
-            track_name: track.name,
-            artist_name: track.artists,
-            album_name: track.album_name,
-            album_artist: track.album_artist || track.artists,
+            track_name: enrichedTrack.name,
+            artist_name: enrichedTrack.artists,
+            album_name: enrichedTrack.album_name,
+            album_artist: enrichedTrack.album_artist || enrichedTrack.artists,
             release_date: resolvedReleaseDate,
-            cover_url: track.images,
-            album_track_number: finalTrackNumber || track.track_number,
-            disc_number: track.disc_number,
-            total_tracks: track.total_tracks,
-            spotify_total_discs: track.total_discs,
-            copyright: track.copyright,
-            publisher: track.publisher,
+            cover_url: enrichedTrack.images,
+            album_track_number: finalTrackNumber || enrichedTrack.track_number,
+            disc_number: enrichedTrack.disc_number,
+            total_tracks: enrichedTrack.total_tracks,
+            spotify_total_discs: enrichedTrack.total_discs,
+            isrc: enrichedTrack.isrc,
+            copyright: enrichedTrack.copyright,
+            publisher: enrichedTrack.publisher,
             output_dir: outputDir,
             audio_format: settings.audioFormat,
             filename_format: settings.filenameTemplate,
@@ -320,7 +352,7 @@ export function useDownload() {
         logger.info(`starting download: ${track.name} - ${displayArtist}`);
         setDownloadingTrack(id);
         try {
-            const response = await downloadWithSpotiDownloader(track, settings, playlistName, position, 0, isAlbum);
+            const response = await downloadWithSpotiDownloader(await enrichTrackISRC(track, settings), settings, playlistName, position, 0, isAlbum);
             if (response.success) {
                 if (response.already_exists) {
                     logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
@@ -363,9 +395,9 @@ export function useDownload() {
         setIsDownloading(true);
         setBulkDownloadType("selected");
         setDownloadProgress(0);
-        const selectedTrackObjects = await enrichTracksReleaseDates(selectedTracks
+        const selectedTrackObjects = await enrichTracksISRC(await enrichTracksReleaseDates(selectedTracks
             .map((id) => allTracks.find((t) => t.spotify_id === id))
-            .filter((t): t is TrackMetadata => t !== undefined), settings);
+            .filter((t): t is TrackMetadata => t !== undefined), settings), settings);
         const selectedTrackPathInfo = selectedTrackObjects.map((track, index) => ({
             track,
             pathInfo: buildBatchTrackPathInfo(track, settings, playlistName, isAlbum, index + 1),
@@ -380,6 +412,7 @@ export function useDownload() {
                 album_name: track.album_name || "",
                 album_artist: pathInfo.displayAlbumArtist,
                 release_date: normalizeReleaseDate(track.release_date),
+                isrc: track.isrc,
                 track_number: track.track_number || 0,
                 disc_number: track.disc_number || 0,
                 position: pathInfo.trackPosition,
@@ -464,6 +497,7 @@ export function useDownload() {
                     disc_number: track.disc_number,
                     total_tracks: track.total_tracks,
                     spotify_total_discs: track.total_discs,
+                    isrc: track.isrc,
                     copyright: track.copyright,
                     publisher: track.publisher,
                     output_dir: pathInfo.targetOutputDir,
@@ -595,7 +629,7 @@ export function useDownload() {
         setIsDownloading(true);
         setBulkDownloadType("all");
         setDownloadProgress(0);
-        const enrichedTracksWithId = await enrichTracksReleaseDates(tracksWithId, settings);
+        const enrichedTracksWithId = await enrichTracksISRC(await enrichTracksReleaseDates(tracksWithId, settings), settings);
         const trackPathInfo = enrichedTracksWithId.map((track, index) => ({
             track,
             pathInfo: buildBatchTrackPathInfo(track, settings, playlistName, isAlbum, index + 1),
@@ -610,6 +644,7 @@ export function useDownload() {
                 album_name: track.album_name || "",
                 album_artist: pathInfo.displayAlbumArtist,
                 release_date: normalizeReleaseDate(track.release_date),
+                isrc: track.isrc,
                 track_number: track.track_number || 0,
                 disc_number: track.disc_number || 0,
                 position: pathInfo.trackPosition,
@@ -695,6 +730,7 @@ export function useDownload() {
                     disc_number: track.disc_number || 0,
                     total_tracks: track.total_tracks || 0,
                     spotify_total_discs: track.total_discs || 0,
+                    isrc: track.isrc,
                     copyright: track.copyright || "",
                     publisher: track.publisher || "",
                     output_dir: pathInfo.targetOutputDir,

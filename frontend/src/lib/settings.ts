@@ -23,13 +23,13 @@ export interface Settings {
     embedLyrics: boolean;
     embedMaxQualityCover: boolean;
     operatingSystem: "Windows" | "linux/MacOS";
-    useSpotFetchAPI: boolean;
-    spotFetchAPIUrl: string;
     createPlaylistFolder: boolean;
+    playlistOwnerFolderName: boolean;
     createM3u8File: boolean;
     useFirstArtistOnly: boolean;
     useSingleGenre: boolean;
     embedGenre: boolean;
+    redownloadWithSuffix: boolean;
     separator: "comma" | "semicolon";
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
@@ -79,6 +79,7 @@ export const TEMPLATE_VARIABLES = [
     { key: "{disc}", description: "Disc number", example: "1" },
     { key: "{year}", description: "Release year", example: "2014" },
     { key: "{date}", description: "Release date (YYYY-MM-DD)", example: "2014-10-27" },
+    { key: "{isrc}", description: "Track ISRC", example: "USUM71412345" },
 ];
 function detectOS(): "Windows" | "linux/MacOS" {
     const platform = window.navigator.platform.toLowerCase();
@@ -104,13 +105,13 @@ export const DEFAULT_SETTINGS: Settings = {
     embedLyrics: false,
     embedMaxQualityCover: false,
     operatingSystem: detectOS(),
-    useSpotFetchAPI: false,
-    spotFetchAPIUrl: "https://sp.afkarxyz.qzz.io/api",
     createPlaylistFolder: true,
+    playlistOwnerFolderName: false,
     createM3u8File: false,
     useFirstArtistOnly: false,
     useSingleGenre: false,
-    embedGenre: true,
+    embedGenre: false,
+    redownloadWithSuffix: false,
     separator: "semicolon"
 };
 export const FONT_OPTIONS: {
@@ -211,6 +212,9 @@ function normalizeSettingsData(source: LegacySettings | null | undefined): Setti
     if (!("createPlaylistFolder" in parsed)) {
         parsed.createPlaylistFolder = true;
     }
+    if (!("playlistOwnerFolderName" in parsed)) {
+        parsed.playlistOwnerFolderName = false;
+    }
     if (!("createM3u8File" in parsed)) {
         parsed.createM3u8File = false;
     }
@@ -221,10 +225,13 @@ function normalizeSettingsData(source: LegacySettings | null | undefined): Setti
         parsed.useSingleGenre = false;
     }
     if (!("embedGenre" in parsed)) {
-        parsed.embedGenre = true;
+        parsed.embedGenre = false;
     }
     if (!("separator" in parsed)) {
         parsed.separator = "semicolon";
+    }
+    if (!("redownloadWithSuffix" in parsed)) {
+        parsed.redownloadWithSuffix = false;
     }
     parsed.operatingSystem = detectOS();
     return { ...DEFAULT_SETTINGS, ...parsed };
@@ -288,6 +295,7 @@ export interface TemplateData {
     album?: string;
     album_artist?: string;
     title?: string;
+    isrc?: string;
     track?: number;
     disc?: number;
     year?: string;
@@ -302,6 +310,7 @@ export function parseTemplate(template: string, data: TemplateData): string {
     result = result.replace(/\{artist\}/g, data.artist || "Unknown Artist");
     result = result.replace(/\{album\}/g, data.album || "Unknown Album");
     result = result.replace(/\{album_artist\}/g, data.album_artist || data.artist || "Unknown Artist");
+    result = result.replace(/\{isrc\}/g, data.isrc || "");
     result = result.replace(/\{track\}/g, data.track ? String(data.track).padStart(2, "0") : "00");
     result = result.replace(/\{disc\}/g, data.disc ? String(data.disc) : "1");
     result = result.replace(/\{year\}/g, data.year || "0000");

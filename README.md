@@ -6,13 +6,13 @@ Get Spotify tracks, albums, playlists and discography in MP3 and FLAC.
 ![macOS](https://img.shields.io/badge/macOS-10.13%2B-000000?style=for-the-badge&logo=apple&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Any-FCC624?style=for-the-badge&logo=linux&logoColor=white)
 
-### [Download](https://github.com/afkarxyz/SpotiDownloader/releases)
+### [Download](https://github.com/spotbye/SpotiDownloader/releases)
 
 ![Image](https://github.com/user-attachments/assets/8a47f62c-3cc9-47d9-b1d0-1a877493bb3e)
 
 ## Other projects
 
-### [SpotiFLAC](https://github.com/afkarxyz/SpotiFLAC)
+### [SpotiFLAC](https://github.com/spotbye/SpotiFLAC)
 
 Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account required.
 
@@ -20,9 +20,9 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 
 Get Spotify tracks in true Lossless from Tidal, Qobuz, Amazon Music, Deezer & Apple Music — no account required.
 
-### [SpotubeDL](https://spotubedl.com)
+### [SpotubeDL.com](https://spotubedl.com)
 
-Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.
+Download Spotify Tracks, Albums, Playlists & Discography as MP3/OGG/Opus.
 
 ## FAQ
 
